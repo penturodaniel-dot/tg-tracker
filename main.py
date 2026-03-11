@@ -1165,24 +1165,90 @@ async def landing_admin(request: Request, msg: str = ""):
     user, err = require_auth(request)
     if err: return err
     links = db.get_landing_links()
-    rows = "".join(f"""<tr><td style="font-size:1.2rem">{l['emoji']}</td><td><b>{l['title']}</b></td>
-        <td><a href="{l['tg_link']}" target="_blank" style="color:#60a5fa">{l['tg_link']}</a></td>
+    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+
+    rows = "".join(f"""<tr>
+        <td style="font-size:1.2rem">{l['emoji']}</td>
+        <td><b>{l['title']}</b></td>
+        <td><a href="{l['tg_link']}" target="_blank" style="color:#60a5fa;font-size:.8rem">{l['tg_link'][:40]}...</a></td>
         <td><form method="post" action="/landing/delete"><input type="hidden" name="link_id" value="{l['id']}"/>
         <button class="del-btn">✕</button></form></td></tr>""" for l in links
-    ) or '<tr><td colspan="4"><div class="empty">Нет ссылок</div></td></tr>'
-    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
-    content = f"""<div class="page-wrap"><div class="page-title">🌐 Лендинг</div>
+    ) or '<tr><td colspan="4"><div class="empty">Нет ссылок — добавь TG каналы для кнопки Contact me</div></td></tr>'
+
+    # Текущие значения
+    def gs(k, d=""): return db.get_setting(k, d)
+
+    content = f"""<div class="page-wrap">
+    <div class="page-title">🌐 Лендинг — Клиенты</div>
     <div class="page-sub">Публичная страница: <a href="/page" target="_blank" style="color:#3b82f6">/page →</a></div>
-    <div class="section"><div class="section-head"><h3>➕ Добавить кнопку</h3></div><div class="section-body">
-    {alert}<form method="post" action="/landing/add"><div class="form-row">
-    <div class="field-group" style="max-width:80px"><div class="field-label">Эмодзи</div><input type="text" name="emoji" value="📢"/></div>
-    <div class="field-group"><div class="field-label">Название</div><input type="text" name="title" placeholder="Phoenix" required/></div>
-    <div class="field-group"><div class="field-label">Ссылка TG</div><input type="text" name="tg_link" placeholder="https://t.me/+xxx" required/></div>
-    <div style="display:flex;align-items:flex-end"><button class="btn">Добавить</button></div>
-    </div></form></div></div>
-    <div class="section"><div class="section-head"><h3>🔗 Кнопки ({len(links)}/10)</h3></div>
-    <table><thead><tr><th></th><th>Название</th><th>Ссылка</th><th></th></tr></thead>
-    <tbody>{rows}</tbody></table></div></div>"""
+    {alert}
+
+    <div class="section">
+      <div class="section-head"><h3>📩 Кнопки Contact me (TG каналы)</h3></div>
+      <div class="section-body">
+        <form method="post" action="/landing/add"><div class="form-row" style="margin-bottom:10px">
+          <div class="field-group" style="max-width:80px"><div class="field-label">Эмодзи</div><input type="text" name="emoji" value="📢"/></div>
+          <div class="field-group"><div class="field-label">Название</div><input type="text" name="title" placeholder="Мой канал" required/></div>
+          <div class="field-group"><div class="field-label">Ссылка TG</div><input type="text" name="tg_link" placeholder="https://t.me/+xxx" required/></div>
+          <div style="display:flex;align-items:flex-end"><button class="btn">Добавить</button></div>
+        </div></form>
+        <table><thead><tr><th></th><th>Название</th><th>Ссылка</th><th></th></tr></thead>
+        <tbody>{rows}</tbody></table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h3>✏️ Тексты лендинга</h3></div>
+      <div class="section-body">
+        <form method="post" action="/landing/texts">
+          <div class="grid-2" style="margin-bottom:12px">
+            <div class="field-group"><div class="field-label">Заголовок Hero</div><input type="text" name="land_hero_title" value="{gs('land_hero_title','Relaxation and Balance 🌿✨')}"/></div>
+            <div class="field-group"><div class="field-label">Подзаголовок Hero</div><input type="text" name="land_hero_sub" value="{gs('land_hero_sub','I invite you to enjoy a soothing body massage in a comfortable, private setting.')}"/></div>
+            <div class="field-group"><div class="field-label">Заголовок "Included"</div><input type="text" name="land_incl_title" value="{gs('land_incl_title','Included in the session:')}"/></div>
+            <div class="field-group"><div class="field-label">УТП 1</div><input type="text" name="land_utp1" value="{gs('land_utp1','💆‍♂️ Full body massage')}"/></div>
+            <div class="field-group"><div class="field-label">УТП 2</div><input type="text" name="land_utp2" value="{gs('land_utp2','🤍 Full body contact massage')}"/></div>
+            <div class="field-group"><div class="field-label">УТП 3</div><input type="text" name="land_utp3" value="{gs('land_utp3','🔥 Relaxation completion')}"/></div>
+            <div class="field-group"><div class="field-label">Тариф 1 (мин — цена)</div><input type="text" name="land_rate1" value="{gs('land_rate1','60 min — $230')}"/></div>
+            <div class="field-group"><div class="field-label">Тариф 2</div><input type="text" name="land_rate2" value="{gs('land_rate2','30 min — $200')}"/></div>
+            <div class="field-group"><div class="field-label">Тариф 3</div><input type="text" name="land_rate3" value="{gs('land_rate3','15 min — $140')}"/></div>
+            <div class="field-group"><div class="field-label">Важно 1</div><input type="text" name="land_info1" value="{gs('land_info1','📌 Extra services can only be discussed in person during the session.')}"/></div>
+            <div class="field-group"><div class="field-label">Важно 2</div><input type="text" name="land_info2" value="{gs('land_info2','💵 Payment is accepted in cash only. Please prepare the exact amount.')}"/></div>
+            <div class="field-group"><div class="field-label">Важно 3</div><input type="text" name="land_info3" value="{gs('land_info3','⚠️ Same-day appointments only. Advance bookings are not available.')}"/></div>
+          </div>
+          <div class="field-group" style="margin-bottom:12px">
+            <div class="field-label">Описание (attire/about)</div>
+            <textarea name="land_attire">{gs('land_attire',"✨ I'll greet you in elegant attire and provide a relaxing massage in comfortable, minimal clothing. Touching me is not allowed.")}</textarea>
+          </div>
+          <div class="field-group" style="margin-bottom:12px">
+            <div class="field-label">CTA текст для бронирования</div>
+            <input type="text" name="land_book_cta" value="{gs('land_book_cta','💌 Message me to book your session!')}"/>
+          </div>
+          <button class="btn">💾 Сохранить тексты</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h3>📸 Медиа (фото и видео)</h3></div>
+      <div class="section-body">
+        <div style="font-size:.8rem;color:#475569;margin-bottom:12px">
+          Вставь URL-ы через запятую. Для Cloudinary: загрузи файл и скопируй ссылку с .jpg/.mp4<br>
+          Пример: <span class="tag">https://res.cloudinary.com/XXX/image/upload/v1/photo1.jpg, https://...</span>
+        </div>
+        <form method="post" action="/landing/media">
+          <div class="field-group" style="margin-bottom:12px">
+            <div class="field-label">📷 Фото URL-ы (через запятую)</div>
+            <textarea name="land_photo_urls" placeholder="https://res.cloudinary.com/...">{gs('land_photo_urls','')}</textarea>
+          </div>
+          <div class="field-group" style="margin-bottom:12px">
+            <div class="field-label">🎬 Видео URL-ы (через запятую)</div>
+            <textarea name="land_video_urls" placeholder="https://res.cloudinary.com/...">{gs('land_video_urls','')}</textarea>
+          </div>
+          <button class="btn">💾 Сохранить медиа</button>
+        </form>
+      </div>
+    </div>
+    </div>"""
     return HTMLResponse(base(content, "landing", request))
 
 
@@ -1202,19 +1268,353 @@ async def landing_delete(request: Request, link_id: int = Form(...)):
     return RedirectResponse("/landing", 303)
 
 
+@app.post("/landing/texts")
+async def landing_texts(request: Request,
+    land_hero_title: str = Form(""), land_hero_sub: str = Form(""),
+    land_incl_title: str = Form(""), land_utp1: str = Form(""),
+    land_utp2: str = Form(""), land_utp3: str = Form(""),
+    land_attire: str = Form(""), land_rate1: str = Form(""),
+    land_rate2: str = Form(""), land_rate3: str = Form(""),
+    land_info1: str = Form(""), land_info2: str = Form(""),
+    land_info3: str = Form(""), land_book_cta: str = Form("")):
+    user, err = require_auth(request)
+    if err: return err
+    for key, val in [
+        ("land_hero_title", land_hero_title), ("land_hero_sub", land_hero_sub),
+        ("land_incl_title", land_incl_title), ("land_utp1", land_utp1),
+        ("land_utp2", land_utp2), ("land_utp3", land_utp3),
+        ("land_attire", land_attire), ("land_rate1", land_rate1),
+        ("land_rate2", land_rate2), ("land_rate3", land_rate3),
+        ("land_info1", land_info1), ("land_info2", land_info2),
+        ("land_info3", land_info3), ("land_book_cta", land_book_cta),
+    ]:
+        if val.strip(): db.set_setting(key, val.strip())
+    return RedirectResponse("/landing?msg=Тексты+сохранены", 303)
+
+
+@app.post("/landing/media")
+async def landing_media(request: Request,
+    land_photo_urls: str = Form(""), land_video_urls: str = Form("")):
+    user, err = require_auth(request)
+    if err: return err
+    db.set_setting("land_photo_urls", land_photo_urls.strip())
+    db.set_setting("land_video_urls", land_video_urls.strip())
+    return RedirectResponse("/landing?msg=Медиа+сохранены", 303)
+
+
 @app.get("/page", response_class=HTMLResponse)
 async def public_page():
     links = db.get_landing_links()
-    title = db.get_setting("landing_title", "Наши каналы")
-    sub   = db.get_setting("landing_subtitle", "Подписывайся и будь в курсе")
-    btns  = "".join(f'<a href="{l["tg_link"]}" target="_blank" class="ch-btn"><span style="font-size:1.4rem">{l["emoji"]}</span><span style="flex:1;font-weight:600;color:#fff">{l["title"]}</span><span style="color:#3b82f6">→</span></a>' for l in links) or '<p style="text-align:center;color:#475569">Скоро</p>'
-    return HTMLResponse(f"""<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>
-    <style>*{{box-sizing:border-box;margin:0;padding:0}}body{{background:#0a0d14;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui;padding:24px}}
-    .wrap{{width:100%;max-width:420px}}h1{{font-size:1.5rem;font-weight:700;text-align:center;margin-bottom:8px;color:#fff}}
-    .sub{{text-align:center;color:#475569;font-size:.9rem;margin-bottom:28px}}
-    .ch-btn{{display:flex;align-items:center;gap:14px;background:#111827;border:1px solid #1a2030;border-radius:14px;padding:16px 20px;margin-bottom:10px;transition:all .2s;text-decoration:none}}
-    .ch-btn:hover{{background:#1a2030;border-color:#3b82f6;transform:translateY(-2px)}}</style></head>
-    <body><div class="wrap"><h1>{title}</h1><p class="sub">{sub}</p>{btns}</div></body></html>""")
+
+    # Настройки лендинга из БД (с дефолтами по ТЗ)
+    hero_title    = db.get_setting("land_hero_title",    "Relaxation and Balance 🌿✨")
+    hero_sub      = db.get_setting("land_hero_sub",      "I invite you to enjoy a soothing body massage in a comfortable, private setting.")
+    incl_title    = db.get_setting("land_incl_title",    "Included in the session:")
+    utp1          = db.get_setting("land_utp1",          "💆‍♂️ Full body massage")
+    utp2          = db.get_setting("land_utp2",          "🤍 Full body contact massage")
+    utp3          = db.get_setting("land_utp3",          "🔥 Relaxation completion")
+    attire_text   = db.get_setting("land_attire",        "✨ I'll greet you in elegant attire and provide a relaxing massage in comfortable, minimal clothing. Touching me is not allowed.")
+    rate1         = db.get_setting("land_rate1",         "60 min — $230")
+    rate2         = db.get_setting("land_rate2",         "30 min — $200")
+    rate3         = db.get_setting("land_rate3",         "15 min — $140")
+    info1         = db.get_setting("land_info1",         "📌 Extra services can only be discussed in person during the session.")
+    info2         = db.get_setting("land_info2",         "💵 Payment is accepted in cash only. Please prepare the exact amount.")
+    info3         = db.get_setting("land_info3",         "⚠️ Same-day appointments only. Advance bookings are not available.")
+    book_cta      = db.get_setting("land_book_cta",      "💌 Message me to book your session!")
+    photo_urls    = db.get_setting("land_photo_urls",    "")   # через запятую
+    video_urls    = db.get_setting("land_video_urls",    "")   # через запятую
+
+    # Галерея
+    photos = [u.strip() for u in photo_urls.split(",") if u.strip()]
+    videos = [u.strip() for u in video_urls.split(",") if u.strip()]
+
+    photo_thumbs = "".join(f'<div class="gallery-thumb" onclick="openMedia(\'photo\',{i})"><img src="{u}" alt="photo"/></div>' for i, u in enumerate(photos))
+    video_thumbs = "".join(f'<div class="gallery-thumb" onclick="openMedia(\'video\',{i})"><video src="{u}" muted></video><div class="play-icon">▶</div></div>' for i, u in enumerate(videos))
+
+    photo_items_js = "[" + ",".join(f'"{u}"' for u in photos) + "]"
+    video_items_js = "[" + ",".join(f'"{u}"' for u in videos) + "]"
+
+    # Кнопки TG каналов для попапа Contact me
+    contact_btns = "".join(f'''<a href="{l["tg_link"]}" target="_blank" class="contact-btn">
+      <span class="contact-icon">{l["emoji"]}</span>
+      <span>{l["title"]}</span>
+      <span class="contact-arrow">→</span></a>''' for l in links) or '<p style="text-align:center;color:#94a3b8;padding:20px">Контакты не добавлены — настрой в Лендинг</p>'
+
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{hero_title}</title>
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  :root{{
+    --bg:#080b12;--surface:#0f1420;--surface2:#141c2a;
+    --border:#1e2a3a;--accent:#c9a96e;--accent2:#e8c99a;
+    --text:#f0ece4;--muted:#7a8499;--danger:#e05252;
+  }}
+  body{{background:var(--bg);color:var(--text);font-family:'Georgia',serif;min-height:100vh;overflow-x:hidden}}
+  a{{text-decoration:none;color:inherit}}
+
+  /* ALERT BAR */
+  .alert-bar{{background:linear-gradient(90deg,#1a0a0a,#2d1515,#1a0a0a);border-bottom:1px solid #5c1f1f;
+    padding:10px 20px;text-align:center;font-size:.82rem;color:#fca5a5;letter-spacing:.04em;
+    display:flex;align-items:center;justify-content:center;gap:8px}}
+
+  /* HERO */
+  .hero{{padding:60px 24px 48px;text-align:center;position:relative;
+    background:radial-gradient(ellipse at 50% 0%,#1a1508 0%,transparent 70%)}}
+  .hero::before{{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent)}}
+  .hero-title{{font-size:clamp(1.6rem,5vw,2.4rem);font-weight:400;letter-spacing:-.01em;
+    color:var(--text);margin-bottom:16px;line-height:1.3}}
+  .hero-sub{{font-size:1rem;color:var(--muted);max-width:360px;margin:0 auto 32px;line-height:1.7;font-style:italic}}
+  .divider{{width:60px;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);
+    margin:28px auto}}
+
+  /* SECTIONS */
+  .section{{padding:40px 24px;max-width:520px;margin:0 auto}}
+  .section-title{{font-size:1.1rem;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;
+    margin-bottom:24px;text-align:center;font-family:system-ui;font-weight:600}}
+
+  /* UTP LIST */
+  .utp-list{{display:flex;flex-direction:column;gap:12px}}
+  .utp-item{{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+    padding:16px 20px;font-size:1rem;color:var(--text);display:flex;align-items:center;gap:12px;
+    border-left:3px solid var(--accent)}}
+
+  /* ATTIRE */
+  .attire-box{{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+    padding:20px 24px;font-size:.95rem;color:var(--muted);line-height:1.8;text-align:center;
+    font-style:italic}}
+
+  /* GALLERY */
+  .media-block{{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px}}
+  .media-title{{font-size:1rem;color:var(--text);font-weight:600;margin-bottom:16px;text-align:center}}
+  .media-btns{{display:flex;gap:10px;justify-content:center;margin-bottom:16px}}
+  .media-btn{{flex:1;max-width:160px;padding:12px;border-radius:12px;border:1px solid var(--border);
+    background:var(--surface2);color:var(--text);cursor:pointer;font-size:.9rem;font-family:inherit;
+    transition:all .2s;font-weight:600}}
+  .media-btn:hover,.media-btn.active{{background:var(--accent);border-color:var(--accent);color:#000}}
+  .gallery-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;display:none}}
+  .gallery-grid.active{{display:grid}}
+  .gallery-thumb{{aspect-ratio:1;border-radius:10px;overflow:hidden;cursor:pointer;position:relative;
+    background:var(--surface2);border:1px solid var(--border)}}
+  .gallery-thumb img,.gallery-thumb video{{width:100%;height:100%;object-fit:cover;transition:.2s}}
+  .gallery-thumb:hover img,.gallery-thumb:hover video{{transform:scale(1.05)}}
+  .play-icon{{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:1.8rem;color:rgba(255,255,255,.85);pointer-events:none}}
+
+  /* RATES */
+  .rates-list{{display:flex;flex-direction:column;gap:10px}}
+  .rate-item{{display:flex;justify-content:space-between;align-items:center;
+    padding:16px 20px;background:var(--surface);border:1px solid var(--border);border-radius:14px}}
+  .rate-dur{{font-size:.95rem;color:var(--muted)}}
+  .rate-price{{font-size:1.15rem;font-weight:700;color:var(--accent)}}
+
+  /* IMPORTANT */
+  .info-box{{background:linear-gradient(135deg,#0f1a0f,#0a1208);border:1px solid #2d4a2d;
+    border-radius:16px;padding:24px}}
+  .info-title{{font-size:.85rem;font-weight:700;color:#86efac;letter-spacing:.1em;
+    text-transform:uppercase;margin-bottom:16px}}
+  .info-item{{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #1a2a1a;
+    font-size:.9rem;color:#a7c4a7;line-height:1.6}}
+  .info-item:last-child{{border-bottom:none}}
+
+  /* CTA BOOK */
+  .book-cta{{text-align:center;padding:32px 24px;font-size:1.1rem;color:var(--accent);
+    font-style:italic;letter-spacing:.02em}}
+
+  /* CONTACT SECTION */
+  .contact-section{{padding:40px 24px 60px;max-width:520px;margin:0 auto}}
+  .contact-title{{font-size:1.3rem;color:var(--text);text-align:center;margin-bottom:24px;font-weight:400}}
+  .contact-btn{{display:flex;align-items:center;gap:14px;background:var(--surface);
+    border:1px solid var(--border);border-radius:16px;padding:18px 22px;margin-bottom:10px;
+    transition:all .2s;color:var(--text);font-size:.95rem}}
+  .contact-btn:hover{{background:var(--surface2);border-color:var(--accent);transform:translateX(4px)}}
+  .contact-icon{{font-size:1.5rem;flex-shrink:0}}
+  .contact-arrow{{margin-left:auto;color:var(--accent);font-size:1.1rem}}
+
+  /* CTA BUTTON */
+  .cta-wrap{{text-align:center;margin:28px 0}}
+  .cta-btn{{display:inline-block;background:linear-gradient(135deg,var(--accent),var(--accent2));
+    color:#0a0a0a;font-weight:700;padding:15px 40px;border-radius:50px;font-size:1rem;
+    cursor:pointer;border:none;font-family:inherit;letter-spacing:.03em;transition:all .2s;
+    box-shadow:0 4px 24px rgba(201,169,110,.25)}}
+  .cta-btn:hover{{transform:translateY(-2px);box-shadow:0 8px 32px rgba(201,169,110,.4)}}
+
+  /* POPUP MODAL */
+  .modal-overlay{{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:100;
+    display:none;align-items:center;justify-content:center;padding:20px}}
+  .modal-overlay.open{{display:flex}}
+  .modal{{background:var(--surface);border:1px solid var(--border);border-radius:20px;
+    width:100%;max-width:460px;padding:28px 24px;position:relative;max-height:90vh;overflow-y:auto}}
+  .modal-close{{position:absolute;top:16px;right:16px;background:var(--surface2);border:1px solid var(--border);
+    border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;
+    cursor:pointer;color:var(--muted);font-size:1.1rem;line-height:1}}
+  .modal-title{{font-size:1.15rem;color:var(--text);margin-bottom:20px;font-weight:600}}
+
+  /* LIGHTBOX */
+  .lightbox{{position:fixed;inset:0;background:rgba(0,0,0,.97);z-index:200;
+    display:none;align-items:center;justify-content:center;flex-direction:column}}
+  .lightbox.open{{display:flex}}
+  .lightbox img,.lightbox video{{max-width:95vw;max-height:80vh;border-radius:12px;object-fit:contain}}
+  .lightbox-close{{position:absolute;top:20px;right:20px;color:#fff;font-size:2rem;cursor:pointer;
+    background:rgba(255,255,255,.1);border-radius:50%;width:44px;height:44px;
+    display:flex;align-items:center;justify-content:center}}
+  .lightbox-nav{{display:flex;gap:16px;margin-top:16px}}
+  .lightbox-nav button{{background:rgba(255,255,255,.12);border:none;color:#fff;padding:10px 24px;
+    border-radius:50px;cursor:pointer;font-size:.95rem}}
+  .lightbox-nav button:hover{{background:rgba(255,255,255,.2)}}
+</style>
+</head>
+<body>
+
+<!-- БЛОК 1: Alert bar -->
+<div class="alert-bar">⚠️ No Fake Service &nbsp;💯</div>
+
+<!-- БЛОК 2-3: Hero -->
+<div class="hero">
+  <div class="divider"></div>
+  <h1 class="hero-title">{hero_title}</h1>
+  <p class="hero-sub">{hero_sub}</p>
+  <!-- БЛОК 4: CTA -->
+  <div class="cta-wrap">
+    <button class="cta-btn" onclick="openContact()">Contact me</button>
+  </div>
+  <div class="divider"></div>
+</div>
+
+<!-- БЛОК 5-6: Included -->
+<div class="section">
+  <div class="section-title">{incl_title}</div>
+  <div class="utp-list">
+    <div class="utp-item">{utp1}</div>
+    <div class="utp-item">{utp2}</div>
+    <div class="utp-item">{utp3}</div>
+  </div>
+</div>
+
+<!-- БЛОК 7: Attire description -->
+<div class="section" style="padding-top:0">
+  <div class="attire-box">{attire_text}</div>
+</div>
+
+<!-- БЛОК 8: Photos & Videos -->
+<div class="section" style="padding-top:0">
+  <div class="media-block">
+    <div class="media-title">📸 Photos and videos</div>
+    <div class="media-btns">
+      <button class="media-btn" id="btn-video" onclick="showGallery('video')">🎬 Видео</button>
+      <button class="media-btn" id="btn-photo" onclick="showGallery('photo')">📷 Фото</button>
+    </div>
+    <div class="gallery-grid" id="grid-photo">{photo_thumbs if photo_thumbs else '<div style="color:var(--muted);text-align:center;padding:20px;grid-column:1/-1">Фото не добавлены</div>'}</div>
+    <div class="gallery-grid" id="grid-video">{video_thumbs if video_thumbs else '<div style="color:var(--muted);text-align:center;padding:20px;grid-column:1/-1">Видео не добавлены</div>'}</div>
+  </div>
+</div>
+
+<!-- БЛОК 9: CTA -->
+<div class="cta-wrap">
+  <button class="cta-btn" onclick="openContact()">Contact me</button>
+</div>
+
+<!-- БЛОК 10: Rates -->
+<div class="section">
+  <div class="section-title">💰 Rates:</div>
+  <div class="rates-list">
+    <div class="rate-item"><span class="rate-dur">{rate1.split("—")[0].strip() if "—" in rate1 else rate1}</span><span class="rate-price">{rate1.split("—")[1].strip() if "—" in rate1 else ""}</span></div>
+    <div class="rate-item"><span class="rate-dur">{rate2.split("—")[0].strip() if "—" in rate2 else rate2}</span><span class="rate-price">{rate2.split("—")[1].strip() if "—" in rate2 else ""}</span></div>
+    <div class="rate-item"><span class="rate-dur">{rate3.split("—")[0].strip() if "—" in rate3 else rate3}</span><span class="rate-price">{rate3.split("—")[1].strip() if "—" in rate3 else ""}</span></div>
+  </div>
+</div>
+
+<!-- БЛОК 11: CTA -->
+<div class="cta-wrap">
+  <button class="cta-btn" onclick="openContact()">Contact me</button>
+</div>
+
+<!-- БЛОК 12: Important Information -->
+<div class="section">
+  <div class="info-box">
+    <div class="info-title">Important Information</div>
+    <div class="info-item">{info1}</div>
+    <div class="info-item">{info2}</div>
+    <div class="info-item">{info3}</div>
+  </div>
+</div>
+
+<!-- БЛОК 13: Book CTA text -->
+<div class="book-cta">{book_cta}</div>
+
+<!-- БЛОК 14-15: Contact me section -->
+<div class="contact-section" id="contact">
+  <div class="divider"></div>
+  <h2 class="contact-title">Contact me:</h2>
+  <button class="cta-btn" style="display:block;width:100%;margin-bottom:0;border-radius:16px" onclick="openContact()">📩 Contact me</button>
+</div>
+
+<!-- ПОПАП Contact me -->
+<div class="modal-overlay" id="contact-modal" onclick="if(event.target===this)closeContact()">
+  <div class="modal">
+    <div class="modal-close" onclick="closeContact()">✕</div>
+    <div class="modal-title">📩 Contact me</div>
+    {contact_btns}
+  </div>
+</div>
+
+<!-- LIGHTBOX для галереи -->
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-close" onclick="closeLightbox()">✕</div>
+  <div id="lightbox-content"></div>
+  <div class="lightbox-nav">
+    <button onclick="prevMedia()">← Пред</button>
+    <button onclick="nextMedia()">След →</button>
+  </div>
+</div>
+
+<script>
+  // Contact popup
+  function openContact(){{document.getElementById('contact-modal').classList.add('open');document.body.style.overflow='hidden'}}
+  function closeContact(){{document.getElementById('contact-modal').classList.remove('open');document.body.style.overflow=''}}
+  document.addEventListener('keydown',e=>{{if(e.key==='Escape'){{closeContact();closeLightbox();}}}});
+
+  // Gallery tabs
+  function showGallery(type){{
+    document.getElementById('grid-photo').classList.toggle('active', type==='photo');
+    document.getElementById('grid-video').classList.toggle('active', type==='video');
+    document.getElementById('btn-photo').classList.toggle('active', type==='photo');
+    document.getElementById('btn-video').classList.toggle('active', type==='video');
+  }}
+
+  // Lightbox
+  const PHOTOS = {photo_items_js};
+  const VIDEOS = {video_items_js};
+  let _mediaType='photo', _mediaIdx=0;
+  function openMedia(type, idx){{
+    _mediaType=type; _mediaIdx=idx;
+    renderLightbox();
+    document.getElementById('lightbox').classList.add('open');
+    document.body.style.overflow='hidden';
+  }}
+  function renderLightbox(){{
+    const arr = _mediaType==='photo'?PHOTOS:VIDEOS;
+    const url = arr[_mediaIdx];
+    const el = document.getElementById('lightbox-content');
+    if(_mediaType==='photo'){{
+      el.innerHTML=`<img src="${{url}}" alt="photo"/>`;
+    }} else {{
+      el.innerHTML=`<video src="${{url}}" controls autoplay style="max-width:95vw;max-height:80vh;border-radius:12px"></video>`;
+    }}
+  }}
+  function closeLightbox(){{
+    document.getElementById('lightbox').classList.remove('open');
+    document.body.style.overflow='';
+    document.getElementById('lightbox-content').innerHTML='';
+  }}
+  function prevMedia(){{const arr=_mediaType==='photo'?PHOTOS:VIDEOS;_mediaIdx=(_mediaIdx-1+arr.length)%arr.length;renderLightbox();}}
+  function nextMedia(){{const arr=_mediaType==='photo'?PHOTOS:VIDEOS;_mediaIdx=(_mediaIdx+1)%arr.length;renderLightbox();}}
+</script>
+</body></html>""")
 
 
 @app.get("/flow_clients", response_class=HTMLResponse)

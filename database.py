@@ -501,8 +501,17 @@ class Database:
         with _get_conn() as conn:
             cur = conn.cursor()
             cur.execute("""
-                SELECT * FROM conversations
-                ORDER BY COALESCE(last_message_at, created_at) DESC
+                SELECT c.*,
+                       u.utm_source, u.utm_campaign, u.utm_medium,
+                       u.fbclid, u.utm_content
+                FROM conversations c
+                LEFT JOIN LATERAL (
+                    SELECT utm_source, utm_campaign, utm_medium, fbclid, utm_content
+                    FROM utm_tracking
+                    WHERE conversation_id = c.id
+                    ORDER BY id DESC LIMIT 1
+                ) u ON true
+                ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
             """)
             return _rows(cur)
 

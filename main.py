@@ -5,7 +5,7 @@ import os
 from contextlib import asynccontextmanager
 from urllib.parse import urlencode, quote
 
-from fastapi import FastAPI, Request, Form, Cookie
+from fastapi import FastAPI, Request, Form, Cookie, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -13,6 +13,7 @@ import uvicorn
 import httpx
 import meta_capi
 import bot_manager
+import cloudinary_upload as cu
 from database import Database
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -251,6 +252,10 @@ a{color:inherit;text-decoration:none}
   box-shadow:var(--glow-orange);transition:var(--transition);
 }
 .send-btn-orange:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(249,115,22,.4)}
+.attach-btn{display:flex;align-items:center;justify-content:center;width:40px;height:44px;flex-shrink:0;cursor:pointer;font-size:1.15rem;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);transition:var(--transition)}
+.attach-btn:hover{border-color:var(--orange);color:var(--orange)}
+.msg-text{margin-top:2px}
+.msg-bubble img,.msg-bubble video,.msg-bubble audio{cursor:pointer}
 .no-conv{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text3);gap:14px}
 .no-conv div:first-child{font-size:3rem;filter:grayscale(1);opacity:.4}
 
@@ -539,6 +544,30 @@ async function _globalNotifyPoll() {
 })();
 </script>"""
 
+
+
+def render_msg_bubble(m: dict) -> str:
+    """Рендерит HTML для пузыря сообщения с поддержкой медиа."""
+    t = m["created_at"][11:16]
+    sender = m["sender_type"]
+    mid = m["id"]
+    content = (m.get("content") or "").replace("<","&lt;").replace("\n","<br>")
+    media_url  = m.get("media_url")
+    media_type = m.get("media_type")
+    media_html = ""
+    if media_url and media_type == "photo":
+        media_html = f'<a href="{media_url}" target="_blank"><img src="{media_url}" style="max-width:260px;max-height:220px;border-radius:8px;display:block;margin-bottom:4px" loading="lazy"/></a>'
+    elif media_url and media_type == "video":
+        media_html = f'<video src="{media_url}" controls style="max-width:260px;border-radius:8px;display:block;margin-bottom:4px"></video>'
+    elif media_url and media_type == "voice":
+        media_html = f'<audio src="{media_url}" controls style="width:240px;display:block;margin-bottom:4px"></audio>'
+    elif media_url and media_type == "document":
+        fname = media_url.split("/")[-1].split("?")[0]
+        media_html = f'<a href="{media_url}" target="_blank" style="color:var(--accent);font-size:.82rem">📎 {fname}</a><br>'
+    txt_html = f'<div class="msg-text">{content}</div>' if content and content not in ("📷 Фото","🎬 Видео","🎤 Голосовое") else (f'<div class="msg-text">{content}</div>' if content else "")
+    return f'''<div class="msg {sender}" data-id="{mid}">
+      <div class="msg-bubble">{media_html}{txt_html}</div>
+      <div class="msg-time">{t}</div></div>'''
 
 def nav_html(active: str, request: Request) -> str:
     user = check_session(request)
@@ -924,10 +953,7 @@ async def chat_panel(request: Request, conv_id: int = 0):
             staff = db.get_staff_by_conv(conv_id)
             utm = db.get_utm_by_conv(conv_id)
             for m in msgs:
-                t = m["created_at"][11:16]
-                messages_html += f"""<div class="msg {m['sender_type']}" data-id="{m['id']}">
-                  <div class="msg-bubble">{(m['content'] or '').replace('<','&lt;')}</div>
-                  <div class="msg-time">{t}</div></div>"""
+                messages_html += render_msg_bubble(m)
 
             active_name = (active_conv.get('visitor_name') or '').replace('"','')
             uname = f"@{active_conv['username']}" if active_conv.get('username') else active_conv.get('tg_chat_id','')
@@ -1013,10 +1039,16 @@ async def chat_panel(request: Request, conv_id: int = 0):
 
     right = f"""{header_html}
     <div class="chat-messages" id="msgs">{messages_html}</div>
-    <div class="chat-input"><div class="chat-input-row">
-      <textarea id="reply-text" placeholder="Ответить сотруднику… (Enter — отправить)" rows="1" onkeydown="handleKey(event)"></textarea>
-      <button class="send-btn-orange" onclick="sendMsg()">Отправить</button>
-    </div></div>""" if active_conv else '<div class="no-conv"><div style="font-size:2.5rem">👔</div><div>Выбери диалог</div></div>'
+    <div class="chat-input">
+      <div class="chat-input-row">
+        <label class="attach-btn" title="Прикрепить фото">
+          📎<input type="file" id="file-inp" accept="image/*,video/*" style="display:none" onchange="sendFile(this)">
+        </label>
+        <textarea id="reply-text" placeholder="Ответить сотруднику… (Enter — отправить)" rows="1" onkeydown="handleKey(event)"></textarea>
+        <button class="send-btn-orange" onclick="sendMsg()">Отправить</button>
+      </div>
+      <div id="upload-progress" style="display:none;font-size:.75rem;color:var(--text2);padding:4px 12px">⏳ Загрузка...</div>
+    </div>""" if active_conv else '<div class="no-conv"><div style="font-size:2.5rem">👔</div><div>Выбери диалог</div></div>'
 
     content = f"""<div class="chat-layout">
       <div class="conv-list">
@@ -1096,6 +1128,20 @@ async def chat_panel(request: Request, conv_id: int = 0):
       await loadNewMsgs();
     }}
     function handleKey(e){{if(e.key==='Enter'&&!e.shiftKey){{e.preventDefault();sendMsg();}}}}
+    function renderBubble(m){{
+      const t=m.created_at.substring(11,16);
+      let media='';
+      if(m.media_url&&m.media_type==='photo') media=`<a href="${{m.media_url}}" target="_blank"><img src="${{m.media_url}}" style="max-width:260px;max-height:220px;border-radius:8px;display:block;margin-bottom:4px" loading="lazy"/></a>`;
+      else if(m.media_url&&m.media_type==='video') media=`<video src="${{m.media_url}}" controls style="max-width:260px;border-radius:8px;display:block;margin-bottom:4px"></video>`;
+      else if(m.media_url&&m.media_type==='voice') media=`<audio src="${{m.media_url}}" controls style="width:240px;display:block;margin-bottom:4px"></audio>`;
+      else if(m.media_url&&m.media_type==='document') media=`<a href="${{m.media_url}}" target="_blank" style="color:var(--accent);font-size:.82rem">📎 Файл</a><br>`;
+      const skip=['📷 Фото','🎬 Видео','🎤 Голосовое'];
+      const txt=(m.content&&!skip.includes(m.content))?`<div class="msg-text">${{esc(m.content)}}</div>`:'';
+      const d=document.createElement('div');
+      d.className='msg '+m.sender_type; d.dataset.id=m.id;
+      d.innerHTML=`<div class="msg-bubble">${{media}}${{txt}}</div><div class="msg-time">${{t}}</div>`;
+      return d;
+    }}
     async function loadNewMsgs(){{
       const msgs=document.querySelectorAll('.msg[data-id]');
       const lastId=msgs.length?msgs[msgs.length-1].dataset.id:0;
@@ -1108,11 +1154,24 @@ async def chat_panel(request: Request, conv_id: int = 0):
           playNotifySound('tg');
           showToast(ACTIVE_NAME,incoming[incoming.length-1].content,'tg');
         }}
-        data.messages.forEach(m=>{{const d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
-          d.innerHTML='<div class="msg-bubble">'+esc(m.content)+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
-          c.appendChild(d);}});c.scrollTop=c.scrollHeight;
+        data.messages.forEach(m=>c.appendChild(renderBubble(m)));
+        c.scrollTop=c.scrollHeight;
         _firstMsgLoad=false;
       }} else {{ _firstMsgLoad=false; }}
+    }}
+    async function sendFile(inp){{
+      if(!inp.files||!inp.files[0]) return;
+      const prog=document.getElementById('upload-progress');
+      if(prog) prog.style.display='block';
+      const fd=new FormData();
+      fd.append('conv_id','{conv_id}');
+      fd.append('file',inp.files[0]);
+      try{{
+        await fetch('/chat/send_photo',{{method:'POST',body:fd}});
+        await loadNewMsgs();
+      }}catch(e){{console.error(e);}}
+      if(prog) prog.style.display='none';
+      inp.value='';
     }}
     function esc(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>');}}
     function filterConvs(q){{document.querySelectorAll('.conv-item').forEach(el=>{{
@@ -2711,8 +2770,20 @@ async def wa_webhook(request: Request):
         wa_number   = data["wa_number"]
         sender_name = data.get("sender_name", wa_number)
         text        = data.get("body", "")
+        media_url   = data.get("media_url")   # WA service присылает если есть медиа
+        media_type_raw = data.get("media_type", "")  # 'image','video','audio','document'
+        # Нормализуем тип медиа
+        media_type = None
+        if media_url:
+            if "image" in media_type_raw:   media_type = "photo"
+            elif "video" in media_type_raw: media_type = "video"
+            elif "audio" in media_type_raw: media_type = "voice"
+            else:                           media_type = "document"
+            if not text:
+                text = {"photo":"📷 Фото","video":"🎬 Видео","voice":"🎤 Голосовое"}.get(media_type,"📎 Файл")
         conv = db.get_or_create_wa_conversation(wa_chat_id, wa_number, sender_name)
-        db.save_wa_message(conv["id"], wa_chat_id, "visitor", text)
+        db.save_wa_message(conv["id"], wa_chat_id, "visitor", text,
+                           media_url=media_url, media_type=media_type)
         db.update_wa_last_message(wa_chat_id, text, increment_unread=True)
         notify_chat = db.get_setting("notify_chat_id")
         if notify_chat:
@@ -2762,10 +2833,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
             db.mark_wa_read(conv_id)
             msgs = db.get_wa_messages(conv_id)
             for m in msgs:
-                t = m["created_at"][11:16]
-                messages_html += f"""<div class="msg {m['sender_type']}" data-id="{m['id']}">
-                  <div class="msg-bubble">{(m['content'] or '').replace('<','&lt;')}</div>
-                  <div class="msg-time">{t}</div></div>"""
+                messages_html += render_msg_bubble(m)
             fb_sent = active_conv.get("fb_event_sent")
             fb_btn  = '<span class="badge-green">FB Lead ✓ отправлен</span>' if fb_sent else \
                       f'<form method="post" action="/wa/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-green btn-sm">📤 Отправить Lead в FB</button></form>'
@@ -2880,6 +2948,20 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
       await loadNewWaMsgs();
     }}
     function handleWaKey(e){{if(e.key==='Enter'&&!e.shiftKey){{e.preventDefault();sendWaMsg();}}}}
+    function renderWaBubble(m){{
+      const t=m.created_at.substring(11,16);
+      let media='';
+      if(m.media_url&&m.media_type==='photo') media=`<a href="${{m.media_url}}" target="_blank"><img src="${{m.media_url}}" style="max-width:260px;max-height:220px;border-radius:8px;display:block;margin-bottom:4px" loading="lazy"/></a>`;
+      else if(m.media_url&&m.media_type==='video') media=`<video src="${{m.media_url}}" controls style="max-width:260px;border-radius:8px;display:block;margin-bottom:4px"></video>`;
+      else if(m.media_url&&m.media_type==='voice') media=`<audio src="${{m.media_url}}" controls style="width:240px;display:block;margin-bottom:4px"></audio>`;
+      else if(m.media_url&&m.media_type==='document') media=`<a href="${{m.media_url}}" target="_blank" style="color:#25d366;font-size:.82rem">📎 Файл</a><br>`;
+      const skip=['📷 Фото','🎬 Видео','🎤 Голосовое'];
+      const txt=(m.content&&!skip.includes(m.content))?`<div class="msg-text">${{esc(m.content)}}</div>`:'';
+      const d=document.createElement('div');
+      d.className='msg '+m.sender_type; d.dataset.id=m.id;
+      d.innerHTML=`<div class="msg-bubble">${{media}}${{txt}}</div><div class="msg-time">${{t}}</div>`;
+      return d;
+    }}
     async function loadNewWaMsgs(){{
       const msgs=document.querySelectorAll('#wa-msgs .msg[data-id]');
       const lastId=msgs.length?msgs[msgs.length-1].dataset.id:0;
@@ -2892,9 +2974,8 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
           playNotifySound('wa');
           showToast(WA_ACTIVE_NAME,incoming[incoming.length-1].content,'wa');
         }}
-        data.messages.forEach(m=>{{const d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
-          d.innerHTML='<div class="msg-bubble">'+esc(m.content)+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
-          c.appendChild(d);}});c.scrollTop=c.scrollHeight;
+        data.messages.forEach(m=>c.appendChild(renderWaBubble(m)));
+        c.scrollTop=c.scrollHeight;
         _firstWaMsgLoad=false;
       }} else {{ _firstWaMsgLoad=false; }}
     }}
@@ -3028,6 +3109,29 @@ async def chat_send_lead(request: Request, conv_id: int = Form(...)):
     if sent:
         db.set_staff_fb_event(staff["id"], "Lead")
     return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
+
+
+@app.post("/chat/send_photo")
+async def chat_send_photo(request: Request, conv_id: int = Form(...),
+                          file: UploadFile = File(...)):
+    """Менеджер отправляет фото сотруднику через TG."""
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    conv = db.get_conversation(conv_id)
+    if not conv: return JSONResponse({"error": "not found"}, 404)
+    data = await file.read()
+    ext  = (file.filename or "").split(".")[-1].lower()
+    rt   = "video" if ext in ("mp4","mov","avi","mkv") else "image"
+    media_url = await cu.upload_bytes(data, resource_type=rt, folder="tg_chat_out")
+    if not media_url:
+        return JSONResponse({"ok": False, "error": "Cloudinary upload failed"})
+    ok = await bot_manager.send_staff_photo(conv["tg_chat_id"], media_url)
+    if ok:
+        media_type = "video" if rt == "video" else "photo"
+        db.save_message(conv_id, conv["tg_chat_id"], "manager", f"{'🎬 Видео' if rt=='video' else '📷 Фото'}",
+                        media_url=media_url, media_type=media_type)
+        db.update_conversation_last_message(conv["tg_chat_id"], "📷 Фото", increment_unread=False)
+    return JSONResponse({"ok": ok, "media_url": media_url})
 
 
 @app.post("/wa/close")

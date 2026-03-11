@@ -70,6 +70,44 @@ class Database:
                     step       INTEGER NOT NULL,
                     sent_at    TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS conversations (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tg_chat_id      TEXT NOT NULL UNIQUE,
+                    visitor_name    TEXT NOT NULL DEFAULT 'Неизвестный',
+                    username        TEXT,
+                    source          TEXT DEFAULT 'telegram',
+                    status          TEXT DEFAULT 'open',
+                    unread_count    INTEGER DEFAULT 0,
+                    last_message    TEXT,
+                    last_message_at TEXT,
+                    created_at      TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS messages (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    conversation_id INTEGER NOT NULL,
+                    tg_chat_id      TEXT NOT NULL,
+                    sender_type     TEXT NOT NULL,
+                    content         TEXT,
+                    tg_message_id   INTEGER,
+                    read_by_manager INTEGER DEFAULT 0,
+                    created_at      TEXT NOT NULL,
+                    FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS clients (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    conversation_id INTEGER,
+                    tg_chat_id      TEXT UNIQUE,
+                    name            TEXT,
+                    username        TEXT,
+                    phone           TEXT,
+                    email           TEXT,
+                    notes           TEXT,
+                    tags            TEXT DEFAULT '[]',
+                    created_at      TEXT NOT NULL
+                );
             """)
 
     # ── Settings ──────────────────────────────────────────────────────────────
@@ -169,12 +207,137 @@ class Database:
 
     def get_stats(self):
         with self._conn() as conn:
-            total = conn.execute("SELECT COUNT(*) AS c FROM joins").fetchone()["c"]
+            total    = conn.execute("SELECT COUNT(*) AS c FROM joins").fetchone()["c"]
             from_ads = conn.execute("SELECT COUNT(*) AS c FROM joins WHERE campaign_name!='organic'").fetchone()["c"]
-            organic = conn.execute("SELECT COUNT(*) AS c FROM joins WHERE campaign_name='organic'").fetchone()["c"]
+            organic  = conn.execute("SELECT COUNT(*) AS c FROM joins WHERE campaign_name='organic'").fetchone()["c"]
             channels = conn.execute("SELECT COUNT(*) AS c FROM channels").fetchone()["c"]
-            campaigns = conn.execute("SELECT COUNT(*) AS c FROM campaigns").fetchone()["c"]
-            return {"total": total, "from_ads": from_ads, "organic": organic, "channels": channels, "campaigns": campaigns}
+            campaigns= conn.execute("SELECT COUNT(*) AS c FROM campaigns").fetchone()["c"]
+            convs    = conn.execute("SELECT COUNT(*) AS c FROM conversations").fetchone()["c"]
+            unread   = conn.execute("SELECT COALESCE(SUM(unread_count),0) AS c FROM conversations").fetchone()["c"]
+            return {"total": total, "from_ads": from_ads, "organic": organic,
+                    "channels": channels, "campaigns": campaigns, "conversations": convs, "unread": unread}
+
+    # ── Conversations ─────────────────────────────────────────────────────────
+
+    def get_or_create_conversation(self, tg_chat_id: str, visitor_name: str, username: str | None) -> dict:
+        with self._conn() as conn:
+            row = conn.execute("SELECT * FROM conversations WHERE tg_chat_id=?", (tg_chat_id,)).fetchone()
+            if row:
+                return dict(row)
+            conn.execute(
+                "INSERT INTO conversations (tg_chat_id, visitor_name, username, created_at) VALUES (?,?,?,?)",
+                (tg_chat_id, visitor_name, username, datetime.utcnow().isoformat())
+            )
+            row = conn.execute("SELECT * FROM conversations WHERE tg_chat_id=?", (tg_chat_id,)).fetchone()
+            return dict(row)
+
+    def get_conversations(self):
+        with self._conn() as conn:
+            rows = conn.execute("""
+                SELECT * FROM conversations
+                ORDER BY COALESCE(last_message_at, created_at) DESC
+            """).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_conversation(self, conv_id: int):
+        with self._conn() as conn:
+            row = conn.execute("SELECT * FROM conversations WHERE id=?", (conv_id,)).fetchone()
+            return dict(row) if row else None
+
+    def get_conversation_by_chat(self, tg_chat_id: str):
+        with self._conn() as conn:
+            row = conn.execute("SELECT * FROM conversations WHERE tg_chat_id=?", (tg_chat_id,)).fetchone()
+            return dict(row) if row else None
+
+    def update_conversation_last_message(self, tg_chat_id: str, text: str, increment_unread: bool = True):
+        with self._conn() as conn:
+            if increment_unread:
+                conn.execute("""
+                    UPDATE conversations
+                    SET last_message=?, last_message_at=?, unread_count=unread_count+1
+                    WHERE tg_chat_id=?
+                """, (text[:100], datetime.utcnow().isoformat(), tg_chat_id))
+            else:
+                conn.execute("""
+                    UPDATE conversations
+                    SET last_message=?, last_message_at=?
+                    WHERE tg_chat_id=?
+                """, (text[:100], datetime.utcnow().isoformat(), tg_chat_id))
+
+    def mark_conversation_read(self, conv_id: int):
+        with self._conn() as conn:
+            conn.execute("UPDATE conversations SET unread_count=0 WHERE id=?", (conv_id,))
+            conn.execute("""
+                UPDATE messages SET read_by_manager=1
+                WHERE conversation_id=? AND sender_type='visitor'
+            """, (conv_id,))
+
+    def close_conversation(self, conv_id: int):
+        with self._conn() as conn:
+            conn.execute("UPDATE conversations SET status='closed' WHERE id=?", (conv_id,))
+
+    def reopen_conversation(self, conv_id: int):
+        with self._conn() as conn:
+            conn.execute("UPDATE conversations SET status='open' WHERE id=?", (conv_id,))
+
+    # ── Messages ──────────────────────────────────────────────────────────────
+
+    def save_message(self, conversation_id: int, tg_chat_id: str, sender_type: str,
+                     content: str, tg_message_id: int | None = None) -> int:
+        with self._conn() as conn:
+            cur = conn.execute("""
+                INSERT INTO messages (conversation_id, tg_chat_id, sender_type, content, tg_message_id, created_at)
+                VALUES (?,?,?,?,?,?)
+            """, (conversation_id, tg_chat_id, sender_type, content,
+                  tg_message_id, datetime.utcnow().isoformat()))
+            return cur.lastrowid
+
+    def get_messages(self, conversation_id: int, limit: int = 100):
+        with self._conn() as conn:
+            rows = conn.execute("""
+                SELECT * FROM messages WHERE conversation_id=?
+                ORDER BY created_at ASC LIMIT ?
+            """, (conversation_id, limit)).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_new_messages(self, conversation_id: int, after_id: int):
+        with self._conn() as conn:
+            rows = conn.execute("""
+                SELECT * FROM messages WHERE conversation_id=? AND id>?
+                ORDER BY created_at ASC
+            """, (conversation_id, after_id)).fetchall()
+            return [dict(r) for r in rows]
+
+    # ── Clients ───────────────────────────────────────────────────────────────
+
+    def get_or_create_client(self, tg_chat_id: str, name: str, username: str | None, conv_id: int):
+        with self._conn() as conn:
+            row = conn.execute("SELECT * FROM clients WHERE tg_chat_id=?", (tg_chat_id,)).fetchone()
+            if row:
+                return dict(row)
+            conn.execute("""
+                INSERT INTO clients (conversation_id, tg_chat_id, name, username, created_at)
+                VALUES (?,?,?,?,?)
+            """, (conv_id, tg_chat_id, name, username, datetime.utcnow().isoformat()))
+            row = conn.execute("SELECT * FROM clients WHERE tg_chat_id=?", (tg_chat_id,)).fetchone()
+            return dict(row)
+
+    def get_clients(self):
+        with self._conn() as conn:
+            rows = conn.execute("SELECT * FROM clients ORDER BY created_at DESC").fetchall()
+            return [dict(r) for r in rows]
+
+    def update_client(self, client_id: int, name: str, phone: str, email: str, notes: str, tags: str):
+        with self._conn() as conn:
+            conn.execute("""
+                UPDATE clients SET name=?, phone=?, email=?, notes=?, tags=?
+                WHERE id=?
+            """, (name, phone, email, notes, tags, client_id))
+
+    def get_client_by_conv(self, conv_id: int):
+        with self._conn() as conn:
+            row = conn.execute("SELECT * FROM clients WHERE conversation_id=?", (conv_id,)).fetchone()
+            return dict(row) if row else None
 
     # ── Landing ────────────────────────────────────────────────────────────────
 

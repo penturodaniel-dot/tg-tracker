@@ -243,8 +243,8 @@ def nav_html(active: str, request: Request) -> str:
       <div class="nav-divider"></div>
       <div class="nav-section">👔 Сотрудники</div>
       {item("💬", "Чаты", "chat", "orange", badge=True)}
-      {item("💚", "WA Чаты", "wa_chat", "orange")}
-      {item("📱", "WA Настройка", "wa_setup", "orange")}
+      <a href="/wa/chat"><div class="{'nav-item active orange' if active in ['wa_chat'] else 'nav-item'}"><span class="nav-label">💚 WA Чаты</span></div></a>
+      <a href="/wa/setup"><div class="{'nav-item active orange' if active in ['wa_setup'] else 'nav-item'}"><span class="nav-label">📱 WA Настройка</span></div></a>
       {item("🗂", "База", "staff", "orange")}
       {item("💬", "Msg Flow HR", "flow_staff", "orange")}
       {admin_section}

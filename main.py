@@ -204,6 +204,118 @@ textarea{resize:vertical;min-height:80px}
 </style>"""
 
 
+
+NOTIFY_JS = """<script>
+// ═══════════════════════════════════════════
+//  GLOBAL NOTIFICATION SYSTEM
+// ═══════════════════════════════════════════
+const _notifySnap = {};
+let _notifyFirst = true;
+let _audioCtx = null;
+
+function _getAudioCtx() {
+  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return _audioCtx;
+}
+
+window.playNotifySound = function(type) {
+  try {
+    const ctx = _getAudioCtx();
+    const freqs = type === 'wa' ? [660, 880] : [880, 1100];
+    freqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      const t = ctx.currentTime + i * 0.13;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.25, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+      osc.start(t); osc.stop(t + 0.4);
+    });
+  } catch(e) {}
+};
+
+window.showToast = function(title, body, type) {
+  type = type || 'tg';
+  const color = type === 'wa' ? '#25d366' : '#3b82f6';
+  const icon  = type === 'wa' ? '💚' : '💬';
+  if (!document.getElementById('_notify_style')) {
+    const s = document.createElement('style');
+    s.id = '_notify_style';
+    s.textContent = `@keyframes _slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+      @keyframes _fadeOut{to{opacity:0;transform:translateX(120%)}}
+      ._toast{position:fixed;right:24px;z-index:99999;background:#1e2a3a;border-radius:12px;
+        padding:14px 18px;min-width:260px;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.5);
+        cursor:pointer;animation:_slideIn .3s ease;font-family:system-ui;transition:bottom .2s}`;
+    document.head.appendChild(s);
+  }
+  // Stack existing toasts up
+  document.querySelectorAll('._toast').forEach((t, i) => {
+    t.style.bottom = (24 + (i + 1) * 82) + 'px';
+  });
+  const el = document.createElement('div');
+  el.className = '_toast';
+  el.style.cssText = `border:1px solid ${color};border-left:4px solid ${color};bottom:24px`;
+  el.innerHTML = `<div style="font-size:.72rem;color:${color};font-weight:700;letter-spacing:.05em;margin-bottom:5px">${icon} ${title.toUpperCase()}</div>
+    <div style="font-size:.85rem;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px">${body}</div>`;
+  el.onclick = () => { el.style.animation='_fadeOut .25s ease forwards'; setTimeout(()=>el.remove(),250); };
+  document.body.appendChild(el);
+  setTimeout(() => { if(el.parentNode){el.style.animation='_fadeOut .25s ease forwards';setTimeout(()=>el.remove(),250);} }, 6000);
+  // Browser notification
+  if (Notification.permission === 'granted') {
+    try { new Notification(title, {body: body.substring(0,80), tag: 'tgtracker'}); } catch(e) {}
+  }
+};
+
+function _notifyCheck(convs, type) {
+  let totalUnread = 0;
+  convs.forEach(c => {
+    totalUnread += c.unread_count || 0;
+    const key = type + '_' + c.id;
+    const prev = _notifySnap[key];
+    if (!_notifyFirst && prev !== undefined && c.unread_count > prev && c.last_message) {
+      playNotifySound(type);
+      const name = c.visitor_name || (type === 'wa' ? 'WhatsApp' : 'Telegram');
+      showToast(name, c.last_message, type);
+    }
+    _notifySnap[key] = c.unread_count;
+  });
+  return totalUnread;
+}
+
+// Update browser tab title with unread count
+function _updateTabTitle(total) {
+  const base = document.title.replace(/^[(][0-9]+[)] */, '');
+  document.title = total > 0 ? '(' + total + ') ' + base : base;
+}
+
+// Global poll — runs on ALL pages every 5s
+async function _globalNotifyPoll() {
+  try {
+    const [tg, wa] = await Promise.all([
+      fetch('/api/conversations').then(r=>r.json()).catch(()=>({conversations:[]})),
+      fetch('/api/wa_conversations').then(r=>r.json()).catch(()=>({conversations:[]}))
+    ]);
+    const t1 = _notifyCheck(tg.conversations || [], 'tg');
+    const t2 = _notifyCheck(wa.conversations || [], 'wa');
+    _updateTabTitle(t1 + t2);
+    _notifyFirst = false;
+  } catch(e) {}
+}
+
+// Init: request permission then start polling
+(async function() {
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+  await _globalNotifyPoll(); // baseline snapshot (no alerts, just sets _notifySnap)
+  setInterval(_globalNotifyPoll, 5000);
+})();
+</script>"""
+
+
 def nav_html(active: str, request: Request) -> str:
     user = check_session(request)
     stats = db.get_stats()
@@ -255,7 +367,7 @@ def nav_html(active: str, request: Request) -> str:
 
 
 def base(content: str, active: str, request: Request) -> str:
-    return f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>TG Tracker</title>{CSS}</head><body>{nav_html(active, request)}<div class="main">{content}</div></body></html>'
+    return f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>TG Tracker</title>{CSS}</head><body>{nav_html(active, request)}<div class="main">{content}</div>{NOTIFY_JS}</body></html>'
 
 
 STAFF_STATUSES = {
@@ -555,6 +667,7 @@ async def chat_panel(request: Request, conv_id: int = 0):
     messages_html = ""
     header_html = ""
     active_conv = None
+    active_name = ""
 
     if conv_id:
         active_conv = db.get_conversation(conv_id)
@@ -569,6 +682,7 @@ async def chat_panel(request: Request, conv_id: int = 0):
                   <div class="msg-bubble">{(m['content'] or '').replace('<','&lt;')}</div>
                   <div class="msg-time">{t}</div></div>"""
 
+            active_name = (active_conv.get('visitor_name') or '').replace('"','')
             uname = f"@{active_conv['username']}" if active_conv.get('username') else active_conv.get('tg_chat_id','')
             status_color = "#34d399" if active_conv["status"] == "open" else "#ef4444"
 
@@ -645,7 +759,9 @@ async def chat_panel(request: Request, conv_id: int = 0):
     const msgsEl=document.getElementById('msgs');
     if(msgsEl) msgsEl.scrollTop=msgsEl.scrollHeight;
     const ACTIVE_ID={conv_id};
+    const ACTIVE_NAME="{active_name}";
     let _snap={{}};
+    let _firstMsgLoad=true;
 
     // Единый цикл: обновляем список + сообщения каждые 3с
     setInterval(pollAll,3000);
@@ -709,9 +825,16 @@ async def chat_panel(request: Request, conv_id: int = 0):
       const data=await res.json();
       if(data.messages&&data.messages.length>0){{
         const c=document.getElementById('msgs');
+        const incoming=data.messages.filter(m=>m.sender_type==='visitor');
+        if(!_firstMsgLoad&&incoming.length>0&&typeof playNotifySound!=='undefined'){{
+          playNotifySound('tg');
+          showToast(ACTIVE_NAME,incoming[incoming.length-1].content,'tg');
+        }}
         data.messages.forEach(m=>{{const d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
           d.innerHTML='<div class="msg-bubble">'+esc(m.content)+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
-          c.appendChild(d);}});c.scrollTop=c.scrollHeight;}}
+          c.appendChild(d);}});c.scrollTop=c.scrollHeight;
+        _firstMsgLoad=false;
+      }} else {{ _firstMsgLoad=false; }}
     }}
     function esc(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>');}}
     function filterConvs(q){{document.querySelectorAll('.conv-item').forEach(el=>{{
@@ -719,7 +842,7 @@ async def chat_panel(request: Request, conv_id: int = 0):
       el.parentElement.style.display=n.includes(q.toLowerCase())?'':'none';}});}}
     </script>"""
 
-    return HTMLResponse(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>Чаты</title>{CSS}</head><body>{nav_html("chat",request)}<div class="main">{content}</div></body></html>')
+    return HTMLResponse(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>Чаты</title>{CSS}</head><body>{nav_html("chat",request)}<div class="main">{content}</div>{NOTIFY_JS}</body></html>')
 
 
 @app.post("/chat/send")
@@ -2332,9 +2455,11 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
     messages_html = ""
     header_html   = ""
     active_conv   = None
+    wa_active_name = ""
     if conv_id:
         active_conv = db.get_wa_conversation(conv_id)
         if active_conv:
+            wa_active_name = (active_conv.get('visitor_name') or '').replace('"','')
             db.mark_wa_read(conv_id)
             msgs = db.get_wa_messages(conv_id)
             for m in msgs:
@@ -2400,7 +2525,9 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
     const msgsEl=document.getElementById('wa-msgs');
     if(msgsEl) msgsEl.scrollTop=msgsEl.scrollHeight;
     const WA_ACTIVE_ID={conv_id};
+    const WA_ACTIVE_NAME="{wa_active_name}";
     let _waSnap={{}};
+    let _firstWaMsgLoad=true;
 
     // Единый цикл: обновляем список + сообщения каждые 3с
     setInterval(waPollAll,3000);
@@ -2461,16 +2588,23 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
       const data=await res.json();
       if(data.messages&&data.messages.length>0){{
         const c=document.getElementById('wa-msgs');
+        const incoming=data.messages.filter(m=>m.sender_type==='visitor');
+        if(!_firstWaMsgLoad&&incoming.length>0&&typeof playNotifySound!=='undefined'){{
+          playNotifySound('wa');
+          showToast(WA_ACTIVE_NAME,incoming[incoming.length-1].content,'wa');
+        }}
         data.messages.forEach(m=>{{const d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
           d.innerHTML='<div class="msg-bubble">'+esc(m.content)+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
-          c.appendChild(d);}});c.scrollTop=c.scrollHeight;}}
+          c.appendChild(d);}});c.scrollTop=c.scrollHeight;
+        _firstWaMsgLoad=false;
+      }} else {{ _firstWaMsgLoad=false; }}
     }}
     function esc(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>');}}
     function filterConvs(q){{document.querySelectorAll('.conv-item').forEach(el=>{{
       const n=el.querySelector('.conv-name')?.textContent?.toLowerCase()||'';
       el.parentElement.style.display=n.includes(q.toLowerCase())?'':'none';}});}}
     </script>"""
-    return HTMLResponse(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>WA Чаты</title>{CSS}</head><body>{nav_html("wa_chat",request)}<div class="main">{content}</div></body></html>')
+    return HTMLResponse(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>WA Чаты</title>{CSS}</head><body>{nav_html("wa_chat",request)}<div class="main">{content}</div>{NOTIFY_JS}</body></html>')
 
 
 @app.get("/wa/setup", response_class=HTMLResponse)

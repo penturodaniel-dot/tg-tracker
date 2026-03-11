@@ -1,8 +1,8 @@
 """
-bot_manager.py — управляет двумя независимыми ботами.
-Бот 1 (Трекер): отслеживает вступления в каналы → Meta CAPI
-Бот 2 (Сотрудники): переписка менеджеров с сотрудниками
-Оба бота можно сменить через UI без перезапуска Railway.
+bot_manager.py v5
+Бот 1 — Трекер: вступления в каналы → Meta CAPI Subscribe
+Бот 2 — Сотрудники: переписка → Meta CAPI Lead
+Уведомления менеджеру при новом сообщении
 """
 import asyncio
 import logging
@@ -11,7 +11,6 @@ from aiogram.filters import ChatMemberUpdatedFilter, JOIN_TRANSITION, Command
 
 log = logging.getLogger(__name__)
 
-# Глобальные экземпляры — заменяются при смене токена
 _tracker_bot: Bot | None = None
 _tracker_dp:  Dispatcher | None = None
 _tracker_task: asyncio.Task | None = None
@@ -20,15 +19,14 @@ _staff_bot: Bot | None = None
 _staff_dp:  Dispatcher | None = None
 _staff_task: asyncio.Task | None = None
 
-# Ссылки на db и capi — инжектируются из main.py
 _db = None
-_send_capi = None
+_meta = None
 
 
-def init(db, send_capi_fn):
-    global _db, _send_capi
+def init(db, meta_module):
+    global _db, _meta
     _db = db
-    _send_capi = send_capi_fn
+    _meta = meta_module
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -48,14 +46,36 @@ def _build_tracker_dp() -> Dispatcher:
         raw_link = event.invite_link.invite_link if event.invite_link else None
         campaign = _db.get_campaign_by_link(raw_link)
         campaign_name = campaign["name"] if campaign else "organic"
-        _db.log_join(user_id=user.id, channel_id=cid, invite_link=raw_link, campaign_name=campaign_name)
-        log.info(f"[BOT1] JOIN user={user.id} channel={cid} campaign={campaign_name}")
+
+        # Ищем click_id по invite_link если есть
+        click_id = None
+        if campaign:
+            click_id = campaign.get("click_id")
+
+        join_id = _db.log_join(
+            user_id=user.id,
+            channel_id=cid,
+            invite_link=raw_link,
+            campaign_name=campaign_name,
+            click_id=click_id
+        )
+
+        # Получаем UTM данные если есть click_id
+        click_data = _db.get_click(click_id) if click_id else {}
+        if click_data:
+            _db.save_utm(click_data, join_id=join_id)
+
         pixel_id   = _db.get_setting("pixel_id")
         meta_token = _db.get_setting("meta_token")
-        await _send_capi(pixel_id, meta_token, str(user.id), campaign_name)
-
-        # Message Flow для трекер-бота
-        asyncio.create_task(_run_flow(event.new_chat_member.user.id, cid, _tracker_bot))
+        await _meta.send_subscribe_event(
+            pixel_id, meta_token, str(user.id), campaign_name,
+            fbclid=click_data.get("fbclid") if click_data else None,
+            fbp=click_data.get("fbp") if click_data else None,
+            utm_source=click_data.get("utm_source") if click_data else None,
+            utm_campaign=click_data.get("utm_campaign") if click_data else None,
+        )
+        log.info(f"[BOT1] JOIN user={user.id} channel={cid} campaign={campaign_name}")
+        asyncio.create_task(_run_flow(user.id, cid, _tracker_bot))
 
     return dp
 
@@ -102,7 +122,6 @@ async def stop_tracker_bot():
         try: await _tracker_bot.session.close()
         except: pass
     _tracker_bot = _tracker_dp = _tracker_task = None
-    log.info("[BOT1] Stopped")
 
 
 def get_tracker_bot() -> Bot | None:
@@ -121,8 +140,36 @@ def _build_staff_dp() -> Dispatcher:
         user = message.from_user
         name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "Сотрудник"
         conv = _db.get_or_create_conversation(str(user.id), name, user.username)
-        _db.get_or_create_staff(str(user.id), name, user.username, conv["id"])
-        welcome = _db.get_setting("staff_welcome", "Привет! Напиши своё имя и должность, мы свяжемся с тобой 👋")
+        staff = _db.get_or_create_staff(str(user.id), name, user.username, conv["id"])
+
+        # Проверяем UTM из start параметра
+        start_param = message.text.split()[-1] if len(message.text.split()) > 1 else None
+        if start_param and start_param.startswith("ref_"):
+            click_id = start_param[4:]
+            click_data = _db.get_click(click_id)
+            if click_data:
+                _db.save_utm(click_data, conversation_id=conv["id"])
+                log.info(f"[BOT2] UTM linked conv={conv['id']} click={click_id}")
+
+        # Отправляем Lead в Meta CAPI если ещё не отправляли
+        if not staff.get("fb_event_sent"):
+            utm = _db.get_utm_by_conv(conv["id"])
+            pixel_id   = _db.get_setting("pixel_id")
+            meta_token = _db.get_setting("meta_token")
+            sent = await _meta.send_lead_event(
+                pixel_id, meta_token, str(user.id),
+                campaign=utm.get("utm_campaign", "staff_bot") if utm else "staff_bot",
+                fbclid=utm.get("fbclid") if utm else None,
+                fbp=utm.get("fbp") if utm else None,
+            )
+            if sent:
+                _db.set_staff_fb_event(staff["id"], "Lead")
+                _db.set_conv_fb_event(conv["id"], "Lead")
+
+        # Уведомление менеджеру
+        asyncio.create_task(_notify_manager(name, conv["id"], "start"))
+
+        welcome = _db.get_setting("staff_welcome", "Привет! Напиши своё имя и должность 👋")
         await message.answer(welcome)
         log.info(f"[BOT2] START user={user.id} name={name}")
 
@@ -132,13 +179,40 @@ def _build_staff_dp() -> Dispatcher:
         user = message.from_user
         name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "Сотрудник"
         text = message.text or message.caption or "[медиафайл]"
+
         conv = _db.get_or_create_conversation(str(user.id), name, user.username)
         _db.get_or_create_staff(str(user.id), name, user.username, conv["id"])
         _db.save_message(conv["id"], str(user.id), "visitor", text, message.message_id)
         _db.update_conversation_last_message(str(user.id), text, increment_unread=True)
+
+        # Уведомление менеджеру
+        asyncio.create_task(_notify_manager(name, conv["id"], text))
         log.info(f"[BOT2] MSG user={user.id}: {text[:50]}")
 
     return dp
+
+
+async def _notify_manager(sender_name: str, conv_id: int, text: str):
+    """Отправляет уведомление менеджеру в Telegram"""
+    notify_chat = _db.get_setting("notify_chat_id")
+    if not notify_chat: return
+    bot = get_tracker_bot() or get_staff_bot()
+    if not bot: return
+    preview = text[:80] + "..." if len(text) > 80 else text
+    msg = f"💬 *Новое сообщение*\n👤 {sender_name}\n\n_{preview}_"
+    try:
+        await bot.send_message(
+            int(notify_chat), msg,
+            parse_mode="Markdown",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(
+                    text="Открыть чат →",
+                    url=f"{_db.get_setting('app_url', '')}/chat?key={_db.get_setting('dashboard_password', '')}&conv_id={conv_id}"
+                )
+            ]])
+        )
+    except Exception as e:
+        log.warning(f"Notify error: {e}")
 
 
 async def start_staff_bot(token: str):
@@ -168,7 +242,6 @@ async def stop_staff_bot():
         try: await _staff_bot.session.close()
         except: pass
     _staff_bot = _staff_dp = _staff_task = None
-    log.info("[BOT2] Stopped")
 
 
 def get_staff_bot() -> Bot | None:
@@ -193,6 +266,7 @@ async def get_bot_info(bot: Bot | None) -> dict:
         return {"active": False, "username": None, "name": None}
     try:
         info = await bot.get_me()
-        return {"active": True, "username": info.username, "name": info.full_name, "link": f"https://t.me/{info.username}"}
+        return {"active": True, "username": info.username,
+                "name": info.full_name, "link": f"https://t.me/{info.username}"}
     except:
         return {"active": False, "username": None, "name": None}

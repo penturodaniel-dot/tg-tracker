@@ -13,7 +13,43 @@ import uvicorn
 import httpx
 import meta_capi
 import bot_manager
-import cloudinary_upload as cu
+# ── Cloudinary upload (inline) ────────────────────────────────────────────────
+import hashlib as _hl, time as _time, httpx as _httpx
+
+class _CU:
+    def __init__(self):
+        self.cloud = os.getenv("CLOUDINARY_CLOUD_NAME","")
+        self.key   = os.getenv("CLOUDINARY_API_KEY","")
+        self.sec   = os.getenv("CLOUDINARY_API_SECRET","")
+
+    def _sign(self, params):
+        s = "&".join(f"{k}={v}" for k,v in sorted(params.items()))
+        return _hl.sha1((s + self.sec).encode()).hexdigest()
+
+    async def upload_bytes(self, data: bytes, resource_type="image", folder="tg_chat"):
+        if not all([self.cloud, self.key, self.sec]): return None
+        try:
+            ts = int(_time.time())
+            params = {"folder": folder, "timestamp": ts}
+            sig = self._sign(params)
+            url = f"https://api.cloudinary.com/v1_1/{self.cloud}/{resource_type}/upload"
+            async with _httpx.AsyncClient(timeout=30) as c:
+                r = await c.post(url, data={"api_key":self.key,"timestamp":ts,"folder":folder,"signature":sig},
+                                 files={"file":("media", data)})
+            return r.json().get("secure_url") if r.status_code==200 else None
+        except Exception as e:
+            log.warning(f"Cloudinary upload error: {e}"); return None
+
+    async def upload_from_url(self, src_url: str, resource_type="image", folder="tg_chat"):
+        try:
+            async with _httpx.AsyncClient(timeout=30) as c:
+                r = await c.get(src_url)
+            return await self.upload_bytes(r.content, resource_type, folder) if r.status_code==200 else None
+        except Exception as e:
+            log.warning(f"upload_from_url error: {e}"); return None
+
+cu = _CU()
+# ─────────────────────────────────────────────────────────────────────────────
 from database import Database
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -30,7 +66,7 @@ WA_SECRET          = os.getenv("WA_API_SECRET",  "changeme")
 WA_WH_SECRET       = os.getenv("WA_WEBHOOK_SECRET", "changeme")
 
 db = Database()
-bot_manager.init(db, meta_capi)
+bot_manager.init(db, meta_capi, cu=cu)
 
 for key, val in [
     ("bot1_token",  DEFAULT_BOT1_TOKEN),
@@ -1386,9 +1422,9 @@ async def users_delete(request: Request, user_id: int = Form(...)):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request, msg: str = ""):
-    user, err = require_auth(request, role="admin")
-    if err: return err
+async def settings_page(request: Request, msg: str = "", err: str = ""):
+    user, err_auth = require_auth(request, role="admin")
+    if err_auth: return err_auth
 
     b1_info = await bot_manager.get_bot_info(bot_manager.get_tracker_bot())
     b2_info = await bot_manager.get_bot_info(bot_manager.get_staff_bot())
@@ -1400,7 +1436,47 @@ async def settings_page(request: Request, msg: str = ""):
     notify_chat   = db.get_setting("notify_chat_id", "")
     app_url       = db.get_setting("app_url", "")
     masked = meta_token[:12] + "..." + meta_token[-6:] if len(meta_token) > 20 else meta_token
-    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+    alert     = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+    err_alert = f'<div class="alert-red">❌ {err}</div>' if err else ""
+
+    # WA блок
+    wa_data   = await wa_api("get", "/status")
+    wa_status = wa_data.get("status", "disconnected")
+    wa_number = wa_data.get("number", "")
+    db.set_setting("wa_status", wa_status)
+    if wa_number: db.set_setting("wa_connected_number", wa_number)
+    qr_html = ""
+    if wa_status == "qr":
+        qr_data = await wa_api("get", "/qr")
+        qr = qr_data.get("qr", "")
+        if qr:
+            qr_html = f'''<div style="text-align:center;padding:16px 0">
+              <img src="{qr}" style="width:200px;height:200px;border-radius:10px;border:2px solid #25d366"/>
+              <div style="color:#86efac;margin-top:10px;font-size:.83rem">WhatsApp → Связанные устройства → Привязать устройство</div>
+              <div style="color:var(--text3);font-size:.75rem;margin-top:4px">Обновление через <span id="cd">20</span>с
+              <script>let t=20;setInterval(()=>{{const el=document.getElementById("cd");if(el)el.textContent=--t;if(t<=0)location.reload()}},1000)</script></div>
+            </div>'''
+    if wa_status == "ready":
+        wa_status_html = f'<div style="color:#34d399;font-weight:700">💚 Подключён · +{wa_number}</div>'
+        wa_action = '<form method="post" action="/wa/disconnect" style="margin-top:12px"><button class="btn-red btn-sm">🔄 Сменить номер (отключить)</button></form><div style="font-size:.75rem;color:var(--text3);margin-top:5px">После отключения подключи новый номер</div>'
+    elif wa_status == "qr":
+        wa_status_html = '<div style="color:#fbbf24;font-weight:700">📱 Ожидает QR...</div>'
+        wa_action = ""
+    else:
+        wa_status_html = '<div style="color:#f87171;font-weight:700">⚠️ Не подключён</div>'
+        wa_action = '<form method="post" action="/wa/connect" style="margin-top:12px"><button class="btn" style="background:linear-gradient(135deg,#059669,#047857);box-shadow:0 0 12px rgba(5,150,105,.3)">💚 Подключить WhatsApp</button></form><div style="font-size:.75rem;color:var(--text3);margin-top:5px">Появится QR-код для сканирования</div>'
+    wa_section = f'''<div class="section" id="wa" style="border-left:3px solid #25d366">
+      <div class="section-head"><h3>💚 WhatsApp</h3><span style="font-size:.82rem">{wa_status_html}</span></div>
+      <div class="section-body">
+        {qr_html}{wa_action}
+        <div style="margin-top:16px;font-size:.8rem;color:var(--text3);line-height:1.9;border-top:1px solid var(--border);padding-top:12px">
+          <b style="color:var(--text2)">Как подключить:</b><br>
+          1. Нажми "Подключить WhatsApp" — появится QR<br>
+          2. WhatsApp → Связанные устройства → Привязать устройство<br>
+          3. Отсканируй QR — ~10 секунд<br>
+          <span style="color:#fbbf24">⚠️ Используй отдельный номер, не основной</span>
+        </div>
+      </div></div>'''
 
     def bot_card(title, color, info, field, route):
         status = f'<span style="color:#34d399">● Активен — <a href="{info.get("link","")}" target="_blank" style="color:#60a5fa">@{info.get("username","")}</a></span>' if info.get("active") else '<span style="color:#ef4444">● Не запущен</span>'
@@ -1418,7 +1494,8 @@ async def settings_page(request: Request, msg: str = ""):
 
     content = f"""<div class="page-wrap">
     <div class="page-title">⚙️ Настройки</div><div class="page-sub">Управление ботами и системой</div>
-    {alert}
+    {alert}{err_alert}
+    {wa_section}
 
     <div class="section-head" style="padding:0;margin-bottom:12px"><h3 style="font-size:.78rem;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:.08em">🤖 Управление ботами</h3></div>
     {bot_card("🔵 Бот 1 — Трекер (Клиенты)", "blue", b1_info, "bot1_token", "settings/bot1")}
@@ -2989,56 +3066,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
 
 @app.get("/wa/setup", response_class=HTMLResponse)
 async def wa_setup_page(request: Request, msg: str = "", err: str = ""):
-    user, err_auth = require_auth(request, role="admin")
-    if err_auth: return err_auth
-    wa_data   = await wa_api("get", "/status")
-    wa_status = wa_data.get("status", "disconnected")
-    wa_number = wa_data.get("number", "")
-    db.set_setting("wa_status", wa_status)
-    if wa_number: db.set_setting("wa_connected_number", wa_number)
-    qr_html = ""
-    if wa_status == "qr":
-        qr_data = await wa_api("get", "/qr")
-        qr = qr_data.get("qr", "")
-        if qr:
-            qr_html = f"""<div style="text-align:center;padding:20px">
-              <img src="{qr}" style="width:220px;height:220px;border-radius:12px;border:2px solid #25d366"/>
-              <div style="color:#86efac;margin-top:12px;font-size:.88rem">Открой WhatsApp → Связанные устройства → Привязать устройство</div>
-              <div style="color:#475569;font-size:.78rem;margin-top:6px">Обновление через <span id="cd">20</span>с
-              <script>let t=20;setInterval(()=>{{const el=document.getElementById('cd');if(el)el.textContent=--t;if(t<=0)location.reload()}},1000)</script></div>
-            </div>"""
-    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
-    err_alert = f'<div class="alert-red">❌ {err}<br><small>Проверь что WA сервис запущен на Railway</small></div>' if err else ""
-    WA_BTN_CSS = "<style>.btn-green{background:#059669;color:#fff;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:.85rem;font-weight:600}.btn-green:hover{background:#047857}</style>"
-    if wa_status == "ready":
-        status_html = f'<div style="color:#34d399;font-size:1rem;font-weight:600">💚 Подключён · +{wa_number}</div>'
-        action_btn  = f"""<div style="margin-top:16px"><form method="post" action="/wa/disconnect">
-            <button class="btn-red">🔄 Сменить номер (отключить)</button></form>
-            <div style="font-size:.78rem;color:#475569;margin-top:6px">После отключения отсканируй QR новым номером</div></div>"""
-    elif wa_status == "qr":
-        status_html = '<div style="color:#fbbf24;font-size:1rem;font-weight:600">📱 Ожидает сканирования QR...</div>'
-        action_btn  = ""
-    else:
-        status_html = '<div style="color:#f87171;font-size:1rem;font-weight:600">⚠️ Не подключён</div>'
-        action_btn  = """<div style="margin-top:16px"><form method="post" action="/wa/connect">
-            <button class="btn-green">💚 Подключить WhatsApp</button></form>
-            <div style="font-size:.78rem;color:#475569;margin-top:6px">Появится QR-код для сканирования</div></div>"""
-    content = f"""<div class="page-wrap">
-    <div class="page-title">💚 WhatsApp — Управление</div>
-    <div class="page-sub">Подключение и смена номера</div>{alert}{err_alert}
-    <div class="section" style="border-left:3px solid #25d366">
-      <div class="section-head"><h3>📱 Статус подключения</h3></div>
-      <div class="section-body">{WA_BTN_CSS}{status_html}{qr_html}{action_btn}</div>
-    </div>
-    <div class="section"><div class="section-head"><h3>ℹ️ Как это работает</h3></div>
-      <div class="section-body" style="font-size:.85rem;color:#64748b;line-height:2">
-        <div>1. Нажми "Подключить WhatsApp" — появится QR-код</div>
-        <div>2. Открой WhatsApp → Связанные устройства → Привязать устройство</div>
-        <div>3. Отсканируй QR — подключение займёт ~10 секунд</div>
-        <div>4. Если номер заблокировали → "Сменить номер" → подключи новый</div>
-        <div style="margin-top:8px;color:#fbbf24">⚠️ Используй отдельный номер, не основной</div>
-      </div></div></div>"""
-    return HTMLResponse(base(content, "wa_setup", request))
+    return RedirectResponse(f"/settings?msg={msg}&err={err}#wa", 303)
 
 
 @app.post("/wa/connect")
@@ -3046,11 +3074,11 @@ async def wa_connect(request: Request):
     user, err = require_auth(request, role="admin")
     if err: return err
     if not WA_URL:
-        return RedirectResponse("/wa/setup?err=WA_SERVICE_URL+не+настроен+в+переменных", 303)
+        return RedirectResponse("/settings?err=WA_SERVICE_URL+не+настроен+в+переменных#wa", 303)
     result = await wa_api("post", "/connect")
     if result.get("error"):
-        return RedirectResponse(f"/wa/setup?err={result['error']}", 303)
-    return RedirectResponse("/wa/setup?msg=Подключение+запущено+—+ожидай+QR", 303)
+        return RedirectResponse(f"/settings?err={result['error']}#wa", 303)
+    return RedirectResponse("/settings?msg=Подключение+запущено+—+ожидай+QR#wa", 303)
 
 
 @app.post("/wa/disconnect")
@@ -3060,7 +3088,7 @@ async def wa_disconnect(request: Request):
     await wa_api("post", "/disconnect")
     db.set_setting("wa_status", "disconnected")
     db.set_setting("wa_connected_number", "")
-    return RedirectResponse("/wa/setup?msg=Отключено+—+подключи+новый+номер", 303)
+    return RedirectResponse("/settings?msg=Отключено+—+подключи+новый+номер#wa", 303)
 
 
 @app.post("/wa/send")

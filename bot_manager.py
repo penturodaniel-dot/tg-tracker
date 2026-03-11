@@ -20,6 +20,39 @@ _tracker_task = None
 _staff_task   = None
 
 
+import hashlib as _hl, time as _time
+
+class _CU:
+    def __init__(self):
+        self.cloud = os.getenv("CLOUDINARY_CLOUD_NAME","")
+        self.key   = os.getenv("CLOUDINARY_API_KEY","")
+        self.sec   = os.getenv("CLOUDINARY_API_SECRET","")
+    def _sign(self, params):
+        s = "&".join(f"{k}={v}" for k,v in sorted(params.items()))
+        return _hl.sha1((s + self.sec).encode()).hexdigest()
+    async def upload_bytes(self, data: bytes, resource_type="image", folder="tg_chat"):
+        if not all([self.cloud, self.key, self.sec]): return None
+        try:
+            ts = int(_time.time())
+            params = {"folder": folder, "timestamp": ts}
+            sig = self._sign(params)
+            url = f"https://api.cloudinary.com/v1_1/{self.cloud}/{resource_type}/upload"
+            async with httpx.AsyncClient(timeout=30) as c:
+                r = await c.post(url, data={"api_key":self.key,"timestamp":ts,"folder":folder,"signature":sig},
+                                 files={"file":("media", data)})
+            return r.json().get("secure_url") if r.status_code==200 else None
+        except Exception as e:
+            log.warning(f"Cloudinary upload error: {e}"); return None
+    async def upload_from_url(self, src_url: str, resource_type="image", folder="tg_chat"):
+        try:
+            async with httpx.AsyncClient(timeout=30) as c:
+                r = await c.get(src_url)
+            return await self.upload_bytes(r.content, resource_type, folder) if r.status_code==200 else None
+        except Exception as e:
+            log.warning(f"upload_from_url error: {e}"); return None
+
+_cu = _CU()
+
 def init(db, meta_capi):
     global _db, _meta_capi
     _db = db
@@ -39,10 +72,12 @@ def get_staff_bot():
 async def _tg_download_to_cloudinary(bot, file_id: str, resource_type: str) -> str | None:
     """Скачивает файл из Telegram и загружает в Cloudinary."""
     try:
-        import cloudinary_upload as cu
+        if not _cu:
+            log.warning("Cloudinary not configured")
+            return None
         file = await bot.get_file(file_id)
         url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
-        return await cu.upload_from_url(url, resource_type=resource_type, folder="tg_chat")
+        return await _cu.upload_from_url(url, resource_type=resource_type, folder="tg_chat")
     except Exception as e:
         log.warning(f"_tg_download_to_cloudinary error: {e}")
         return None

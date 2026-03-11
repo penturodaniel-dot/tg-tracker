@@ -1,272 +1,321 @@
 """
-bot_manager.py v5
-Бот 1 — Трекер: вступления в каналы → Meta CAPI Subscribe
-Бот 2 — Сотрудники: переписка → Meta CAPI Lead
-Уведомления менеджеру при новом сообщении
+bot_manager.py — управление aiogram ботами TG Tracker v6
+Поддержка: текст, фото, видео, голос (скачивание → Cloudinary → DB)
 """
 import asyncio
 import logging
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import ChatMemberUpdatedFilter, JOIN_TRANSITION, Command
+import os
+import httpx
 
 log = logging.getLogger(__name__)
 
-_tracker_bot: Bot | None = None
-_tracker_dp:  Dispatcher | None = None
-_tracker_task: asyncio.Task | None = None
+# ─── Глобальные переменные ────────────────────────────────────────────────────
+_db         = None
+_meta_capi  = None
+_tracker_dp = None
+_tracker_bot = None
+_staff_dp   = None
+_staff_bot  = None
+_tracker_task = None
+_staff_task   = None
 
-_staff_bot: Bot | None = None
-_staff_dp:  Dispatcher | None = None
-_staff_task: asyncio.Task | None = None
 
-_db = None
-_meta = None
-
-
-def init(db, meta_module):
-    global _db, _meta
+def init(db, meta_capi):
+    global _db, _meta_capi
     _db = db
-    _meta = meta_module
+    _meta_capi = meta_capi
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# БОТ 1 — ТРЕКЕР
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _build_tracker_dp() -> Dispatcher:
-    dp = Dispatcher()
-
-    @dp.chat_member(ChatMemberUpdatedFilter(JOIN_TRANSITION))
-    async def on_join(event: types.ChatMemberUpdated):
-        channel_ids = _db.get_channel_ids()
-        cid = str(event.chat.id)
-        if cid not in channel_ids:
-            return
-        user = event.new_chat_member.user
-        raw_link = event.invite_link.invite_link if event.invite_link else None
-        campaign = _db.get_campaign_by_link(raw_link)
-        campaign_name = campaign["name"] if campaign else "organic"
-
-        # Ищем click_id по invite_link если есть
-        click_id = None
-        if campaign:
-            click_id = campaign.get("click_id")
-
-        join_id = _db.log_join(
-            user_id=user.id,
-            channel_id=cid,
-            invite_link=raw_link,
-            campaign_name=campaign_name,
-            click_id=click_id
-        )
-
-        # Получаем UTM данные если есть click_id
-        click_data = _db.get_click(click_id) if click_id else {}
-        if click_data:
-            _db.save_utm(click_data, join_id=join_id)
-
-        pixel_id   = _db.get_setting("pixel_id")
-        meta_token = _db.get_setting("meta_token")
-        await _meta.send_subscribe_event(
-            pixel_id, meta_token, str(user.id), campaign_name,
-            fbclid=click_data.get("fbclid") if click_data else None,
-            fbp=click_data.get("fbp") if click_data else None,
-            utm_source=click_data.get("utm_source") if click_data else None,
-            utm_campaign=click_data.get("utm_campaign") if click_data else None,
-        )
-        log.info(f"[BOT1] JOIN user={user.id} channel={cid} campaign={campaign_name}")
-        asyncio.create_task(_run_flow(user.id, cid, _tracker_bot))
-
-    return dp
+def get_tracker_bot():
+    return _tracker_bot
 
 
-async def _run_flow(user_id: int, channel_id: str, bot: Bot | None):
-    if not bot: return
-    flows = _db.get_flows(channel_id, bot_type="tracker")
-    for flow in flows:
-        if not flow["active"]: continue
-        if _db.was_flow_sent(user_id, channel_id, flow["step"]): continue
-        if flow["delay_min"] > 0:
-            await asyncio.sleep(flow["delay_min"] * 60)
-        try:
-            await bot.send_message(user_id, flow["message"])
-            _db.log_flow_sent(user_id, channel_id, flow["step"])
-        except Exception as e:
-            log.warning(f"Flow error user={user_id}: {e}")
+def get_staff_bot():
+    return _staff_bot
 
 
-async def start_tracker_bot(token: str):
-    global _tracker_bot, _tracker_dp, _tracker_task
-    await stop_tracker_bot()
-    if not token: return
+# ─── Загрузка файла из TG + Cloudinary ───────────────────────────────────────
+
+async def _tg_download_to_cloudinary(bot, file_id: str, resource_type: str) -> str | None:
+    """Скачивает файл из Telegram и загружает в Cloudinary."""
     try:
-        _tracker_bot = Bot(token=token)
-        _tracker_dp  = _build_tracker_dp()
-        _tracker_task = asyncio.create_task(
-            _tracker_dp.start_polling(_tracker_bot, allowed_updates=["chat_member"])
-        )
-        info = await _tracker_bot.get_me()
-        log.info(f"[BOT1] Started: @{info.username}")
+        import cloudinary_upload as cu
+        file = await bot.get_file(file_id)
+        url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+        return await cu.upload_from_url(url, resource_type=resource_type, folder="tg_chat")
     except Exception as e:
-        log.error(f"[BOT1] Start error: {e}")
+        log.warning(f"_tg_download_to_cloudinary error: {e}")
+        return None
+
+
+# ─── Регистрация хэндлеров ────────────────────────────────────────────────────
+
+def _register_tracker_handlers(dp, bot):
+    """Бот-трекер: обрабатывает сообщения от посетителей (tracker bot)."""
+    from aiogram import types
+    from aiogram.filters import CommandStart
+
+    @dp.message(CommandStart())
+    async def cmd_start(msg: types.Message):
+        """Отвечает на /start, создаёт конверсацию."""
+        try:
+            tg_id = str(msg.from_user.id)
+            name  = (msg.from_user.full_name or tg_id)[:100]
+            uname = msg.from_user.username
+            conv  = _db.get_or_create_conversation(tg_id, name, uname)
+            pixel = _db.get_setting("pixel_id")
+            token = _db.get_setting("meta_token")
+            if pixel and token:
+                await _meta_capi.send_lead_event(pixel, token, user_id=tg_id)
+            await msg.answer("Привет! Оставьте ваш вопрос — мы ответим в ближайшее время 👋")
+        except Exception as e:
+            log.error(f"tracker /start error: {e}")
+
+    @dp.message()
+    async def on_message(msg: types.Message):
+        try:
+            tg_id = str(msg.from_user.id)
+            name  = (msg.from_user.full_name or tg_id)[:100]
+            uname = msg.from_user.username
+            conv  = _db.get_or_create_conversation(tg_id, name, uname)
+
+            text       = msg.text or msg.caption or ""
+            media_url  = None
+            media_type = None
+
+            # Фото
+            if msg.photo:
+                best = msg.photo[-1]  # наибольшее разрешение
+                media_url = await _tg_download_to_cloudinary(bot, best.file_id, "image")
+                media_type = "photo"
+                text = text or "📷 Фото"
+            # Видео
+            elif msg.video:
+                media_url = await _tg_download_to_cloudinary(bot, msg.video.file_id, "video")
+                media_type = "video"
+                text = text or "🎬 Видео"
+            # Голосовое
+            elif msg.voice:
+                media_url = await _tg_download_to_cloudinary(bot, msg.voice.file_id, "video")
+                media_type = "voice"
+                text = text or "🎤 Голосовое"
+            # Документ
+            elif msg.document:
+                ext = (msg.document.file_name or "").split(".")[-1].lower()
+                rt  = "image" if ext in ("jpg","jpeg","png","gif","webp") else \
+                      "video" if ext in ("mp4","mov","avi","mkv") else "raw"
+                media_url = await _tg_download_to_cloudinary(bot, msg.document.file_id, rt)
+                media_type = "document"
+                text = text or f"📎 {msg.document.file_name or 'Файл'}"
+            # Стикер
+            elif msg.sticker:
+                text = f"🎭 Стикер: {msg.sticker.emoji or ''}"
+
+            _db.save_message(conv["id"], tg_id, "visitor", text,
+                             media_url=media_url, media_type=media_type)
+            _db.update_conversation_last_message(tg_id, text, increment_unread=True)
+        except Exception as e:
+            log.error(f"tracker on_message error: {e}")
+
+
+def _register_staff_handlers(dp, bot):
+    """Бот для сотрудников: обрабатывает ответы сотрудников."""
+    from aiogram import types
+    from aiogram.filters import CommandStart
+
+    @dp.message(CommandStart())
+    async def cmd_start(msg: types.Message):
+        try:
+            tg_id = str(msg.from_user.id)
+            name  = (msg.from_user.full_name or tg_id)[:100]
+            uname = msg.from_user.username
+            _db.get_or_create_staff(tg_id, name, uname, conv_id=0)
+            pixel = _db.get_setting("pixel_id")
+            token = _db.get_setting("meta_token")
+            if pixel and token:
+                await _meta_capi.send_lead_event(pixel, token, user_id=tg_id, campaign="staff")
+            await msg.answer("Привет! Ваша анкета создана. Мы свяжемся с вами 👔")
+        except Exception as e:
+            log.error(f"staff /start error: {e}")
+
+    @dp.message()
+    async def on_message(msg: types.Message):
+        try:
+            tg_id = str(msg.from_user.id)
+            name  = (msg.from_user.full_name or tg_id)[:100]
+            uname = msg.from_user.username
+            conv  = _db.get_or_create_staff_conv(tg_id, name, uname)
+            if not conv:
+                return
+
+            text       = msg.text or msg.caption or ""
+            media_url  = None
+            media_type = None
+
+            if msg.photo:
+                best = msg.photo[-1]
+                media_url = await _tg_download_to_cloudinary(bot, best.file_id, "image")
+                media_type = "photo"
+                text = text or "📷 Фото"
+            elif msg.video:
+                media_url = await _tg_download_to_cloudinary(bot, msg.video.file_id, "video")
+                media_type = "video"
+                text = text or "🎬 Видео"
+            elif msg.voice:
+                media_url = await _tg_download_to_cloudinary(bot, msg.voice.file_id, "video")
+                media_type = "voice"
+                text = text or "🎤 Голосовое"
+            elif msg.document:
+                ext = (msg.document.file_name or "").split(".")[-1].lower()
+                rt  = "image" if ext in ("jpg","jpeg","png","gif","webp") else \
+                      "video" if ext in ("mp4","mov","avi","mkv") else "raw"
+                media_url = await _tg_download_to_cloudinary(bot, msg.document.file_id, rt)
+                media_type = "document"
+                text = text or f"📎 {msg.document.file_name or 'Файл'}"
+
+            _db.save_message(conv["id"], tg_id, "visitor", text,
+                             media_url=media_url, media_type=media_type)
+            _db.update_conversation_last_message(tg_id, text, increment_unread=True)
+
+            # Уведомление менеджера
+            notify_chat = _db.get_setting("notify_chat_id")
+            if notify_chat and _tracker_bot:
+                try:
+                    await _tracker_bot.send_message(
+                        int(notify_chat),
+                        f"👔 *Staff бот — новое сообщение*\n👤 {name}\n\n_{text[:80]}_",
+                        parse_mode="Markdown"
+                    )
+                except Exception:
+                    pass
+        except Exception as e:
+            log.error(f"staff on_message error: {e}")
+
+
+# ─── Запуск / остановка ───────────────────────────────────────────────────────
+
+async def _run_bot(dp, bot):
+    try:
+        await dp.start_polling(bot, handle_signals=False)
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        log.error(f"Bot polling error: {e}")
+
+
+async def start_tracker_bot(token: str | None):
+    global _tracker_bot, _tracker_dp, _tracker_task
+    if not token:
+        log.warning("Tracker bot token not set")
+        return
+    try:
+        from aiogram import Bot, Dispatcher
+        await stop_tracker_bot()
+        _tracker_bot = Bot(token=token)
+        _tracker_dp  = Dispatcher()
+        _register_tracker_handlers(_tracker_dp, _tracker_bot)
+        _tracker_task = asyncio.create_task(_run_bot(_tracker_dp, _tracker_bot))
+        info = await _tracker_bot.get_me()
+        log.info(f"Tracker bot @{info.username} started")
+        _db.set_setting("bot1_name", f"@{info.username}")
+    except Exception as e:
+        log.error(f"start_tracker_bot error: {e}")
         _tracker_bot = None
 
 
 async def stop_tracker_bot():
     global _tracker_bot, _tracker_dp, _tracker_task
-    if _tracker_task and not _tracker_task.done():
+    if _tracker_task:
         _tracker_task.cancel()
         try: await _tracker_task
-        except: pass
+        except Exception: pass
+        _tracker_task = None
+    if _tracker_dp:
+        await _tracker_dp.storage.close()
+        _tracker_dp = None
     if _tracker_bot:
-        try: await _tracker_bot.session.close()
-        except: pass
-    _tracker_bot = _tracker_dp = _tracker_task = None
+        await _tracker_bot.session.close()
+        _tracker_bot = None
 
 
-def get_tracker_bot() -> Bot | None:
-    return _tracker_bot
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# БОТ 2 — СОТРУДНИКИ
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _build_staff_dp() -> Dispatcher:
-    dp = Dispatcher()
-
-    @dp.message(Command("start"))
-    async def on_start(message: types.Message):
-        user = message.from_user
-        name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "Сотрудник"
-        conv = _db.get_or_create_conversation(str(user.id), name, user.username)
-        staff = _db.get_or_create_staff(str(user.id), name, user.username, conv["id"])
-
-        # Проверяем UTM из start параметра
-        start_param = message.text.split()[-1] if len(message.text.split()) > 1 else None
-        if start_param and start_param.startswith("ref_"):
-            click_id = start_param[4:]
-            click_data = _db.get_click(click_id)
-            if click_data:
-                _db.save_utm(click_data, conversation_id=conv["id"])
-                log.info(f"[BOT2] UTM linked conv={conv['id']} click={click_id}")
-
-        # Отправляем Lead в Meta CAPI если ещё не отправляли
-        if not staff.get("fb_event_sent"):
-            utm = _db.get_utm_by_conv(conv["id"])
-            pixel_id   = _db.get_setting("pixel_id")
-            meta_token = _db.get_setting("meta_token")
-            sent = await _meta.send_lead_event(
-                pixel_id, meta_token, str(user.id),
-                campaign=utm.get("utm_campaign", "staff_bot") if utm else "staff_bot",
-                fbclid=utm.get("fbclid") if utm else None,
-                fbp=utm.get("fbp") if utm else None,
-            )
-            if sent:
-                _db.set_staff_fb_event(staff["id"], "Lead")
-                _db.set_conv_fb_event(conv["id"], "Lead")
-
-        # Уведомление менеджеру
-        asyncio.create_task(_notify_manager(name, conv["id"], "start"))
-
-        welcome = _db.get_setting("staff_welcome", "Привет! Напиши своё имя и должность 👋")
-        await message.answer(welcome)
-        log.info(f"[BOT2] START user={user.id} name={name}")
-
-    @dp.message()
-    async def on_message(message: types.Message):
-        if message.chat.type != "private": return
-        user = message.from_user
-        name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "Сотрудник"
-        text = message.text or message.caption or "[медиафайл]"
-
-        conv = _db.get_or_create_conversation(str(user.id), name, user.username)
-        _db.get_or_create_staff(str(user.id), name, user.username, conv["id"])
-        _db.save_message(conv["id"], str(user.id), "visitor", text, message.message_id)
-        _db.update_conversation_last_message(str(user.id), text, increment_unread=True)
-
-        # Уведомление менеджеру
-        asyncio.create_task(_notify_manager(name, conv["id"], text))
-        log.info(f"[BOT2] MSG user={user.id}: {text[:50]}")
-
-    return dp
-
-
-async def _notify_manager(sender_name: str, conv_id: int, text: str):
-    """Отправляет уведомление менеджеру в Telegram"""
-    notify_chat = _db.get_setting("notify_chat_id")
-    if not notify_chat: return
-    bot = get_tracker_bot() or get_staff_bot()
-    if not bot: return
-    preview = text[:80] + "..." if len(text) > 80 else text
-    msg = f"💬 *Новое сообщение*\n👤 {sender_name}\n\n_{preview}_"
-    try:
-        await bot.send_message(
-            int(notify_chat), msg,
-            parse_mode="Markdown",
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-                types.InlineKeyboardButton(
-                    text="Открыть чат →",
-                    url=f"{_db.get_setting('app_url', '')}/chat?key={_db.get_setting('dashboard_password', '')}&conv_id={conv_id}"
-                )
-            ]])
-        )
-    except Exception as e:
-        log.warning(f"Notify error: {e}")
-
-
-async def start_staff_bot(token: str):
+async def start_staff_bot(token: str | None):
     global _staff_bot, _staff_dp, _staff_task
-    await stop_staff_bot()
-    if not token: return
+    if not token:
+        log.warning("Staff bot token not set")
+        return
     try:
+        from aiogram import Bot, Dispatcher
+        await stop_staff_bot()
         _staff_bot = Bot(token=token)
-        _staff_dp  = _build_staff_dp()
-        _staff_task = asyncio.create_task(
-            _staff_dp.start_polling(_staff_bot, allowed_updates=["message"])
-        )
+        _staff_dp  = Dispatcher()
+        _register_staff_handlers(_staff_dp, _staff_bot)
+        _staff_task = asyncio.create_task(_run_bot(_staff_dp, _staff_bot))
         info = await _staff_bot.get_me()
-        log.info(f"[BOT2] Started: @{info.username}")
+        log.info(f"Staff bot @{info.username} started")
+        _db.set_setting("bot2_name", f"@{info.username}")
     except Exception as e:
-        log.error(f"[BOT2] Start error: {e}")
+        log.error(f"start_staff_bot error: {e}")
         _staff_bot = None
 
 
 async def stop_staff_bot():
     global _staff_bot, _staff_dp, _staff_task
-    if _staff_task and not _staff_task.done():
+    if _staff_task:
         _staff_task.cancel()
         try: await _staff_task
-        except: pass
+        except Exception: pass
+        _staff_task = None
+    if _staff_dp:
+        await _staff_dp.storage.close()
+        _staff_dp = None
     if _staff_bot:
-        try: await _staff_bot.session.close()
-        except: pass
-    _staff_bot = _staff_dp = _staff_task = None
+        await _staff_bot.session.close()
+        _staff_bot = None
 
 
-def get_staff_bot() -> Bot | None:
-    return _staff_bot
-
+# ─── Отправка сообщений из дашборда ──────────────────────────────────────────
 
 async def send_staff_message(tg_chat_id: str, text: str) -> bool:
-    bot = get_staff_bot()
-    if not bot:
-        log.error("[BOT2] Bot not running")
+    """Отправляет текстовое сообщение сотруднику через staff-бот."""
+    if not _staff_bot:
         return False
     try:
-        await bot.send_message(int(tg_chat_id), text)
+        await _staff_bot.send_message(int(tg_chat_id), text)
         return True
     except Exception as e:
-        log.error(f"[BOT2] Send error: {e}")
+        log.error(f"send_staff_message error: {e}")
         return False
 
 
-async def get_bot_info(bot: Bot | None) -> dict:
-    if not bot:
-        return {"active": False, "username": None, "name": None}
+async def send_staff_photo(tg_chat_id: str, photo_url: str, caption: str = "") -> bool:
+    """Отправляет фото сотруднику через staff-бот (по URL из Cloudinary)."""
+    if not _staff_bot:
+        return False
     try:
-        info = await bot.get_me()
-        return {"active": True, "username": info.username,
-                "name": info.full_name, "link": f"https://t.me/{info.username}"}
-    except:
-        return {"active": False, "username": None, "name": None}
+        await _staff_bot.send_photo(int(tg_chat_id), photo=photo_url, caption=caption)
+        return True
+    except Exception as e:
+        log.error(f"send_staff_photo error: {e}")
+        return False
+
+
+async def send_tracker_message(tg_chat_id: str, text: str) -> bool:
+    """Отправляет текстовое сообщение через tracker-бот."""
+    if not _tracker_bot:
+        return False
+    try:
+        await _tracker_bot.send_message(int(tg_chat_id), text)
+        return True
+    except Exception as e:
+        log.error(f"send_tracker_message error: {e}")
+        return False
+
+
+async def get_bot_info(bot) -> dict | None:
+    if not bot:
+        return None
+    try:
+        me = await bot.get_me()
+        return {"id": me.id, "username": me.username, "first_name": me.first_name}
+    except Exception:
+        return None

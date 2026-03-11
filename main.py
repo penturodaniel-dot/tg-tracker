@@ -966,9 +966,20 @@ async def chat_panel(request: Request, conv_id: int = 0):
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T"," ")
         ucount = f'<span class="unread-num">{c["unread_count"]}</span>' if c["unread_count"] > 0 else ""
         dot = "🟢" if c["status"] == "open" else "⚫"
+        # FB иконка
+        fb_icon = '<span style="color:#1877f2;font-size:.75rem;font-weight:700;background:rgba(24,119,242,.12);border:1px solid rgba(24,119,242,.25);border-radius:4px;padding:1px 5px;margin-left:4px">fb</span>' if c.get("fbclid") else ""
+        # UTM теги
+        utm_parts = []
+        if c.get("utm_source"):   utm_parts.append(c["utm_source"])
+        if c.get("utm_campaign"): utm_parts.append(c["utm_campaign"])
+        utm_row = ""
+        if utm_parts:
+            tags_html = "".join(f'<span style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:3px;padding:1px 5px;font-size:.65rem;color:#a5b4fc;font-family:monospace">{p}</span>' for p in utm_parts)
+            utm_row = f'<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px">{tags_html}</div>'
         conv_items += f"""<a href="/chat?conv_id={c['id']}"><div class="{cls}">
-          <div class="conv-name"><span>{dot} {c['visitor_name']}</span>{ucount}</div>
+          <div class="conv-name"><span>{dot} {c['visitor_name']}</span><span style="display:flex;align-items:center;gap:2px">{fb_icon}{ucount}</span></div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
+          {utm_row}
           <div class="conv-time">{t}</div></div></a>"""
 
     if not conv_items:
@@ -1033,9 +1044,17 @@ async def chat_panel(request: Request, conv_id: int = 0):
             const name=esc(c.visitor_name||'');
             const preview=esc(c.last_message||'Нет сообщений');
             const vis=!q||name.toLowerCase().includes(q);
+            // FB иконка
+            const fbIcon=c.fbclid?'<span style="color:#1877f2;font-size:.75rem;font-weight:700;background:rgba(24,119,242,.12);border:1px solid rgba(24,119,242,.25);border-radius:4px;padding:1px 5px;margin-left:4px">fb</span>':'';
+            // UTM теги
+            const utmParts=[];
+            if(c.utm_source) utmParts.push(c.utm_source);
+            if(c.utm_campaign) utmParts.push(c.utm_campaign);
+            const utmRow=utmParts.length?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px">${{utmParts.map(p=>`<span style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:3px;padding:1px 5px;font-size:.65rem;color:#a5b4fc;font-family:monospace">${{esc(p)}}</span>`).join('')}}</div>`:'';
             html+=`<a href="/chat?conv_id=${{c.id}}" style="${{vis?'':'display:none'}}"><div class="${{cls}}">
-              <div class="conv-name"><span>${{dot}} ${{name}}</span>${{unum}}</div>
+              <div class="conv-name"><span>${{dot}} ${{name}}</span><span style="display:flex;align-items:center;gap:2px">${{fbIcon}}${{unum}}</span></div>
               <div class="conv-preview">${{preview}}</div>
+              ${{utmRow}}
               <div class="conv-time">${{t}}</div></div></a>`;
           }});
           if(!html)html='<div class="empty" style="padding:36px 14px">Диалогов пока нет</div>';

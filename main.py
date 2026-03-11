@@ -448,6 +448,14 @@ async def analytics(request: Request):
     click_stats   = db.get_click_stats(30)
     funnel        = db.get_staff_funnel()
 
+    # WA статистика
+    wa_convs      = db.get_wa_conversations()
+    wa_total      = len(wa_convs)
+    wa_open       = sum(1 for c in wa_convs if c.get("status") == "open")
+    wa_closed     = wa_total - wa_open
+    wa_unread     = sum(c.get("unread_count", 0) for c in wa_convs)
+    wa_fb_sent    = sum(1 for c in wa_convs if c.get("fb_event_sent"))
+
     # Строим chart HTML
     def bar_chart(data, key, color, label):
         if not data: return '<div class="empty">Нет данных</div>'
@@ -493,6 +501,17 @@ async def analytics(request: Request):
 
     <div style="font-size:.76rem;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:.08em;margin:18px 0 10px">Воронка сотрудников</div>
     <div class="funnel">{funnel_html}</div>
+
+    <div style="font-size:.76rem;font-weight:700;color:#25d366;text-transform:uppercase;letter-spacing:.08em;margin:18px 0 10px">💚 WhatsApp — Статистика</div>
+    <div class="cards" style="margin-bottom:18px">
+      <div class="card"><div class="val green">{wa_total}</div><div class="lbl">Всего WA диалогов</div></div>
+      <div class="card"><div class="val green">{wa_open}</div><div class="lbl">Открытых</div></div>
+      <div class="card"><div class="val" style="color:#64748b">{wa_closed}</div><div class="lbl">Закрытых</div></div>
+      <div class="card"><div class="val orange">{wa_unread}</div><div class="lbl">Непрочитанных</div></div>
+      <div class="card"><div class="val green">{wa_fb_sent}</div><div class="lbl">FB Lead отправлен</div></div>
+    </div>
+
+    {'<div class="section"><div class="section-head"><h3>💚 Последние WA диалоги</h3></div><table><thead><tr><th>Контакт</th><th>Номер</th><th>Статус</th><th>Последнее сообщение</th><th>FB Lead</th><th>Дата</th></tr></thead><tbody>' + "".join(f"""<tr><td style="font-weight:600;color:#fff">{c["visitor_name"]}</td><td style="color:#25d366">+{c["wa_number"]}</td><td><span class="{'badge-green' if c['status']=='open' else 'badge-gray'}">{"🟢 Открыт" if c["status"]=="open" else "⚫ Закрыт"}</span></td><td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#64748b">{(c.get("last_message") or "—")[:60]}</td><td>{"<span class='badge-green'>✓ FB</span>" if c.get("fb_event_sent") else "—"}</td><td>{(c.get("last_message_at") or c["created_at"])[:10]}</td></tr>""" for c in wa_convs[:20]) + '</tbody></table></div>' if wa_convs else '<div class="section"><div class="section-body"><div class="empty">Нет WA диалогов — подключи WhatsApp в разделе WA Настройка</div></div></div>'}
 
     <div class="section">
       <div class="section-head"><h3>🔗 Кампании по подпискам</h3></div>
@@ -604,14 +623,64 @@ async def chat_panel(request: Request, conv_id: int = 0):
     <script>
     const msgsEl=document.getElementById('msgs');
     if(msgsEl) msgsEl.scrollTop=msgsEl.scrollHeight;
+    const ACTIVE_ID={conv_id};
+    let _snap={{}};
+
+    // Единый цикл: обновляем список + сообщения каждые 3с
+    setInterval(pollAll,3000);
+    async function pollAll(){{
+      await refreshConvList();
+      if(ACTIVE_ID) await loadNewMsgs();
+    }}
+
+    // Умное обновление списка диалогов (без мерцания — только при изменениях)
+    async function refreshConvList(){{
+      try{{
+        const r=await fetch('/api/conversations');
+        const d=await r.json();
+        if(!d.conversations) return;
+        let changed=false,total=0;
+        const ids=new Set(d.conversations.map(c=>c.id));
+        d.conversations.forEach(c=>{{
+          total+=c.unread_count||0;
+          const p=_snap[c.id];
+          if(!p||p.u!==c.unread_count||p.m!==c.last_message||p.s!==c.status){{
+            changed=true;_snap[c.id]={{u:c.unread_count,m:c.last_message,s:c.status}};
+          }}
+        }});
+        for(const id in _snap)if(!ids.has(+id)){{changed=true;delete _snap[id];}}
+        if(changed){{
+          const q=(document.querySelector('.conv-search input')?.value||'').toLowerCase();
+          let html='';
+          d.conversations.forEach(c=>{{
+            const cls='conv-item'+(c.id===ACTIVE_ID?' active':'');
+            const t=(c.last_message_at||c.created_at).substring(0,16).replace('T',' ');
+            const unum=c.unread_count>0?`<span class="unread-num">${{c.unread_count}}</span>`:'';
+            const dot=c.status==='open'?'🟢':'⚫';
+            const name=esc(c.visitor_name||'');
+            const preview=esc(c.last_message||'Нет сообщений');
+            const vis=!q||name.toLowerCase().includes(q);
+            html+=`<a href="/chat?conv_id=${{c.id}}" style="${{vis?'':'display:none'}}"><div class="${{cls}}">
+              <div class="conv-name"><span>${{dot}} ${{name}}</span>${{unum}}</div>
+              <div class="conv-preview">${{preview}}</div>
+              <div class="conv-time">${{t}}</div></div></a>`;
+          }});
+          if(!html)html='<div class="empty" style="padding:36px 14px">Диалогов пока нет</div>';
+          document.getElementById('conv-items').innerHTML=html;
+        }}
+        // Обновляем бейдж в сайдбаре
+        const b=document.querySelector('.badge-count');
+        if(total>0){{if(b)b.textContent=total;}}else if(b)b.remove();
+      }}catch(e){{}}
+    }}
+
     async function sendMsg(){{
       const ta=document.getElementById('reply-text');
       const text=ta.value.trim(); if(!text) return; ta.value='';
       await fetch('/chat/send',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id={conv_id}&text='+encodeURIComponent(text)}});
-      loadNewMsgs();
+      await loadNewMsgs();
     }}
     function handleKey(e){{if(e.key==='Enter'&&!e.shiftKey){{e.preventDefault();sendMsg();}}}}
-    {"setInterval(loadNewMsgs,3000);" if active_conv else "setInterval(checkUnread,5000);"}
     async function loadNewMsgs(){{
       const msgs=document.querySelectorAll('.msg[data-id]');
       const lastId=msgs.length?msgs[msgs.length-1].dataset.id:0;
@@ -622,11 +691,6 @@ async def chat_panel(request: Request, conv_id: int = 0):
         data.messages.forEach(m=>{{const d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
           d.innerHTML='<div class="msg-bubble">'+esc(m.content)+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
           c.appendChild(d);}});c.scrollTop=c.scrollHeight;}}
-    }}
-    async function checkUnread(){{
-      const r=await fetch('/api/stats');const d=await r.json();
-      const b=document.querySelector('.badge-count');
-      if(d.unread>0){{if(b)b.textContent=d.unread;}}else if(b)b.remove();
     }}
     function esc(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>');}}
     function filterConvs(q){{document.querySelectorAll('.conv-item').forEach(el=>{{
@@ -1206,6 +1270,20 @@ async def api_stats(request: Request):
     return JSONResponse(db.get_stats())
 
 
+@app.get("/api/conversations")
+async def api_conversations(request: Request):
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    return JSONResponse({"conversations": db.get_conversations()})
+
+
+@app.get("/api/wa_conversations")
+async def api_wa_conversations(request: Request):
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    return JSONResponse({"conversations": db.get_wa_conversations()})
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # WHATSAPP
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1349,15 +1427,61 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
     <script>
     const msgsEl=document.getElementById('wa-msgs');
     if(msgsEl) msgsEl.scrollTop=msgsEl.scrollHeight;
+    const WA_ACTIVE_ID={conv_id};
+    let _waSnap={{}};
+
+    // Единый цикл: обновляем список + сообщения каждые 3с
+    setInterval(waPollAll,3000);
+    async function waPollAll(){{
+      await refreshWaConvList();
+      if(WA_ACTIVE_ID) await loadNewWaMsgs();
+    }}
+
+    // Умное обновление WA списка диалогов (без мерцания)
+    async function refreshWaConvList(){{
+      try{{
+        const r=await fetch('/api/wa_conversations');
+        const d=await r.json();
+        if(!d.conversations) return;
+        let changed=false;
+        const ids=new Set(d.conversations.map(c=>c.id));
+        d.conversations.forEach(c=>{{
+          const p=_waSnap[c.id];
+          if(!p||p.u!==c.unread_count||p.m!==c.last_message||p.s!==c.status){{
+            changed=true;_waSnap[c.id]={{u:c.unread_count,m:c.last_message,s:c.status}};
+          }}
+        }});
+        for(const id in _waSnap)if(!ids.has(+id)){{changed=true;delete _waSnap[id];}}
+        if(changed){{
+          const q=(document.querySelector('.conv-search input')?.value||'').toLowerCase();
+          let html='';
+          d.conversations.forEach(c=>{{
+            const cls='conv-item'+(c.id===WA_ACTIVE_ID?' active':'');
+            const t=(c.last_message_at||c.created_at).substring(0,16).replace('T',' ');
+            const unum=c.unread_count>0?`<span class="unread-num" style="background:#25d366">${{c.unread_count}}</span>`:'';
+            const dot=c.status==='open'?'🟢':'⚫';
+            const name=esc(c.visitor_name||'');
+            const preview=esc(c.last_message||'Нет сообщений');
+            const vis=!q||name.toLowerCase().includes(q);
+            html+=`<a href="/wa/chat?conv_id=${{c.id}}" style="${{vis?'':'display:none'}}"><div class="${{cls}}">
+              <div class="conv-name"><span>${{dot}} ${{name}}</span>${{unum}}</div>
+              <div class="conv-preview">${{preview}}</div>
+              <div class="conv-time">💚 +${{c.wa_number||''}} · ${{t}}</div></div></a>`;
+          }});
+          if(!html)html='<div class="empty" style="padding:36px 14px">Нет WA диалогов.<br><br>Подключи WhatsApp<br>в разделе WA Настройка</div>';
+          document.getElementById('conv-items').innerHTML=html;
+        }}
+      }}catch(e){{}}
+    }}
+
     async function sendWaMsg(){{
       const ta=document.getElementById('wa-reply');
       const text=ta.value.trim(); if(!text) return; ta.value='';
       await fetch('/wa/send',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},
         body:'conv_id={conv_id}&text='+encodeURIComponent(text)}});
-      loadNewWaMsgs();
+      await loadNewWaMsgs();
     }}
     function handleWaKey(e){{if(e.key==='Enter'&&!e.shiftKey){{e.preventDefault();sendWaMsg();}}}}
-    {"setInterval(loadNewWaMsgs,3000);" if active_conv else "setInterval(()=>{{}},5000);"}
     async function loadNewWaMsgs(){{
       const msgs=document.querySelectorAll('#wa-msgs .msg[data-id]');
       const lastId=msgs.length?msgs[msgs.length-1].dataset.id:0;

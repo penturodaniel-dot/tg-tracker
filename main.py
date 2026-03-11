@@ -548,6 +548,8 @@ def nav_html(active: str, request: Request) -> str:
     b2 = bot_manager.get_staff_bot()
     b1_name = db.get_setting("bot1_name", "Бот трекер")
     b2_name = db.get_setting("bot2_name", "Бот сотрудники")
+    wa_status = db.get_setting("wa_status", "disconnected")
+    wa_number = db.get_setting("wa_connected_number", "")
     role = user["role"] if user else "manager"
 
     def item(icon, label, page, section_color="blue", badge=False):
@@ -590,6 +592,15 @@ def nav_html(active: str, request: Request) -> str:
       <div class="sidebar-footer">
         <div class="bot-status"><div class="dot {'dot-green' if b1 else 'dot-red'}"></div><span>{b1_name}</span></div>
         <div class="bot-status"><div class="dot {'dot-green' if b2 else 'dot-red'}"></div><span>{b2_name}</span></div>
+        <a href="/{'wa/chat' if wa_status=='ready' else 'settings'}" style="text-decoration:none">
+          <div class="bot-status" style="border-color:{'rgba(37,211,102,.3)' if wa_status=='ready' else 'rgba(239,68,68,.2)'};cursor:pointer">
+            <div class="dot" style="background:{'#25d366;box-shadow:0 0 6px rgba(37,211,102,.6)' if wa_status=='ready' else '#ef4444'}"></div>
+            <span style="flex:1;font-size:.73rem">
+              {'💚 WA: +' + wa_number if wa_status == 'ready' else ('📱 WA: QR...' if wa_status == 'qr' else '⚪ WA: откл.')}
+            </span>
+            <span style="font-size:.65rem;color:{'#25d366' if wa_status=='ready' else '#64748b'}">{'✓' if wa_status=='ready' else '→'}</span>
+          </div>
+        </a>
         <a href="/logout" class="nav-item" style="margin:4px 0 0;color:var(--text3)">⬅ Выйти</a>
       </div>
     </div>"""
@@ -947,17 +958,29 @@ async def chat_panel(request: Request, conv_id: int = 0):
                 </div>"""
 
             close_btn = f'<form method="post" action="/chat/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>' if active_conv["status"] == "open" else f'<form method="post" action="/chat/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-orange btn-sm">↺ Открыть</button></form>'
+
+            # Кнопка отправки Lead в FB (как в WA чате)
+            if staff and staff.get("fb_event_sent"):
+                lead_btn = '<span class="badge-green" style="font-size:.77rem;padding:5px 10px">✅ FB Lead отправлен</span>'
+            elif staff:
+                lead_btn = f'<form method="post" action="/chat/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="background:linear-gradient(135deg,#1877f2,#0a5fd8);box-shadow:0 0 12px rgba(24,119,242,.3)">📤 Lead в FB</button></form>'
+            else:
+                lead_btn = ''
+
             header_html = f"""<div class="chat-header">
               <div style="display:flex;align-items:flex-start;gap:12px">
                 <div class="avatar">{active_conv['visitor_name'][0].upper()}</div>
                 <div>
-                  <div style="font-weight:700;color:#fff">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.74rem">●</span></div>
-                  <div style="font-size:.79rem;color:#475569">{uname}</div>
+                  <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.74rem">●</span></div>
+                  <div style="font-size:.79rem;color:var(--text2)">{uname}</div>
                   {staff_info}
                   {utm_tags}
                 </div>
               </div>
-              <div style="display:flex;gap:8px;flex-shrink:0">{close_btn}</div>
+              <div style="display:flex;gap:8px;flex-shrink:0;align-items:flex-start;flex-wrap:wrap;justify-content:flex-end">
+                {lead_btn}
+                {close_btn}
+              </div>
             </div>"""
 
     conv_items = ""
@@ -1126,6 +1149,27 @@ async def chat_reopen(request: Request, conv_id: int = Form(...)):
     user, err = require_auth(request)
     if err: return err
     db.reopen_conversation(conv_id)
+    return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
+
+
+@app.post("/chat/send_lead")
+async def chat_send_lead(request: Request, conv_id: int = Form(...)):
+    user, err = require_auth(request)
+    if err: return err
+    conv = db.get_conversation(conv_id)
+    if not conv: return RedirectResponse("/chat", 303)
+    staff = db.get_staff_by_conv(conv_id)
+    if not staff: return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
+    if staff.get("fb_event_sent"):
+        return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
+    pixel_id   = db.get_setting("pixel_id")
+    meta_token = db.get_setting("meta_token")
+    utm = db.get_utm_by_conv(conv_id)
+    campaign = (utm.get("utm_campaign") if utm else None) or "telegram"
+    user_id = str(conv.get("tg_chat_id", ""))
+    sent = await meta_capi.send_lead_event(pixel_id, meta_token, user_id=user_id, campaign=campaign)
+    if sent:
+        db.set_staff_fb_event(staff["id"], "Lead")
     return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
 
 
@@ -2965,6 +3009,25 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
     if sent:
         db.set_wa_fb_event(conv_id, "Lead")
     return RedirectResponse(f"/wa/chat?conv_id={conv_id}", 303)
+
+
+@app.post("/chat/send_lead")
+async def chat_send_lead(request: Request, conv_id: int = Form(...)):
+    user, err = require_auth(request)
+    if err: return err
+    staff = db.get_staff_by_conv(conv_id)
+    if not staff: return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
+    if staff.get("fb_event_sent"):
+        return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
+    pixel_id   = db.get_setting("pixel_id")
+    meta_token = db.get_setting("meta_token")
+    # Используем tg_chat_id как user_id для CAPI
+    conv = db.get_conversation(conv_id)
+    user_id = conv["tg_chat_id"] if conv else str(staff["id"])
+    sent = await meta_capi.send_lead_event(pixel_id, meta_token, user_id=user_id, campaign="telegram_staff")
+    if sent:
+        db.set_staff_fb_event(staff["id"], "Lead")
+    return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
 
 
 @app.post("/wa/close")

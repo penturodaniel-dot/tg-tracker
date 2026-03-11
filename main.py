@@ -456,6 +456,29 @@ async def analytics(request: Request):
     wa_unread     = sum(c.get("unread_count", 0) for c in wa_convs)
     wa_fb_sent    = sum(1 for c in wa_convs if c.get("fb_event_sent"))
 
+    # WA таблица (вынесена из f-string чтобы избежать SyntaxError в Python 3.11)
+    if wa_convs:
+        wa_rows = ""
+        for c in wa_convs[:20]:
+            badge_cls = "badge-green" if c["status"] == "open" else "badge-gray"
+            status_lbl = "🟢 Открыт" if c["status"] == "open" else "⚫ Закрыт"
+            fb_badge = "<span class='badge-green'>✓ FB</span>" if c.get("fb_event_sent") else "—"
+            preview = (c.get("last_message") or "—")[:60]
+            date = (c.get("last_message_at") or c["created_at"])[:10]
+            wa_rows += f"""<tr>
+              <td style="font-weight:600;color:#fff">{c["visitor_name"]}</td>
+              <td style="color:#25d366">+{c["wa_number"]}</td>
+              <td><span class="{badge_cls}">{status_lbl}</span></td>
+              <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#64748b">{preview}</td>
+              <td>{fb_badge}</td>
+              <td>{date}</td></tr>"""
+        wa_table_html = f"""<div class="section">
+          <div class="section-head"><h3>💚 Последние WA диалоги</h3></div>
+          <table><thead><tr><th>Контакт</th><th>Номер</th><th>Статус</th><th>Последнее сообщение</th><th>FB Lead</th><th>Дата</th></tr></thead>
+          <tbody>{wa_rows}</tbody></table></div>"""
+    else:
+        wa_table_html = '<div class="section"><div class="section-body"><div class="empty">Нет WA диалогов — подключи WhatsApp в разделе WA Настройка</div></div></div>'
+
     # Строим chart HTML
     def bar_chart(data, key, color, label):
         if not data: return '<div class="empty">Нет данных</div>'
@@ -511,7 +534,7 @@ async def analytics(request: Request):
       <div class="card"><div class="val green">{wa_fb_sent}</div><div class="lbl">FB Lead отправлен</div></div>
     </div>
 
-    {'<div class="section"><div class="section-head"><h3>💚 Последние WA диалоги</h3></div><table><thead><tr><th>Контакт</th><th>Номер</th><th>Статус</th><th>Последнее сообщение</th><th>FB Lead</th><th>Дата</th></tr></thead><tbody>' + "".join(f"""<tr><td style="font-weight:600;color:#fff">{c["visitor_name"]}</td><td style="color:#25d366">+{c["wa_number"]}</td><td><span class="{'badge-green' if c['status']=='open' else 'badge-gray'}">{"🟢 Открыт" if c["status"]=="open" else "⚫ Закрыт"}</span></td><td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#64748b">{(c.get("last_message") or "—")[:60]}</td><td>{"<span class='badge-green'>✓ FB</span>" if c.get("fb_event_sent") else "—"}</td><td>{(c.get("last_message_at") or c["created_at"])[:10]}</td></tr>""" for c in wa_convs[:20]) + '</tbody></table></div>' if wa_convs else '<div class="section"><div class="section-body"><div class="empty">Нет WA диалогов — подключи WhatsApp в разделе WA Настройка</div></div></div>'}
+    {wa_table_html}
 
     <div class="section">
       <div class="section-head"><h3>🔗 Кампании по подпискам</h3></div>

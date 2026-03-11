@@ -66,7 +66,7 @@ WA_SECRET          = os.getenv("WA_API_SECRET",  "changeme")
 WA_WH_SECRET       = os.getenv("WA_WEBHOOK_SECRET", "changeme")
 
 db = Database()
-bot_manager.init(db, meta_capi, cu=cu)
+bot_manager.init(db, meta_capi)
 
 for key, val in [
     ("bot1_token",  DEFAULT_BOT1_TOKEN),

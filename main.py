@@ -243,8 +243,8 @@ def nav_html(active: str, request: Request) -> str:
       <div class="nav-divider"></div>
       <div class="nav-section">👔 Сотрудники</div>
       {item("💬", "Чаты", "chat", "orange", badge=True)}
-      <a href="/wa/chat"><div class="{'nav-item active orange' if active in ['wa_chat'] else 'nav-item'}"><span class="nav-label">💚 WA Чаты</span></div></a>
-      <a href="/wa/setup"><div class="{'nav-item active orange' if active in ['wa_setup'] else 'nav-item'}"><span class="nav-label">📱 WA Настройка</span></div></a>
+      {item("💚", "WA Чаты", "wa/chat", "orange")}
+      {item("📱", "WA Настройка", "wa/setup", "orange")}
       {item("🗂", "База", "staff", "orange")}
       {item("💬", "Msg Flow HR", "flow_staff", "orange")}
       {admin_section}
@@ -1378,9 +1378,9 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
 
 
 @app.get("/wa/setup", response_class=HTMLResponse)
-async def wa_setup_page(request: Request, msg: str = ""):
-    user, err = require_auth(request, role="admin")
-    if err: return err
+async def wa_setup_page(request: Request, msg: str = "", err: str = ""):
+    user, err_auth = require_auth(request, role="admin")
+    if err_auth: return err_auth
     wa_data   = await wa_api("get", "/status")
     wa_status = wa_data.get("status", "disconnected")
     wa_number = wa_data.get("number", "")
@@ -1398,6 +1398,7 @@ async def wa_setup_page(request: Request, msg: str = ""):
               <script>let t=20;setInterval(()=>{{const el=document.getElementById('cd');if(el)el.textContent=--t;if(t<=0)location.reload()}},1000)</script></div>
             </div>"""
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+    err_alert = f'<div class="alert-red">❌ {err}<br><small>Проверь что WA сервис запущен на Railway</small></div>' if err else ""
     WA_BTN_CSS = "<style>.btn-green{background:#059669;color:#fff;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:.85rem;font-weight:600}.btn-green:hover{background:#047857}</style>"
     if wa_status == "ready":
         status_html = f'<div style="color:#34d399;font-size:1rem;font-weight:600">💚 Подключён · +{wa_number}</div>'
@@ -1414,7 +1415,7 @@ async def wa_setup_page(request: Request, msg: str = ""):
             <div style="font-size:.78rem;color:#475569;margin-top:6px">Появится QR-код для сканирования</div></div>"""
     content = f"""<div class="page-wrap">
     <div class="page-title">💚 WhatsApp — Управление</div>
-    <div class="page-sub">Подключение и смена номера</div>{alert}
+    <div class="page-sub">Подключение и смена номера</div>{alert}{err_alert}
     <div class="section" style="border-left:3px solid #25d366">
       <div class="section-head"><h3>📱 Статус подключения</h3></div>
       <div class="section-body">{WA_BTN_CSS}{status_html}{qr_html}{action_btn}</div>
@@ -1434,8 +1435,12 @@ async def wa_setup_page(request: Request, msg: str = ""):
 async def wa_connect(request: Request):
     user, err = require_auth(request, role="admin")
     if err: return err
-    await wa_api("post", "/connect")
-    return RedirectResponse("/wa/setup", 303)
+    if not WA_URL:
+        return RedirectResponse("/wa/setup?err=WA_SERVICE_URL+не+настроен+в+переменных", 303)
+    result = await wa_api("post", "/connect")
+    if result.get("error"):
+        return RedirectResponse(f"/wa/setup?err={result['error']}", 303)
+    return RedirectResponse("/wa/setup?msg=Подключение+запущено+—+ожидай+QR", 303)
 
 
 @app.post("/wa/disconnect")

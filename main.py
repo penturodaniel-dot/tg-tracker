@@ -239,14 +239,12 @@ def nav_html(active: str, request: Request) -> str:
       {item("📡", "Каналы", "channels", "blue")}
       {item("🔗", "Кампании", "campaigns", "blue")}
       {item("🌐", "Лендинг", "landing", "blue")}
-      {item("💬", "Msg Flow", "flow_clients", "blue")}
       <div class="nav-divider"></div>
       <div class="nav-section">👔 Сотрудники</div>
-      {item("💬", "Чаты", "chat", "orange", badge=True)}
+      {item("💬", "TG Чаты", "chat", "orange", badge=True)}
       {item("💚", "WA Чаты", "wa/chat", "orange")}
-      {item("📱", "WA Настройка", "wa/setup", "orange")}
       {item("🗂", "База", "staff", "orange")}
-      {item("💬", "Msg Flow HR", "flow_staff", "orange")}
+      {item("🌐", "Лендинг HR", "staff/landing", "orange")}
       {admin_section}
       <div class="sidebar-footer">
         <div class="bot-status"><div class="dot {'dot-green' if b1 else 'dot-red'}"></div><span>{b1_name}</span></div>
@@ -1300,6 +1298,557 @@ async def landing_media(request: Request,
     db.set_setting("land_photo_urls", land_photo_urls.strip())
     db.set_setting("land_video_urls", land_video_urls.strip())
     return RedirectResponse("/landing?msg=Медиа+сохранены", 303)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STAFF LANDING — Лендинг для сотрудников
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/staff/landing", response_class=HTMLResponse)
+async def staff_landing_admin(request: Request, msg: str = ""):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    links = db.get_staff_landing_links()
+    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+
+    tg_links = [l for l in links if l["link_type"] == "tg"]
+    wa_links = [l for l in links if l["link_type"] == "wa"]
+
+    def link_rows(lst, ltype):
+        if not lst:
+            return f'<tr><td colspan="4"><div class="empty">Нет ссылок типа {ltype}</div></td></tr>'
+        return "".join(f"""<tr>
+            <td style="font-size:1.2rem">{l["emoji"]}</td>
+            <td><b>{l["title"]}</b></td>
+            <td style="font-size:.8rem;color:#60a5fa">{l["url"][:45]}...</td>
+            <td><form method="post" action="/staff/landing/delete">
+              <input type="hidden" name="link_id" value="{l["id"]}"/>
+              <button class="del-btn">✕</button></form></td></tr>""" for l in lst)
+
+    def gs(k, d=""): return db.get_setting(k, d)
+
+    content = f"""<div class="page-wrap">
+    <div class="page-title">🌐 Лендинг HR — Сотрудники</div>
+    <div class="page-sub">Публичная страница: <a href="/staff/page" target="_blank" style="color:#f97316">/staff/page →</a></div>
+    {alert}
+
+    <div class="section" style="border-left:3px solid #2BA5F7">
+      <div class="section-head"><h3>✈️ Telegram кнопки</h3></div>
+      <div class="section-body">
+        <form method="post" action="/staff/landing/add"><div class="form-row" style="margin-bottom:10px">
+          <input type="hidden" name="link_type" value="tg"/>
+          <div class="field-group" style="max-width:70px"><div class="field-label">Emoji</div><input type="text" name="emoji" value="✈️"/></div>
+          <div class="field-group"><div class="field-label">Название</div><input type="text" name="title" placeholder="Наш Telegram" required/></div>
+          <div class="field-group"><div class="field-label">Ссылка t.me</div><input type="text" name="url" placeholder="https://t.me/username" required/></div>
+          <div style="display:flex;align-items:flex-end"><button class="btn">Добавить</button></div>
+        </div></form>
+        <table><thead><tr><th></th><th>Название</th><th>Ссылка</th><th></th></tr></thead>
+        <tbody>{link_rows(tg_links, "tg")}</tbody></table>
+      </div>
+    </div>
+
+    <div class="section" style="border-left:3px solid #25d366">
+      <div class="section-head"><h3>💚 WhatsApp кнопки</h3></div>
+      <div class="section-body">
+        <form method="post" action="/staff/landing/add"><div class="form-row" style="margin-bottom:10px">
+          <input type="hidden" name="link_type" value="wa"/>
+          <div class="field-group" style="max-width:70px"><div class="field-label">Emoji</div><input type="text" name="emoji" value="💚"/></div>
+          <div class="field-group"><div class="field-label">Название</div><input type="text" name="title" placeholder="Написать в WhatsApp" required/></div>
+          <div class="field-group"><div class="field-label">Ссылка wa.me</div><input type="text" name="url" placeholder="https://wa.me/1234567890" required/></div>
+          <div style="display:flex;align-items:flex-end"><button class="btn-green">Добавить</button></div>
+        </div></form>
+        <table><thead><tr><th></th><th>Название</th><th>Ссылка</th><th></th></tr></thead>
+        <tbody>{link_rows(wa_links, "wa")}</tbody></table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h3>✏️ Тексты и настройки</h3></div>
+      <div class="section-body">
+        <form method="post" action="/staff/landing/texts">
+          <div class="grid-2" style="margin-bottom:12px">
+            <div class="field-group"><div class="field-label">Hero заголовок (строка 1)</div><input type="text" name="sl_hero1" value="{gs("sl_hero1","РАБОТА")}"/></div>
+            <div class="field-group"><div class="field-label">Hero заголовок (строка 2)</div><input type="text" name="sl_hero2" value="{gs("sl_hero2","МАССАЖИСТКОЙ")}"/></div>
+            <div class="field-group"><div class="field-label">Hero бейдж</div><input type="text" name="sl_badge" value="{gs("sl_badge","в США")}"/></div>
+            <div class="field-group"><div class="field-label">Hero подзаголовок</div><input type="text" name="sl_hero_sub" value="{gs("sl_hero_sub","Свяжитесь с нами и начните зарабатывать деньги прямо сейчас!")}"/></div>
+            <div class="field-group"><div class="field-label">Hero badge-label (напр. Элитный СПА)</div><input type="text" name="sl_hero_badge" value="{gs("sl_hero_badge","⭐ Элитный СПА")}"/></div>
+            <div class="field-group"><div class="field-label">Hero фото URL (Cloudinary)</div><input type="text" name="sl_hero_img" value="{gs("sl_hero_img","")}"/></div>
+          </div>
+          <button class="btn">💾 Сохранить тексты</button>
+        </form>
+      </div>
+    </div>
+    </div>"""
+    return HTMLResponse(base(content, "staff/landing", request))
+
+
+@app.post("/staff/landing/add")
+async def staff_landing_add(request: Request, title: str = Form(...),
+    url: str = Form(...), link_type: str = Form("tg"), emoji: str = Form("📢")):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    db.add_staff_landing_link(title.strip(), url.strip(), link_type, emoji.strip() or "📢")
+    return RedirectResponse("/staff/landing?msg=Добавлено", 303)
+
+
+@app.post("/staff/landing/delete")
+async def staff_landing_delete(request: Request, link_id: int = Form(...)):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    db.delete_staff_landing_link(link_id)
+    return RedirectResponse("/staff/landing", 303)
+
+
+@app.post("/staff/landing/texts")
+async def staff_landing_texts(request: Request,
+    sl_hero1: str = Form(""), sl_hero2: str = Form(""), sl_badge: str = Form(""),
+    sl_hero_sub: str = Form(""), sl_hero_badge: str = Form(""), sl_hero_img: str = Form("")):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    for k, v in [("sl_hero1",sl_hero1),("sl_hero2",sl_hero2),("sl_badge",sl_badge),
+                  ("sl_hero_sub",sl_hero_sub),("sl_hero_badge",sl_hero_badge),("sl_hero_img",sl_hero_img)]:
+        if v.strip(): db.set_setting(k, v.strip())
+    return RedirectResponse("/staff/landing?msg=Сохранено", 303)
+
+
+@app.get("/staff/page", response_class=HTMLResponse)
+async def staff_public_page():
+    links = db.get_staff_landing_links()
+    tg_links = [l for l in links if l["link_type"] == "tg"]
+    wa_links = [l for l in links if l["link_type"] == "wa"]
+
+    def gs(k, d=""): return db.get_setting(k, d)
+    hero1      = gs("sl_hero1", "РАБОТА")
+    hero2      = gs("sl_hero2", "МАССАЖИСТКОЙ")
+    badge      = gs("sl_badge", "в США")
+    hero_sub   = gs("sl_hero_sub", "Свяжитесь с нами и начните зарабатывать деньги прямо сейчас!")
+    hero_badge = gs("sl_hero_badge", "⭐ Элитный СПА")
+    hero_img   = gs("sl_hero_img", "")
+
+    hero_img_html = f'<img src="{hero_img}" alt="massage" style="width:100%;height:100%;object-fit:cover"/>' if hero_img else '<div style="width:100%;height:100%;background:linear-gradient(135deg,#e879f9,#a21caf);display:flex;align-items:center;justify-content:center;font-size:4rem">💆‍♀️</div>'
+
+    def contact_btns(lst, color, icon):
+        if not lst: return ""
+        return "".join(f'<a href="{l["url"]}" target="_blank" class="cta-btn" style="background:{color};display:flex;align-items:center;justify-content:center;gap:10px;margin:6px 0;text-decoration:none"><span>{l["emoji"]}</span> {l["title"]}</a>' for l in lst)
+
+    tg_btns = contact_btns(tg_links, "linear-gradient(135deg,#2BA5F7,#1a7fd4)", "✈️")
+    wa_btns = contact_btns(wa_links, "linear-gradient(135deg,#25d366,#128c7e)", "💚")
+    all_btns_popup = tg_btns + wa_btns or '<p style="text-align:center;color:#999;padding:20px">Контакты не настроены</p>'
+    first_tg = tg_links[0]["url"] if tg_links else "#"
+    first_wa = wa_links[0]["url"] if wa_links else "#"
+
+    def inline_btns():
+        btns = ""
+        if tg_links:
+            btns += f'<a href="{tg_links[0]["url"]}" target="_blank" class="cta-btn" style="background:linear-gradient(135deg,#e040fb,#9c27b0);display:inline-flex;align-items:center;gap:10px;padding:14px 32px;border-radius:50px;color:#fff;font-weight:700;font-size:1rem;text-decoration:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>Связаться в Телеграм</a>'
+        return btns
+
+    cta_html = inline_btns()
+
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Massage Job USA</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+:root{{--pink:#e040fb;--pink2:#f06292;--grad:linear-gradient(135deg,#e040fb,#9c27b0);--dark:#1a1a2e}}
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#fff;color:#1a1a2e;overflow-x:hidden}}
+a{{text-decoration:none;color:inherit}}
+
+/* NAV */
+.nav{{display:flex;align-items:center;justify-content:space-between;padding:14px 40px;background:#fff;
+  border-bottom:1px solid #f5e6ff;position:sticky;top:0;z-index:50;box-shadow:0 2px 12px rgba(224,64,251,.08)}}
+.nav-logo{{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.05rem}}
+.nav-logo-icon{{width:36px;height:36px;background:var(--grad);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem}}
+.nav-links{{display:flex;gap:28px;font-size:.88rem;color:#555}}
+.nav-links a:hover{{color:var(--pink)}}
+.nav-tg{{display:flex;align-items:center;gap:7px;color:var(--pink);font-weight:600;font-size:.88rem}}
+@media(max-width:768px){{.nav-links{{display:none}}.nav{{padding:12px 20px}}}}
+
+/* HERO */
+.hero{{display:grid;grid-template-columns:1fr 1fr;min-height:85vh;background:linear-gradient(135deg,#fce4ec 0%,#f8bbd0 40%,#f3e5f5 100%);position:relative;overflow:hidden}}
+@media(max-width:768px){{.hero{{grid-template-columns:1fr;min-height:auto}}}}
+.hero-left{{padding:80px 60px;display:flex;flex-direction:column;justify-content:center}}
+@media(max-width:768px){{.hero-left{{padding:40px 24px}}}}
+.hero-badge{{display:inline-block;background:var(--grad);color:#fff;border-radius:50px;padding:8px 20px;font-size:.88rem;font-weight:700;margin-bottom:24px;width:fit-content}}
+.hero-h1{{font-size:clamp(2.8rem,6vw,5rem);font-weight:900;line-height:1;letter-spacing:-.02em;color:#1a1a2e;margin-bottom:12px}}
+.hero-h1 span{{color:var(--pink)}}
+.hero-sub{{font-size:1rem;color:#555;margin:20px 0 32px;line-height:1.6;max-width:440px}}
+.hero-right{{position:relative;display:flex;align-items:center;justify-content:center;padding:40px}}
+@media(max-width:768px){{.hero-right{{height:320px;padding:20px}}}}
+.hero-circle{{width:420px;height:420px;border-radius:50%;overflow:hidden;border:6px solid rgba(224,64,251,.3);
+  box-shadow:0 0 80px rgba(224,64,251,.25);position:relative}}
+@media(max-width:768px){{.hero-circle{{width:260px;height:260px}}}}
+.hero-float{{position:absolute;bottom:60px;right:80px;background:#fff;border-radius:16px;padding:12px 20px;
+  display:flex;align-items:center;gap:10px;font-weight:700;font-size:.88rem;
+  box-shadow:0 8px 32px rgba(0,0,0,.12)}}
+@media(max-width:768px){{.hero-float{{bottom:20px;right:20px;font-size:.75rem;padding:8px 14px}}}}
+.hero-star{{font-size:1.4rem}}
+
+/* SECTIONS */
+.section{{padding:80px 40px;max-width:1200px;margin:0 auto}}
+@media(max-width:768px){{.section{{padding:48px 20px}}}}
+.section-bg{{background:linear-gradient(135deg,#fce4ec,#f3e5f5);padding:80px 40px}}
+.sec-tag{{display:inline-block;background:var(--grad);color:#fff;border-radius:50px;padding:6px 18px;font-size:.8rem;font-weight:700;margin-bottom:16px}}
+.sec-h2{{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:900;color:#1a1a2e;margin-bottom:8px}}
+.sec-h2 .pink{{color:var(--pink)}}
+.sec-sub{{color:#777;margin-bottom:40px;font-size:.95rem}}
+
+/* BENEFITS GRID */
+.benefits-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}}
+@media(max-width:768px){{.benefits-grid{{grid-template-columns:1fr}}}}
+.benefit-card{{background:#fff;border-radius:20px;padding:28px;box-shadow:0 4px 24px rgba(0,0,0,.06)}}
+.benefit-icon{{width:52px;height:52px;background:var(--grad);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;margin-bottom:16px}}
+.benefit-title{{font-weight:800;font-size:1.05rem;margin-bottom:8px}}
+.benefit-line{{width:40px;height:3px;background:var(--grad);border-radius:3px;margin-bottom:12px}}
+.benefit-text{{color:#666;font-size:.88rem;line-height:1.6}}
+
+/* PINK BANNER */
+.pink-banner{{background:var(--grad);padding:64px 40px;text-align:center;position:relative;overflow:hidden}}
+.pink-banner::before,.pink-banner::after{{content:"🌴";position:absolute;font-size:8rem;opacity:.2;top:50%;transform:translateY(-50%)}}
+.pink-banner::before{{left:-40px}}
+.pink-banner::after{{right:-40px}}
+.banner-h2{{font-size:clamp(1.6rem,4vw,2.4rem);font-weight:900;color:#fff;margin-bottom:12px}}
+.banner-sub{{color:rgba(255,255,255,.85);margin-bottom:32px;font-size:.95rem}}
+
+/* TWO-COL */
+.two-col{{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}}
+@media(max-width:768px){{.two-col{{grid-template-columns:1fr}}}}
+.req-list{{list-style:none;margin:20px 0 32px}}
+.req-list li{{display:flex;align-items:flex-start;gap:10px;padding:8px 0;font-size:.95rem;color:#444}}
+.req-dot{{width:10px;height:10px;background:var(--grad);border-radius:50%;flex-shrink:0;margin-top:6px}}
+.req-circle{{width:380px;height:380px;border-radius:50%;overflow:hidden;border:6px solid rgba(224,64,251,.25);box-shadow:0 0 60px rgba(224,64,251,.2)}}
+@media(max-width:768px){{.req-circle{{width:260px;height:260px;margin:0 auto}}}}
+
+/* STEPS */
+.steps-grid{{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}}
+@media(max-width:768px){{.steps-grid{{grid-template-columns:1fr}}}}
+.step-card{{background:#fff;border-radius:20px;padding:28px;box-shadow:0 4px 24px rgba(0,0,0,.06);position:relative}}
+.step-num{{position:absolute;top:16px;right:20px;font-size:3rem;font-weight:900;color:#f3e5f5}}
+.step-icon{{width:52px;height:52px;background:var(--grad);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;margin-bottom:14px}}
+.step-title{{font-weight:800;margin-bottom:8px;font-size:1rem}}
+.step-text{{color:#666;font-size:.85rem;line-height:1.6}}
+
+/* PROVIDES */
+.provides-box{{background:#fff;border-radius:20px;padding:8px;box-shadow:0 4px 24px rgba(0,0,0,.06);max-width:700px;margin:0 auto}}
+.provide-item{{display:flex;align-items:center;gap:16px;padding:18px 20px;border-bottom:1px solid #f5f5f5}}
+.provide-item:last-child{{border-bottom:none}}
+.provide-icon{{width:44px;height:44px;background:var(--grad);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0}}
+.provide-text{{font-size:.95rem;color:#333;font-weight:500}}
+
+/* REVIEWS */
+.reviews-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}}
+@media(max-width:900px){{.reviews-grid{{grid-template-columns:1fr 1fr}}}}
+@media(max-width:600px){{.reviews-grid{{grid-template-columns:1fr}}}}
+.review-card{{background:#fff;border-radius:16px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,.07)}}
+.stars{{color:var(--pink);font-size:1rem;margin-bottom:8px}}
+.rev-name{{font-weight:800;font-size:.95rem}}
+.rev-from{{color:#999;font-size:.78rem;margin-bottom:10px}}
+.rev-stats{{display:flex;gap:14px;margin-bottom:12px;font-size:.78rem;color:#888}}
+.rev-stat{{display:flex;align-items:center;gap:4px}}
+.rev-earn{{color:#22c55e;font-weight:700}}
+.rev-text{{font-size:.83rem;color:#555;line-height:1.5}}
+
+/* FAQ */
+.faq-list{{max-width:760px;margin:0 auto}}
+.faq-item{{border-bottom:1px solid #f0e6ff;overflow:hidden}}
+.faq-q{{display:flex;justify-content:space-between;align-items:center;padding:20px 0;cursor:pointer;font-weight:600;font-size:.95rem;color:#1a1a2e}}
+.faq-q:hover{{color:var(--pink)}}
+.faq-icon{{font-size:1.2rem;color:var(--pink);transition:transform .3s;flex-shrink:0}}
+.faq-a{{max-height:0;overflow:hidden;transition:max-height .3s ease;color:#555;font-size:.88rem;line-height:1.7}}
+.faq-a.open{{max-height:200px;padding-bottom:16px}}
+.faq-icon.open{{transform:rotate(180deg)}}
+
+/* FINAL CTA */
+.final-cta{{background:var(--grad);padding:80px 40px;text-align:center;position:relative;overflow:hidden}}
+.final-cta::before{{content:"";position:absolute;width:200px;height:200px;border-radius:50%;
+  background:rgba(255,255,255,.1);top:-50px;left:-50px}}
+.final-cta::after{{content:"";position:absolute;width:150px;height:150px;border-radius:50%;
+  background:rgba(255,255,255,.1);bottom:-30px;right:10%}}
+.final-h2{{font-size:clamp(1.5rem,3.5vw,2.2rem);font-weight:900;color:#fff;margin-bottom:12px;position:relative}}
+.final-sub{{color:rgba(255,255,255,.85);margin-bottom:32px;position:relative}}
+
+/* FOOTER */
+.footer{{background:#1a1a2e;padding:48px 40px;color:#aaa}}
+@media(max-width:768px){{.footer{{padding:32px 20px}}}}
+.footer-grid{{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:40px;max-width:1000px;margin:0 auto 32px}}
+@media(max-width:768px){{.footer-grid{{grid-template-columns:1fr}}}}
+.footer-logo{{display:flex;align-items:center;gap:10px;font-weight:800;color:#fff;margin-bottom:12px;font-size:1.05rem}}
+.footer-text{{font-size:.83rem;line-height:1.6;color:#888}}
+.footer-col h4{{color:#fff;font-weight:700;margin-bottom:14px;font-size:.9rem}}
+.footer-col a{{display:block;color:#888;font-size:.83rem;margin-bottom:8px}}
+.footer-col a:hover{{color:var(--pink)}}
+.footer-bottom{{border-top:1px solid #2d2d4e;padding-top:20px;text-align:center;font-size:.78rem;color:#555;max-width:1000px;margin:0 auto}}
+
+/* CTA BTN */
+.cta-btn{{background:var(--grad);color:#fff;border:none;border-radius:50px;padding:14px 36px;
+  font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;
+  box-shadow:0 4px 20px rgba(224,64,251,.3);display:inline-flex;align-items:center;gap:8px}}
+.cta-btn:hover{{transform:translateY(-2px);box-shadow:0 8px 32px rgba(224,64,251,.45)}}
+.cta-btn.white{{background:#fff;color:var(--pink);box-shadow:0 4px 20px rgba(0,0,0,.15)}}
+
+/* MODAL */
+.modal-overlay{{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;
+  display:none;align-items:center;justify-content:center;padding:20px}}
+.modal-overlay.open{{display:flex}}
+.modal{{background:#fff;border-radius:24px;width:100%;max-width:420px;padding:32px 28px;position:relative}}
+.modal-close{{position:absolute;top:14px;right:16px;background:#f5f5f5;border:none;border-radius:50%;
+  width:30px;height:30px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center}}
+.modal-title{{font-size:1.2rem;font-weight:800;color:#1a1a2e;margin-bottom:20px}}
+.modal-btn{{display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:14px;margin-bottom:10px;
+  font-weight:700;font-size:.95rem;color:#fff;transition:all .2s}}
+.modal-btn:hover{{transform:translateX(4px)}}
+.modal-tg{{background:linear-gradient(135deg,#2BA5F7,#1a7fd4)}}
+.modal-wa{{background:linear-gradient(135deg,#25d366,#128c7e)}}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-logo">
+    <div class="nav-logo-icon">💆</div>
+    <span>Massage Job USA</span>
+  </div>
+  <div class="nav-links">
+    <a href="#vacancy">Вакансия</a>
+    <a href="#benefits">Преимущества</a>
+    <a href="#requirements">Требования</a>
+    <a href="#how">Как начать</a>
+    <a href="#reviews">Отзывы</a>
+    <a href="#faq">FAQ</a>
+  </div>
+  <div class="nav-tg" onclick="openModal()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+    Telegram
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="vacancy">
+  <div class="hero-left">
+    <div class="hero-badge">{badge}</div>
+    <h1 class="hero-h1">{hero1}<br>{hero2}</h1>
+    <p class="hero-sub">{hero_sub}</p>
+    <div onclick="openModal()" style="cursor:pointer">{cta_html or '<button class="cta-btn" onclick="openModal()"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>Связаться в Телеграм</button>'}</div>
+  </div>
+  <div class="hero-right">
+    <div class="hero-circle">{hero_img_html}</div>
+    <div class="hero-float"><span class="hero-star">⭐</span> {hero_badge}</div>
+  </div>
+</section>
+
+<!-- ABOUT -->
+<section class="section-bg">
+  <div style="max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center" id="about">
+    <div>
+      <div class="sec-tag">Увлекательная карьера и</div>
+      <h2 class="sec-h2">Большие заработки для <span class="pink">Массажисток</span></h2>
+      <p style="color:#555;line-height:1.8;margin-bottom:16px">Работа массажисткой в США — уникальный шанс построить успешную карьеру в индустрии красоты и здоровья. Практика показывает: каждая массажистка может зарабатывать от $1500 в день. Главное — желание развиваться.</p>
+      <p style="color:#555;line-height:1.8;margin-bottom:32px">С таким доходом осуществите свои мечты: купите машину, квартиру, помогите близким, запустите собственный бизнес. Вы начнёте зарабатывать с первого дня и сразу почувствуете разницу в качестве жизни.</p>
+      <div style="width:60px;height:3px;background:var(--grad);border-radius:3px;margin-bottom:28px"></div>
+      <button class="cta-btn" onclick="openModal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+        Связаться в Телеграм
+      </button>
+    </div>
+    <div style="display:flex;justify-content:flex-end;align-items:center">
+      <div style="font-size:8rem;opacity:.3">💆‍♀️</div>
+    </div>
+  </div>
+</section>
+
+<!-- PINK BANNER 1 -->
+<div class="pink-banner">
+  <h2 class="banner-h2">Начни зарабатывать уже сегодня</h2>
+  <p class="banner-sub">Присоединяйся к нашей команде и получай стабильный доход с первого дня работы.</p>
+  <button class="cta-btn white" onclick="openModal()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+    Связаться в Телеграм
+  </button>
+</div>
+
+<!-- BENEFITS -->
+<div style="padding:80px 40px;background:#fafafa" id="benefits">
+  <div style="max-width:1200px;margin:0 auto">
+    <h2 class="sec-h2" style="text-align:center;margin-bottom:6px">Почему стоит начать</h2>
+    <p class="sec-sub" style="text-align:center">работать <span style="color:var(--pink);font-weight:700">с нами?</span></p>
+    <div class="benefits-grid" style="margin-top:40px">
+      <div class="benefit-card"><div class="benefit-icon">👁</div><div class="benefit-title">Работайте анонимно</div><div class="benefit-line"></div><p class="benefit-text">Ваши личные данные защищены. Мы гарантируем полную конфиденциальность всем нашим специалистам.</p></div>
+      <div class="benefit-card"><div class="benefit-icon">🕐</div><div class="benefit-title">Работайте когда хотите</div><div class="benefit-line"></div><p class="benefit-text">Гибкий график позволяет совмещать работу с образованием и личной жизнью.</p></div>
+      <div class="benefit-card"><div class="benefit-icon">🛡</div><div class="benefit-title">Безопасность</div><div class="benefit-line"></div><p class="benefit-text">Все клиенты проходят тщательную проверку. Ваша безопасность — наш приоритет.</p></div>
+      <div class="benefit-card"><div class="benefit-icon">💵</div><div class="benefit-title">Оплата каждый день</div><div class="benefit-line"></div><p class="benefit-text">Оплата происходит перед каждой процедурой, поэтому вы сразу получаете свой доход и полностью контролируете свой заработок.</p></div>
+      <div class="benefit-card"><div class="benefit-icon">🎧</div><div class="benefit-title">Обучение и поддержка</div><div class="benefit-line"></div><p class="benefit-text">Если у вас нет опыта — это не проблема. Мы предоставляем обучение для будущих массажисток. На протяжении всей работы вам доступна поддержка.</p></div>
+      <div class="benefit-card"><div class="benefit-icon">🏠</div><div class="benefit-title">Предоставляем комфортное жильё</div><div class="benefit-line"></div><p class="benefit-text">На время сотрудничества мы предоставляем комфортное проживание. Также предусмотрена возможность смены локации в разных городах по территории США.</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- REQUIREMENTS -->
+<div style="padding:80px 40px;background:#fff" id="requirements">
+  <div style="max-width:1200px;margin:0 auto">
+    <div class="two-col">
+      <div>
+        <h2 class="sec-h2">Требования к<br><span class="pink">кандидаткам</span></h2>
+        <p style="color:#555;margin:16px 0">Вы нам подойдёте, если вы:</p>
+        <ul class="req-list">
+          <li><span class="req-dot"></span>имеете опыт работы или готовы обучаться с нуля</li>
+          <li><span class="req-dot"></span>ответственны и дисциплинированы</li>
+          <li><span class="req-dot"></span>коммуникабельны и ориентированы на клиента</li>
+          <li><span class="req-dot"></span>ухожены и придерживаетесь аккуратного внешнего вида</li>
+          <li><span class="req-dot"></span>готовы соблюдать стандарты сервиса</li>
+        </ul>
+        <button class="cta-btn" onclick="openModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+          Связаться в Телеграм
+        </button>
+      </div>
+      <div style="display:flex;justify-content:center">
+        <div class="req-circle">
+          {hero_img_html}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HOW TO START -->
+<div style="padding:80px 40px;background:#fafafa" id="how">
+  <div style="max-width:900px;margin:0 auto">
+    <h2 class="sec-h2" style="text-align:center;margin-bottom:40px">Как начать <span class="pink">работать</span></h2>
+    <div class="steps-grid">
+      <div class="step-card"><div class="step-num">1</div><div class="step-icon">✈️</div><div class="step-title">1. Переходите в телеграм</div><p class="step-text">С вами на связи будет наш HR специалист.</p></div>
+      <div class="step-card"><div class="step-num">2</div><div class="step-icon">💬</div><div class="step-title">2. Уточняете детали</div><p class="step-text">Наш HR-специалист подробно отвечает на все ваши вопросы.</p></div>
+    </div>
+    <div class="step-card" style="margin-top:20px">
+      <div class="step-num">3</div>
+      <div class="step-icon">📋</div>
+      <div class="step-title">3. Заполняете анкету</div>
+      <p class="step-text">От вас потребуется минимум информации:<br><br>
+        • имя и возраст (Анна 24 года)<br>
+        • ваше текущее местонахождение в США (Лос-Анджелес)<br>
+        • номер телефона или Telegram для связи (+1(xxx) xxx-xxx или ник тг @Anya24)<br>
+        • одно фото в полный рост (необходимо для понимания вашего внешнего вида. Фото используется исключительно для предварительного рассмотрения кандидатуры.*)
+      </p>
+    </div>
+    <p style="text-align:center;color:#555;margin:28px 0;font-style:italic">Начните сегодня и уже завтра вы будете радоваться стабильному заработку!</p>
+    <div style="text-align:center">
+      <button class="cta-btn" onclick="openModal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+        Связаться в Телеграм
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- PROVIDES -->
+<div style="padding:80px 40px;background:#fff">
+  <div style="max-width:900px;margin:0 auto">
+    <h2 class="sec-h2" style="text-align:center;margin-bottom:40px">Что предоставляет <span class="pink">вам компания</span></h2>
+    <div class="provides-box">
+      <div class="provide-item"><div class="provide-icon">🏠</div><span class="provide-text">Комфортное жильё на время работы</span></div>
+      <div class="provide-item"><div class="provide-icon">📦</div><span class="provide-text">Материалы необходимые для массажа</span></div>
+      <div class="provide-item"><div class="provide-icon">👥</div><span class="provide-text">Стабильный поток клиентов</span></div>
+      <div class="provide-item"><div class="provide-icon">🎧</div><span class="provide-text">Круглосуточная поддержка по всем вопросам</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- REVIEWS -->
+<div style="padding:80px 40px;background:#fafafa" id="reviews">
+  <div style="max-width:1200px;margin:0 auto">
+    <h2 class="sec-h2" style="text-align:center;margin-bottom:6px">Что специалисты говорят</h2>
+    <p class="sec-sub" style="text-align:center">про работу <span style="color:var(--pink);font-weight:700">с нами</span></p>
+    <div class="reviews-grid" style="margin-top:40px">
+      <div class="review-card"><div class="stars">★★★★★</div><div class="rev-name">Анна</div><div class="rev-from">из Украины</div><div class="rev-stats"><span class="rev-stat">🕐 3 месяца</span><span class="rev-stat rev-earn">+$35,000</span></div><p class="rev-text">Спасибо большое! Заработок превосходит все ожидания. Работаю в премиальном спа в Майами, условия потрясающие.</p></div>
+      <div class="review-card"><div class="stars">★★★★★</div><div class="rev-name">Елена</div><div class="rev-from">из России</div><div class="rev-stats"><span class="rev-stat">🕐 5 месяцев</span><span class="rev-stat rev-earn">+$55,000</span></div><p class="rev-text">Работаю с ними уже давно. Стабильный поток клиентов, отличный заработок. Скоро снова поеду в тур по новым городам.</p></div>
+      <div class="review-card"><div class="stars">★★★★★</div><div class="rev-name">Мария</div><div class="rev-from">из Беларуси</div><div class="rev-stats"><span class="rev-stat">🕐 2 месяца</span><span class="rev-stat rev-earn">+$22,000</span></div><p class="rev-text">Познакомилась с интересными людьми, побывала в Нью-Йорке и Лос-Анджелесе. На заработанные деньги открыла свой массажный кабинет дома.</p></div>
+      <div class="review-card"><div class="stars">★★★★★</div><div class="rev-name">София</div><div class="rev-from">из Молдовы</div><div class="rev-stats"><span class="rev-stat">🕐 4 месяца</span><span class="rev-stat rev-earn">+$42,000</span></div><p class="rev-text">Очень довольна условиями работы. Безопасно, комфортно и прибыльно. Рекомендую всем!</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- FAQ -->
+<div style="padding:80px 40px;background:#fff" id="faq">
+  <div style="max-width:900px;margin:0 auto">
+    <h2 class="sec-h2" style="text-align:center;margin-bottom:48px">Вопросы и <span class="pink">ответы</span></h2>
+    <div class="faq-list">
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Где вы находитесь?</span><span class="faq-icon">⌄</span></div><div class="faq-a">Мы работаем по всей территории США — Нью-Йорк, Лос-Анджелес, Майами, Чикаго и другие города.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Сколько я могу заработать за смену?</span><span class="faq-icon">⌄</span></div><div class="faq-a">В среднем от $500 до $1500+ за смену. Точный доход зависит от города, количества клиентов и вашей активности.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Я никогда не работала массажисткой. Смогу ли я?</span><span class="faq-icon">⌄</span></div><div class="faq-a">Да! Мы предоставляем полное обучение с нуля. Опыт не обязателен — главное желание работать.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Насколько безопасно у вас работать?</span><span class="faq-icon">⌄</span></div><div class="faq-a">Безопасность — наш приоритет. Все клиенты проходят проверку. Мы обеспечиваем безопасные условия работы.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Я боюсь, что у меня не получится, и это меня беспокоит.</span><span class="faq-icon">⌄</span></div><div class="faq-a">Понимаем ваши опасения. Именно поэтому мы предоставляем обучение и постоянную поддержку. Вы не будете одни.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Сколько дней в неделю я могу работать?</span><span class="faq-icon">⌄</span></div><div class="faq-a">График полностью гибкий. Работайте столько, сколько хотите — от 2 до 7 дней в неделю.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Какие документы нужны для трудоустройства?</span><span class="faq-icon">⌄</span></div><div class="faq-a">Минимум документов. Уточните детали у нашего HR-специалиста в Telegram.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Кто ваши клиенты?</span><span class="faq-icon">⌄</span></div><div class="faq-a">Проверенные клиенты премиум-класса. Все проходят предварительный отбор для вашей безопасности.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- FINAL CTA -->
+<div class="final-cta">
+  <h2 class="final-h2">Хочешь зарабатывать от 30 000$ в месяц<br>без лишней суеты и забот?</h2>
+  <p class="final-sub">Заполняй анкету и меняй свою жизнь.</p>
+  <button class="cta-btn white" onclick="openModal()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+    Связаться в Телеграм
+  </button>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-grid">
+    <div>
+      <div class="footer-logo"><div class="nav-logo-icon">💆</div> Massage Job USA</div>
+      <p class="footer-text">Мы поможем вам адаптироваться и закрыть все финансовые вопросы. Если у вас остались какие-либо вопросы, пишите нашему менеджеру, он поможет вам и ответит на все вопросы.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Навигация</h4>
+      <a href="#vacancy">Вакансия</a>
+      <a href="#benefits">Преимущества</a>
+      <a href="#requirements">Требования</a>
+      <a href="#how">Как начать</a>
+      <a href="#reviews">Отзывы</a>
+    </div>
+    <div class="footer-col">
+      <h4>Контакты</h4>
+      <a onclick="openModal()" style="cursor:pointer">✈️ Telegram</a>
+      <a style="color:#888">📍 Вся территория США</a>
+    </div>
+  </div>
+  <div class="footer-bottom">© 2026 Massage Job USA. Все права защищены.</div>
+</footer>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="contact-modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">Выбери способ связи</div>
+    {all_btns_popup}
+  </div>
+</div>
+
+<script>
+function openModal(){{document.getElementById('contact-modal').classList.add('open');document.body.style.overflow='hidden'}}
+function closeModal(){{document.getElementById('contact-modal').classList.remove('open');document.body.style.overflow=''}}
+document.addEventListener('keydown',e=>{{if(e.key==='Escape')closeModal()}});
+function toggleFaq(el){{
+  const ans=el.nextElementSibling;
+  const icon=el.querySelector('.faq-icon');
+  ans.classList.toggle('open');
+  icon.classList.toggle('open');
+}}
+// Smooth scroll
+document.querySelectorAll('a[href^="#"]').forEach(a=>{{
+  a.addEventListener('click',e=>{{
+    const t=document.querySelector(a.getAttribute('href'));
+    if(t){{e.preventDefault();t.scrollIntoView({{behavior:'smooth'}})}}
+  }})
+}});
+</script>
+</body></html>""")
 
 
 @app.get("/page", response_class=HTMLResponse)

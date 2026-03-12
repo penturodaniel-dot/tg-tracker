@@ -20,6 +20,7 @@ class Database:
     def _init_db(self):
         with self._conn() as conn:
             with conn.cursor() as cur:
+                # ── Базовые таблицы ───────────────────────────────────────────
                 cur.execute("""
                 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS users (
@@ -28,59 +29,174 @@ class Database:
                 CREATE TABLE IF NOT EXISTS channels (
                     id SERIAL PRIMARY KEY, name TEXT NOT NULL,
                     channel_id TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+
+                -- Кампания = группа каналов + лендинг
                 CREATE TABLE IF NOT EXISTS campaigns (
-                    id SERIAL PRIMARY KEY, name TEXT NOT NULL, channel_id TEXT NOT NULL,
-                    invite_link TEXT NOT NULL UNIQUE, landing_id INTEGER DEFAULT NULL, created_at TEXT NOT NULL);
+                    id SERIAL PRIMARY KEY,
+                    name        TEXT NOT NULL UNIQUE,
+                    slug        TEXT NOT NULL UNIQUE,
+                    description TEXT DEFAULT '',
+                    created_at  TEXT NOT NULL
+                );
+
+                -- Каналы внутри кампании (каждый со своей invite-ссылкой)
+                CREATE TABLE IF NOT EXISTS campaign_channels (
+                    id          SERIAL PRIMARY KEY,
+                    campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+                    channel_id  TEXT NOT NULL,
+                    channel_name TEXT,
+                    invite_link TEXT NOT NULL,
+                    position    INTEGER DEFAULT 0,
+                    created_at  TEXT NOT NULL
+                );
+
+                -- Подписки (join_id → click_id → fbclid/fbp)
                 CREATE TABLE IF NOT EXISTS joins (
-                    id SERIAL PRIMARY KEY, user_id BIGINT NOT NULL, channel_id TEXT,
-                    invite_link TEXT, campaign_name TEXT NOT NULL DEFAULT 'organic',
-                    click_id TEXT, joined_at TEXT NOT NULL);
+                    id            SERIAL PRIMARY KEY,
+                    user_id       BIGINT NOT NULL,
+                    channel_id    TEXT,
+                    invite_link   TEXT,
+                    campaign_name TEXT NOT NULL DEFAULT 'organic',
+                    click_id      TEXT,
+                    joined_at     TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS click_tracking (
-                    id SERIAL PRIMARY KEY, click_id TEXT NOT NULL UNIQUE,
-                    fbclid TEXT, fbp TEXT, utm_source TEXT, utm_medium TEXT,
-                    utm_campaign TEXT, utm_content TEXT, utm_term TEXT,
-                    referrer TEXT, target_type TEXT DEFAULT 'channel',
-                    target_id TEXT, user_agent TEXT, ip_address TEXT, created_at TEXT NOT NULL);
+                    id           SERIAL PRIMARY KEY,
+                    click_id     TEXT NOT NULL UNIQUE,
+                    fbclid       TEXT,
+                    fbp          TEXT,
+                    utm_source   TEXT,
+                    utm_medium   TEXT,
+                    utm_campaign TEXT,
+                    utm_content  TEXT,
+                    utm_term     TEXT,
+                    referrer     TEXT,
+                    target_type  TEXT DEFAULT 'channel',
+                    target_id    TEXT,
+                    user_agent   TEXT,
+                    ip_address   TEXT,
+                    created_at   TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS utm_tracking (
-                    id SERIAL PRIMARY KEY, conversation_id INTEGER, join_id INTEGER,
-                    click_id TEXT, fbclid TEXT, fbp TEXT, utm_source TEXT, utm_medium TEXT,
-                    utm_campaign TEXT, utm_content TEXT, utm_term TEXT, referrer TEXT, created_at TEXT NOT NULL);
+                    id              SERIAL PRIMARY KEY,
+                    conversation_id INTEGER,
+                    join_id         INTEGER,
+                    click_id        TEXT,
+                    fbclid          TEXT,
+                    fbp             TEXT,
+                    utm_source      TEXT,
+                    utm_medium      TEXT,
+                    utm_campaign    TEXT,
+                    utm_content     TEXT,
+                    utm_term        TEXT,
+                    referrer        TEXT,
+                    created_at      TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS conversations (
-                    id SERIAL PRIMARY KEY, tg_chat_id TEXT NOT NULL UNIQUE,
-                    visitor_name TEXT NOT NULL DEFAULT 'Неизвестный', username TEXT,
-                    status TEXT DEFAULT 'open', unread_count INTEGER DEFAULT 0,
-                    last_message TEXT, last_message_at TEXT, fb_event_sent TEXT,
-                    utm_source TEXT, utm_campaign TEXT, fbclid TEXT, created_at TEXT NOT NULL);
+                    id              SERIAL PRIMARY KEY,
+                    tg_chat_id      TEXT NOT NULL UNIQUE,
+                    visitor_name    TEXT NOT NULL DEFAULT 'Неизвестный',
+                    username        TEXT,
+                    status          TEXT DEFAULT 'open',
+                    unread_count    INTEGER DEFAULT 0,
+                    last_message    TEXT,
+                    last_message_at TEXT,
+                    fb_event_sent   TEXT,
+                    utm_source      TEXT,
+                    utm_campaign    TEXT,
+                    fbclid          TEXT,
+                    created_at      TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS messages (
-                    id SERIAL PRIMARY KEY, conversation_id INTEGER NOT NULL,
-                    tg_chat_id TEXT NOT NULL, sender_type TEXT NOT NULL,
-                    content TEXT, media_url TEXT, media_type TEXT,
-                    tg_message_id INTEGER, read_by_manager INTEGER DEFAULT 0, created_at TEXT NOT NULL);
+                    id              SERIAL PRIMARY KEY,
+                    conversation_id INTEGER NOT NULL,
+                    tg_chat_id      TEXT NOT NULL,
+                    sender_type     TEXT NOT NULL,
+                    content         TEXT,
+                    media_url       TEXT,
+                    media_type      TEXT,
+                    tg_message_id   INTEGER,
+                    read_by_manager INTEGER DEFAULT 0,
+                    created_at      TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS staff (
-                    id SERIAL PRIMARY KEY, conversation_id INTEGER, tg_chat_id TEXT UNIQUE,
-                    name TEXT, username TEXT, phone TEXT, email TEXT, position TEXT,
-                    status TEXT DEFAULT 'new', notes TEXT, tags TEXT DEFAULT '',
-                    fb_event_sent TEXT, created_at TEXT NOT NULL);
+                    id              SERIAL PRIMARY KEY,
+                    conversation_id INTEGER,
+                    tg_chat_id      TEXT UNIQUE,
+                    name            TEXT,
+                    username        TEXT,
+                    phone           TEXT,
+                    email           TEXT,
+                    position        TEXT,
+                    status          TEXT DEFAULT 'new',
+                    notes           TEXT,
+                    tags            TEXT DEFAULT '',
+                    fb_event_sent   TEXT,
+                    created_at      TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS landings (
-                    id SERIAL PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'client',
-                    slug TEXT NOT NULL UNIQUE, content TEXT NOT NULL DEFAULT '{}',
-                    active INTEGER DEFAULT 1, created_at TEXT NOT NULL);
+                    id         SERIAL PRIMARY KEY,
+                    name       TEXT NOT NULL,
+                    type       TEXT NOT NULL DEFAULT 'client',
+                    slug       TEXT NOT NULL UNIQUE,
+                    content    TEXT NOT NULL DEFAULT '{}',
+                    active     INTEGER DEFAULT 1,
+                    created_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS landing_contacts (
-                    id SERIAL PRIMARY KEY, landing_id INTEGER NOT NULL,
-                    type TEXT NOT NULL, label TEXT NOT NULL, url TEXT NOT NULL, position INTEGER DEFAULT 0);
+                    id         SERIAL PRIMARY KEY,
+                    landing_id INTEGER NOT NULL,
+                    type       TEXT NOT NULL,
+                    label      TEXT NOT NULL,
+                    url        TEXT NOT NULL,
+                    position   INTEGER DEFAULT 0
+                );
                 CREATE TABLE IF NOT EXISTS wa_conversations (
-                    id SERIAL PRIMARY KEY, wa_chat_id TEXT NOT NULL UNIQUE,
-                    wa_number TEXT NOT NULL, visitor_name TEXT NOT NULL DEFAULT 'Неизвестный',
-                    status TEXT DEFAULT 'open', unread_count INTEGER DEFAULT 0,
-                    last_message TEXT, last_message_at TEXT, fb_event_sent TEXT,
-                    utm_source TEXT, utm_campaign TEXT, fbclid TEXT, created_at TEXT NOT NULL);
+                    id              SERIAL PRIMARY KEY,
+                    wa_chat_id      TEXT NOT NULL UNIQUE,
+                    wa_number       TEXT NOT NULL,
+                    visitor_name    TEXT NOT NULL DEFAULT 'Неизвестный',
+                    status          TEXT DEFAULT 'open',
+                    unread_count    INTEGER DEFAULT 0,
+                    last_message    TEXT,
+                    last_message_at TEXT,
+                    fb_event_sent   TEXT,
+                    utm_source      TEXT,
+                    utm_campaign    TEXT,
+                    fbclid          TEXT,
+                    created_at      TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS wa_messages (
-                    id SERIAL PRIMARY KEY, conversation_id INTEGER NOT NULL,
-                    wa_chat_id TEXT NOT NULL, sender_type TEXT NOT NULL,
-                    content TEXT, media_url TEXT, media_type TEXT,
-                    read_by_manager INTEGER DEFAULT 0, created_at TEXT NOT NULL);
+                    id              SERIAL PRIMARY KEY,
+                    conversation_id INTEGER NOT NULL,
+                    wa_chat_id      TEXT NOT NULL,
+                    sender_type     TEXT NOT NULL,
+                    content         TEXT,
+                    media_url       TEXT,
+                    media_type      TEXT,
+                    read_by_manager INTEGER DEFAULT 0,
+                    created_at      TEXT NOT NULL
+                );
                 """)
+
+                # ── Миграции для уже существующих БД ─────────────────────────
+                # Добавляем новые колонки если их нет (безопасно для старых БД)
+                migrations = [
+                    "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS slug TEXT",
+                    "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''",
+                    # slug уникальность — только если колонка только что добавлена
+                ]
+                for m in migrations:
+                    try:
+                        cur.execute(m)
+                    except Exception:
+                        pass
+
+                # Заполняем slug для старых кампаний где он NULL
+                cur.execute("UPDATE campaigns SET slug = LOWER(REPLACE(name, ' ', '-')) || '-' || id WHERE slug IS NULL OR slug = ''")
+
             conn.commit()
+
         # Default admin
         try:
             with self._conn() as conn:
@@ -163,33 +279,111 @@ class Database:
                 cur.execute("SELECT channel_id FROM channels")
                 return [r["channel_id"] for r in cur.fetchall()]
 
-    # ── Campaigns ─────────────────────────────────────────────────────────────
-    def save_campaign(self, name, channel_id, invite_link, landing_id=None):
+    # ── Campaigns (новая модель: 1 кампания = много каналов) ──────────────────
+    def create_campaign(self, name: str, slug: str, description: str = "") -> int:
+        import re
+        clean_slug = re.sub(r'[^a-z0-9-]', '-', slug.lower().strip())
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("INSERT INTO campaigns (name,channel_id,invite_link,landing_id,created_at) VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING",
-                            (name, channel_id, invite_link, landing_id, datetime.utcnow().isoformat()))
+                cur.execute("INSERT INTO campaigns (name,slug,description,created_at) VALUES (%s,%s,%s,%s) RETURNING id",
+                            (name.strip(), clean_slug, description, datetime.utcnow().isoformat()))
+                r = cur.fetchone()
             conn.commit()
-
-    def get_campaign_by_link(self, invite_link):
-        if not invite_link: return None
-        with self._conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT * FROM campaigns WHERE invite_link=%s", (invite_link,))
-                r = cur.fetchone(); return dict(r) if r else None
+            return r["id"]
 
     def get_campaigns(self, channel_id=None):
         with self._conn() as conn:
             with conn.cursor() as cur:
-                if channel_id:
-                    cur.execute("""SELECT c.*, COUNT(j.id) AS joins FROM campaigns c
-                        LEFT JOIN joins j ON j.campaign_name=c.name AND j.channel_id=c.channel_id
-                        WHERE c.channel_id=%s GROUP BY c.id ORDER BY c.created_at DESC""", (channel_id,))
-                else:
-                    cur.execute("""SELECT c.*, COUNT(j.id) AS joins FROM campaigns c
-                        LEFT JOIN joins j ON j.campaign_name=c.name AND j.channel_id=c.channel_id
-                        GROUP BY c.id ORDER BY c.created_at DESC""")
+                cur.execute("""
+                    SELECT c.*,
+                        COUNT(DISTINCT cc.id) AS channel_count,
+                        COUNT(DISTINCT j.id)  AS total_joins
+                    FROM campaigns c
+                    LEFT JOIN campaign_channels cc ON cc.campaign_id = c.id
+                    LEFT JOIN joins j ON j.campaign_name = c.name
+                    GROUP BY c.id ORDER BY c.created_at DESC
+                """)
                 return [dict(r) for r in cur.fetchall()]
+
+    def get_campaign(self, campaign_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM campaigns WHERE id=%s", (campaign_id,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def get_campaign_by_slug(self, slug: str):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM campaigns WHERE slug=%s", (slug,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def delete_campaign(self, campaign_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM campaign_channels WHERE campaign_id=%s", (campaign_id,))
+                cur.execute("DELETE FROM campaigns WHERE id=%s", (campaign_id,))
+            conn.commit()
+
+    # ── Campaign Channels ──────────────────────────────────────────────────────
+    def add_campaign_channel(self, campaign_id: int, channel_id: str, channel_name: str, invite_link: str):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COALESCE(MAX(position),0)+1 as p FROM campaign_channels WHERE campaign_id=%s", (campaign_id,))
+                pos = cur.fetchone()["p"]
+                cur.execute("""INSERT INTO campaign_channels (campaign_id,channel_id,channel_name,invite_link,position,created_at)
+                    VALUES (%s,%s,%s,%s,%s,%s)""",
+                    (campaign_id, channel_id, channel_name, invite_link, pos, datetime.utcnow().isoformat()))
+            conn.commit()
+
+    def get_campaign_channels(self, campaign_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT cc.*, 
+                    COUNT(j.id) AS joins
+                    FROM campaign_channels cc
+                    LEFT JOIN joins j ON j.invite_link = cc.invite_link
+                    WHERE cc.campaign_id=%s
+                    GROUP BY cc.id ORDER BY cc.position""", (campaign_id,))
+                return [dict(r) for r in cur.fetchall()]
+
+    def remove_campaign_channel(self, cc_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM campaign_channels WHERE id=%s", (cc_id,))
+            conn.commit()
+
+    def get_campaign_by_invite_link(self, invite_link: str):
+        """Найти кампанию по invite-ссылке одного из её каналов"""
+        if not invite_link: return None
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT c.* FROM campaigns c
+                    JOIN campaign_channels cc ON cc.campaign_id = c.id
+                    WHERE cc.invite_link = %s LIMIT 1""", (invite_link,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    # ── Старый метод для обратной совместимости ─────────────────────────────
+    def save_campaign(self, name, channel_id, invite_link, landing_id=None):
+        """Устаревший метод — создаёт кампанию + добавляет один канал"""
+        import re
+        slug = re.sub(r'[^a-z0-9-]', '-', name.lower()) + "-" + secrets.token_hex(3)
+        try:
+            camp_id = self.create_campaign(name, slug)
+        except Exception:
+            # Уже существует — находим
+            with self._conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM campaigns WHERE name=%s", (name,))
+                    r = cur.fetchone()
+                    camp_id = r["id"] if r else None
+            if not camp_id: return
+        self.add_campaign_channel(camp_id, channel_id, channel_id, invite_link)
+
+    def get_campaign_by_link(self, invite_link):
+        return self.get_campaign_by_invite_link(invite_link)
 
     # ── Joins ─────────────────────────────────────────────────────────────────
     def log_join(self, user_id, channel_id, invite_link, campaign_name, click_id=None):

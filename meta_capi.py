@@ -1,3 +1,13 @@
+"""
+Meta Conversions API v19.0
+──────────────────────────
+Для matching событий в Ads Manager (не только Test Events) нужно:
+1. fbp  — cookie _fbp с лендинга (Meta Pixel устанавливает его сам)
+2. fbc  — fb.1.{ts}.{fbclid} — из fbclid URL параметра
+3. external_id — sha256(telegram_user_id)
+
+Без fbp и fbc события видны в Test Events но НЕ связываются с рекламными кампаниями.
+"""
 import hashlib
 import time
 import logging
@@ -10,10 +20,15 @@ def _hash(value: str) -> str:
     return hashlib.sha256(value.strip().lower().encode()).hexdigest()
 
 
+def _make_fbc(fbclid: str) -> str:
+    if not fbclid: return None
+    return f"fb.1.{int(time.time()*1000)}.{fbclid}"
+
+
 async def send_event(
     pixel_id: str,
     access_token: str,
-    event_name: str,          # Subscribe, Lead, InitiateCheckout, etc.
+    event_name: str,
     user_id: str,
     campaign: str = "unknown",
     fbclid: str = None,
@@ -22,40 +37,50 @@ async def send_event(
     utm_campaign: str = None,
     client_ip: str = None,
     user_agent: str = None,
+    test_event_code: str = None,
 ) -> bool:
     if not pixel_id or not access_token:
         log.warning("Meta CAPI: pixel_id or token not set")
         return False
 
-    url = f"https://graph.facebook.com/v19.0/{pixel_id}/events"
+    user_data = {}
+    if user_id:
+        user_data["external_id"] = [_hash(str(user_id))]
+    if fbp:
+        user_data["fbp"] = fbp
+    fbc = _make_fbc(fbclid)
+    if fbc:
+        user_data["fbc"] = fbc
+    if client_ip:
+        user_data["client_ip_address"] = client_ip
+    if user_agent:
+        user_data["client_user_agent"] = user_agent
 
-    user_data = {"external_id": _hash(user_id)}
-    if fbp:    user_data["fbp"]        = fbp
-    if fbclid: user_data["fbc"]        = f"fb.1.{int(time.time()*1000)}.{fbclid}"
-    if client_ip:   user_data["client_ip_address"] = client_ip
-    if user_agent:  user_data["client_user_agent"]  = user_agent
-
-    custom_data = {"campaign": campaign}
+    custom_data = {}
     if utm_source:   custom_data["utm_source"]   = utm_source
     if utm_campaign: custom_data["utm_campaign"] = utm_campaign
+    if campaign:     custom_data["campaign"]     = campaign
 
     payload = {
         "data": [{
             "event_name": event_name,
             "event_time": int(time.time()),
-            "action_source": "other",
+            "action_source": "website",
             "user_data": user_data,
             "custom_data": custom_data,
+            "event_source_url": "https://t.me/",
         }],
         "access_token": access_token,
     }
+    if test_event_code:
+        payload["test_event_code"] = test_event_code
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(f"https://graph.facebook.com/v19.0/{pixel_id}/events", json=payload)
             data = resp.json()
             if resp.status_code == 200 and data.get("events_received", 0) > 0:
-                log.info(f"Meta CAPI OK: {event_name} user={user_id} campaign={campaign}")
+                log.info(f"Meta CAPI ✅ {event_name} user={user_id} fbp={'✓' if fbp else '—'} fbc={'✓' if fbc else '—'}")
                 return True
             log.error(f"Meta CAPI error {resp.status_code}: {data}")
             return False
@@ -64,7 +89,6 @@ async def send_event(
         return False
 
 
-# Удобные обёртки
 async def send_subscribe_event(pixel_id, access_token, user_id, campaign="unknown", **kwargs):
     return await send_event(pixel_id, access_token, "Subscribe", user_id, campaign, **kwargs)
 

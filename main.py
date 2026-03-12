@@ -403,50 +403,52 @@ async def go_redirect(
     utm_term: str = None,
 ):
     """
-    Страница редиректа с трекингом UTM и fbclid.
+    Страница редиректа с трекингом.
     Использование: /go?to=https://t.me/+xxx&utm_source=fb&utm_campaign=march&fbclid=xxx
+    ⚡ fbp берётся из cookie _fbp (устанавливается Meta Pixel на лендинге)
+    ⚡ fbc = fb.1.{timestamp}.{fbclid} — для matching в Ads Manager
     """
     if not to:
         return HTMLResponse("<h2>Ссылка не указана</h2>", 400)
 
-    # fbp из куки если не передан
+    # fbp из cookie — именно там он правильный (Meta Pixel ставит его сам)
     cookie_fbp = request.cookies.get("_fbp") or fbp
 
-    # Сохраняем клик
+    # Сохраняем клик со ВСЕМИ данными для FB CAPI
     click_id = db.save_click(
-        fbclid=fbclid,
-        fbp=cookie_fbp,
-        utm_source=utm_source,
-        utm_medium=utm_medium,
-        utm_campaign=utm_campaign,
-        utm_content=utm_content,
-        utm_term=utm_term,
-        referrer=request.headers.get("referer"),
-        target_type="channel",
-        target_id=to,
-        user_agent=request.headers.get("user-agent", "")[:255],
-        ip_address=request.client.host if request.client else None,
+        fbclid    = fbclid,
+        fbp       = cookie_fbp,
+        utm_source   = utm_source,
+        utm_medium   = utm_medium,
+        utm_campaign = utm_campaign,
+        utm_content  = utm_content,
+        utm_term     = utm_term,
+        referrer  = request.headers.get("referer"),
+        target_type  = "channel",
+        target_id    = to,
+        user_agent   = request.headers.get("user-agent", "")[:255],
+        ip_address   = request.client.host if request.client else None,
     )
-    log.info(f"[/go] click_id={click_id} fbclid={fbclid} utm={utm_campaign} → {to[:60]}")
+    log.info(f"[/go] click_id={click_id} fbclid={'✓' if fbclid else '—'} fbp={'✓' if cookie_fbp else '—'} utm={utm_campaign} → {to[:60]}")
 
-    # Добавляем ref_ параметр в Telegram ссылку
+    # Добавляем ref_ параметр в Telegram ссылку для связи с ботом
     destination = to
     if "t.me" in to:
         sep = "&" if "?" in to else "?"
         destination = f"{to}{sep}start=ref_{click_id}"
 
-    # Промежуточная страница для сохранения fbp куки
+    # Промежуточная страница — здесь fbp ТОЧНО уже есть в cookie (с лендинга)
     return HTMLResponse(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
     <meta http-equiv="refresh" content="0;url={destination}">
     <script>
-      // Сохраняем fbp если есть
-      if (document.cookie.indexOf('_fbp') === -1) {{
-        const fbp = 'fb.1.' + Date.now() + '.' + Math.random().toString(36).substr(2,9);
+      // Убеждаемся что fbp есть — нужен для FB CAPI Subscribe
+      if (!document.cookie.includes('_fbp')) {{
+        var fbp = 'fb.1.' + Date.now() + '.' + Math.random().toString(36).substr(2,9);
         document.cookie = '_fbp=' + fbp + ';max-age=7776000;path=/;SameSite=Lax';
       }}
-      setTimeout(function(){{ window.location.href = '{destination}'; }}, 100);
+      setTimeout(function(){{ window.location.href = '{destination}'; }}, 80);
     </script>
-    </head><body style="background:#0a0d14;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui">
+    </head><body style="background:#060a0f;color:#e8f0f8;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui">
     <div style="text-align:center"><div style="font-size:2rem;margin-bottom:12px">📡</div>
     <div>Перенаправляем...</div></div></body></html>""")
 
@@ -1147,43 +1149,141 @@ async def campaigns_page(request: Request, msg: str = "", err_msg: str = ""):
     channels  = db.get_channels()
     campaigns = db.get_campaigns()
     app_url   = db.get_setting("app_url", "").rstrip("/")
-    ch_opts = "".join(f'<option value="{c["channel_id"]}">{c["name"]}</option>' for c in channels) or '<option disabled>Сначала добавь каналы</option>'
-    rows = "".join(f"""<tr>
-        <td><span class="badge">{c['name']}</span></td>
-        <td><span class="tag" style="font-size:.7rem">{c['channel_id']}</span></td>
-        <td><div class="link-box" style="max-width:220px">{c['invite_link']}</div></td>
-        <td><div class="link-box" style="max-width:220px;color:#7dd3fc">{app_url}/go?to={c['invite_link']}&utm_campaign={c['name']}</div></td>
-        <td style="color:#34d399;font-weight:600">{c['joins']}</td>
-        <td>{c['created_at'][:10]}</td></tr>""" for c in campaigns
-    ) or '<tr><td colspan="6"><div class="empty">Кампаний нет</div></td></tr>'
-    new_link = msg if msg.startswith("https://") else ""
-    alert = f'<div class="alert-green">✅ Ссылка:<div class="link-box" style="margin-top:8px">{new_link}</div><div style="margin-top:8px;color:#7dd3fc">📎 /go ссылка:<div class="link-box" style="margin-top:4px">{app_url}/go?to={new_link}&utm_campaign=your_campaign</div></div></div>' if new_link else (f'<div class="alert-red">❌ {err_msg}</div>' if err_msg else "")
-    content = f"""<div class="page-wrap"><div class="page-title">🔗 Кампании</div>
-    <div class="page-sub">Invite-ссылки + /go ссылки для рекламы с UTM-трекингом</div>{alert}
-    <div class="section"><div class="section-head"><h3>➕ Создать ссылку</h3></div><div class="section-body">
-    <form method="post" action="/campaigns/create"><div class="form-row">
-    <div class="field-group"><div class="field-label">Канал</div><select name="channel_id">{ch_opts}</select></div>
-    <div class="field-group"><div class="field-label">Название кампании</div><input type="text" name="name" placeholder="FB_Broad_March" required/></div>
-    <div style="display:flex;align-items:flex-end"><button class="btn">Создать</button></div>
-    </div></form></div></div>
-    <div class="section"><div class="section-head"><h3>📋 Кампании ({len(campaigns)})</h3></div>
-    <table><thead><tr><th>Кампания</th><th>Канал</th><th>Invite Link</th><th>/go ссылка</th><th>Подписчиков</th><th>Создана</th></tr></thead>
-    <tbody>{rows}</tbody></table></div></div>"""
+
+    campaign_cards = ""
+    for c in campaigns:
+        slug_url = f"{app_url}/l/{c.get('slug','')}"
+        cchans = db.get_campaign_channels(c["id"])
+        chan_rows = ""
+        for cc in cchans:
+            go_url = f"{app_url}/go?to={cc['invite_link']}&utm_campaign={c['name']}&utm_source=facebook&utm_medium=paid"
+            chan_rows += f"""<tr>
+              <td style="font-weight:600">{cc.get('channel_name') or cc['channel_id']}</td>
+              <td><div class="link-box" style="font-size:.69rem;padding:5px 9px">{cc['invite_link'][:45]}...</div></td>
+              <td style="color:var(--green);font-weight:700">{cc['joins']}</td>
+              <td>
+                <form method="post" action="/campaigns/channel/delete" style="display:inline">
+                  <input type="hidden" name="cc_id" value="{cc['id']}"/>
+                  <input type="hidden" name="campaign_id" value="{c['id']}"/>
+                  <button class="del-btn btn-sm">✕</button>
+                </form>
+              </td>
+            </tr>"""
+        if not chan_rows:
+            chan_rows = '<tr><td colspan="4"><div class="empty" style="padding:12px">Нет каналов — добавь ниже</div></td></tr>'
+
+        ch_opts = "".join(f'<option value="{ch["channel_id"]}">{ch["name"]}</option>' for ch in channels)
+
+        campaign_cards += f"""
+        <div class="section" style="border-left:3px solid var(--accent)">
+          <div class="section-head">
+            <h3>🎯 {c['name']} <span class="badge" style="font-size:.72rem">{c['total_joins']} подписок</span></h3>
+            <div style="display:flex;gap:8px;align-items:center">
+              <a href="{slug_url}" target="_blank" class="btn-gray btn-sm">🌐 Открыть лендинг</a>
+              <form method="post" action="/campaigns/delete">
+                <input type="hidden" name="campaign_id" value="{c['id']}"/>
+                <button class="del-btn">✕ Удалить</button>
+              </form>
+            </div>
+          </div>
+          <div class="section-body">
+            <div style="margin-bottom:12px;padding:10px 14px;background:var(--bg3);border-radius:9px;border:1px solid var(--border)">
+              <div style="font-size:.75rem;color:var(--text3);margin-bottom:5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">🔗 Ссылка на лендинг кампании (используй в рекламе)</div>
+              <div class="link-box">{slug_url}</div>
+              <div style="font-size:.72rem;color:var(--text3);margin-top:6px">💡 fbclid и utm_ автоматически захватываются когда пользователь кликает из FB</div>
+            </div>
+            <table><thead><tr><th>Канал</th><th>Invite Link</th><th>Подписок</th><th></th></tr></thead>
+            <tbody>{chan_rows}</tbody></table>
+            <form method="post" action="/campaigns/channel/add" style="margin-top:14px;display:block">
+              <input type="hidden" name="campaign_id" value="{c['id']}"/>
+              <input type="hidden" name="campaign_name" value="{c['name']}"/>
+              <div class="form-row">
+                <div class="field-group"><div class="field-label">Добавить канал</div>
+                  <select name="channel_id">{ch_opts}</select></div>
+                <div style="display:flex;align-items:flex-end">
+                  <button class="btn btn-sm">+ Добавить и создать ссылку</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>"""
+
+    if not campaign_cards:
+        campaign_cards = '<div class="empty" style="padding:40px">Кампаний нет — создай первую</div>'
+
+    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else (f'<div class="alert-red">❌ {err_msg}</div>' if err_msg else "")
+    content = f"""<div class="page-wrap">
+    <div class="page-title">🔗 Кампании</div>
+    <div class="page-sub">Каждая кампания = несколько групп + лендинг. Пользователь переходит на лендинг → вступает в группу → фиксируется подписка в FB CAPI.</div>
+    {alert}
+    <div class="section">
+      <div class="section-head"><h3>➕ Создать кампанию</h3></div>
+      <div class="section-body">
+        <form method="post" action="/campaigns/create"><div class="form-row">
+          <div class="field-group"><div class="field-label">Название (будет в UTM)</div>
+            <input type="text" name="name" placeholder="FB_Broad_March_NYC" required/></div>
+          <div class="field-group" style="max-width:220px"><div class="field-label">URL slug лендинга</div>
+            <input type="text" name="slug" placeholder="march-nyc"/></div>
+          <div style="display:flex;align-items:flex-end"><button class="btn">Создать</button></div>
+        </div></form>
+      </div>
+    </div>
+    {campaign_cards}
+    </div>"""
     return HTMLResponse(base(content, "campaigns", request))
 
 
 @app.post("/campaigns/create")
-async def campaigns_create(request: Request, channel_id: str = Form(...), name: str = Form(...)):
+async def campaigns_create(request: Request, name: str = Form(...), slug: str = Form("")):
+    user, err = require_auth(request)
+    if err: return err
+    import re, secrets as _sec
+    if not slug.strip():
+        slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-') + "-" + _sec.token_hex(3)
+    try:
+        db.create_campaign(name.strip(), slug.strip())
+        return RedirectResponse(f"/campaigns?msg=Кампания+{name}+создана", 303)
+    except Exception as e:
+        return RedirectResponse(f"/campaigns?err_msg={str(e)}", 303)
+
+
+@app.post("/campaigns/delete")
+async def campaigns_delete(request: Request, campaign_id: int = Form(...)):
+    user, err = require_auth(request)
+    if err: return err
+    db.delete_campaign(campaign_id)
+    return RedirectResponse("/campaigns", 303)
+
+
+@app.post("/campaigns/channel/add")
+async def campaigns_channel_add(request: Request, campaign_id: int = Form(...),
+                                 campaign_name: str = Form(...), channel_id: str = Form(...)):
     user, err = require_auth(request)
     if err: return err
     try:
         b1 = bot_manager.get_tracker_bot()
         if not b1: return RedirectResponse("/campaigns?err_msg=Бот+1+не+запущен", 303)
-        link_obj = await b1.create_chat_invite_link(chat_id=int(channel_id), name=name[:32])
-        db.save_campaign(name=name, channel_id=channel_id, invite_link=link_obj.invite_link)
-        return RedirectResponse(f"/campaigns?msg={link_obj.invite_link}", 303)
+        # Создаём invite-ссылку через бота
+        link_name = f"{campaign_name[:20]}_{channel_id[-6:]}"
+        link_obj = await b1.create_chat_invite_link(chat_id=int(channel_id), name=link_name[:32])
+        # Получаем название канала
+        try:
+            chat = await b1.get_chat(int(channel_id))
+            ch_name = chat.title or channel_id
+        except Exception:
+            ch_name = channel_id
+        db.add_campaign_channel(campaign_id, channel_id, ch_name, link_obj.invite_link)
+        return RedirectResponse(f"/campaigns?msg=Канал+добавлен+в+кампанию", 303)
     except Exception as e:
         return RedirectResponse(f"/campaigns?err_msg={str(e)}", 303)
+
+
+@app.post("/campaigns/channel/delete")
+async def campaigns_channel_delete(request: Request, cc_id: int = Form(...), campaign_id: int = Form(...)):
+    user, err = require_auth(request)
+    if err: return err
+    db.remove_campaign_channel(cc_id)
+    return RedirectResponse(f"/campaigns", 303)
 
 
 @app.get("/landings", response_class=HTMLResponse)
@@ -1322,16 +1422,148 @@ async def landing_contact_delete(request: Request, contact_id: int = Form(...), 
 
 
 @app.get("/l/{slug}", response_class=HTMLResponse)
-async def public_landing(request: Request, slug: str):
+async def public_landing(request: Request, slug: str,
+                          fbclid: str = None, utm_source: str = None,
+                          utm_medium: str = None, utm_campaign: str = None,
+                          utm_content: str = None, utm_term: str = None):
     import json
+    # Сначала ищем как Campaign slug
+    campaign = db.get_campaign_by_slug(slug)
+    if campaign:
+        channels = db.get_campaign_channels(campaign["id"])
+        app_url  = db.get_setting("app_url", "").rstrip("/")
+        pixel_id = db.get_setting("pixel_id", "")
+
+        # Строим кнопки — каждый канал = /go ссылка которая трекает клик
+        btns = []
+        for cc in channels:
+            go_url = f"{app_url}/go?to={cc['invite_link']}&utm_campaign={campaign['name']}&utm_source={utm_source or 'facebook'}&utm_medium={utm_medium or 'paid'}"
+            if fbclid: go_url += f"&fbclid={fbclid}"
+            if utm_content: go_url += f"&utm_content={utm_content}"
+            btns.append({"url": go_url, "label": cc.get("channel_name") or "Вступить в группу", "type": "telegram"})
+
+        return HTMLResponse(_render_campaign_landing(campaign, btns, pixel_id, fbclid))
+
+    # Иначе ищем как Landing slug (для Staff лендингов)
     landing = db.get_landing_by_slug(slug)
     if not landing: return HTMLResponse("<h2>Not found</h2>", 404)
     contacts = db.get_landing_contacts(landing["id"])
-
     if landing["type"] == "staff":
         return HTMLResponse(_render_staff_landing(landing, contacts))
     else:
         return HTMLResponse(_render_client_landing(landing, contacts))
+
+
+def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = None) -> str:
+    """Лендинг кампании — показывает все каналы как кнопки подписки"""
+    btn_html = ""
+    for b in btns:
+        icon_svg = '<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>'
+        btn_html += f'<a class="lnd-btn lnd-tg" href="{b["url"]}">{icon_svg} {b["label"]}</a>'
+
+    pixel_js = ""
+    if pixel_id:
+        pixel_js = f"""
+    <script>
+    !function(f,b,e,v,n,t,s){{if(f.fbq)return;n=f.fbq=function(){{n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)}};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}}(window,document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '{pixel_id}');
+    fbq('track', 'PageView');
+    // Подписка на кнопки
+    document.querySelectorAll('.lnd-btn').forEach(function(btn) {{
+        btn.addEventListener('click', function() {{
+            fbq('track', 'Subscribe');
+        }});
+    }});
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id={pixel_id}&ev=PageView&noscript=1"/></noscript>"""
+
+    return f"""<!DOCTYPE html><html lang="en"><head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Relaxation and Balance 🌿✨</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+    *{{box-sizing:border-box;margin:0;padding:0}}
+    body{{font-family:'Inter',system-ui;background:#060a0f;color:#e8f0f8;min-height:100vh}}
+    .top-bar{{background:linear-gradient(135deg,#1a0a2e,#0d1a2e);border-bottom:1px solid rgba(255,255,255,.08);padding:12px 20px;text-align:center;font-size:.82rem;font-weight:600;color:#f8d56b;letter-spacing:.02em}}
+    .hero{{position:relative;min-height:50vh;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}}
+    .hero::before{{content:"";position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop') center/cover;filter:brightness(.35)}}
+    .hero::after{{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 30%,#060a0f)}}
+    .hero-inner{{position:relative;z-index:1;padding:48px 20px 32px}}
+    .hero h1{{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:800;line-height:1.15;margin-bottom:10px}}
+    .hero p{{color:rgba(255,255,255,.7);max-width:500px;margin:0 auto;font-size:.95rem;line-height:1.7}}
+    .wrap{{max-width:600px;margin:0 auto;padding:0 20px 60px}}
+    .section-title{{font-size:1.1rem;font-weight:700;margin:32px 0 16px;color:#e8f0f8}}
+    .utp-list{{display:flex;flex-direction:column;gap:10px;margin-bottom:32px}}
+    .utp-item{{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:13px;padding:14px 18px;font-size:.9rem;line-height:1.5}}
+    .desc-box{{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);border-radius:13px;padding:16px 20px;font-size:.88rem;line-height:1.7;color:rgba(255,255,255,.8);margin-bottom:32px}}
+    .rates{{display:flex;flex-direction:column;gap:8px;margin-bottom:32px}}
+    .rate-item{{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:14px 20px;font-weight:600}}
+    .rate-price{{font-size:1.15rem;color:#a5f3fc}}
+    .info-box{{background:rgba(248,212,0,.06);border:1px solid rgba(248,212,0,.2);border-radius:13px;padding:16px 20px;margin-bottom:32px}}
+    .info-item{{font-size:.86rem;line-height:1.8;color:rgba(255,255,255,.8)}}
+    .contact-section{{text-align:center;padding:32px 0}}
+    #contact-anchor{{scroll-margin-top:20px}}
+    .contact-title{{font-size:1.3rem;font-weight:800;margin-bottom:8px}}
+    .contact-sub{{color:rgba(255,255,255,.5);font-size:.88rem;margin-bottom:24px}}
+    .lnd-btn{{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:15px;border-radius:13px;font-weight:700;font-size:.95rem;text-decoration:none;margin-bottom:10px;transition:opacity .15s}}
+    .lnd-btn:hover{{opacity:.88}}
+    .lnd-tg{{background:#26A5E4;color:#fff}}
+    .cta-btn{{display:flex;align-items:center;justify-content:center;width:100%;padding:15px;border-radius:13px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;font-weight:600;font-size:.9rem;text-decoration:none;margin-bottom:10px;cursor:pointer;transition:background .15s}}
+    .cta-btn:hover{{background:rgba(255,255,255,.16)}}
+    .msg-book{{text-align:center;font-size:1rem;color:rgba(255,255,255,.6);padding:20px;border-top:1px solid rgba(255,255,255,.07)}}
+    </style></head><body>
+    <div class="top-bar">⚠️ No Fake Service 💯</div>
+    <div class="hero"><div class="hero-inner">
+      <h1>Relaxation and Balance 🌿✨</h1>
+      <p>I invite you to enjoy a soothing body massage in a comfortable, private setting.</p>
+      <a href="#contact-anchor" class="cta-btn" style="max-width:280px;margin:20px auto 0" onclick="document.getElementById('contact-anchor').scrollIntoView({{behavior:'smooth'}});return false">Contact me ↓</a>
+    </div></div>
+    <div class="wrap">
+      <div class="section-title">Included in the session:</div>
+      <div class="utp-list">
+        <div class="utp-item">💆‍♂️ Full body massage</div>
+        <div class="utp-item">🤍 Full body contact massage</div>
+        <div class="utp-item">🔥 Relaxation completion</div>
+      </div>
+      <div class="desc-box">✨ I'll greet you in elegant attire and provide a relaxing massage in comfortable, minimal clothing. Touching me is not allowed.</div>
+      <a href="#contact-anchor" class="cta-btn" onclick="document.getElementById('contact-anchor').scrollIntoView({{behavior:'smooth'}});return false">Contact me ↓</a>
+      <div class="section-title">💰 Rates:</div>
+      <div class="rates">
+        <div class="rate-item"><span>60 min</span><span class="rate-price">$230</span></div>
+        <div class="rate-item"><span>30 min</span><span class="rate-price">$200</span></div>
+        <div class="rate-item"><span>15 min</span><span class="rate-price">$140</span></div>
+      </div>
+      <a href="#contact-anchor" class="cta-btn" onclick="document.getElementById('contact-anchor').scrollIntoView({{behavior:'smooth'}});return false">Contact me ↓</a>
+      <div class="info-box">
+        <div class="info-item">📌 Extra services can only be discussed in person during the session.</div>
+        <div class="info-item">💵 Payment is accepted in cash only. Please prepare the exact amount.</div>
+        <div class="info-item">⚠️ Same-day appointments only. Advance bookings are not available.</div>
+      </div>
+      <div class="msg-book">💌 Message me to book your session!</div>
+      <div class="contact-section" id="contact-anchor">
+        <div class="contact-title">Contact me:</div>
+        <div class="contact-sub">Choose your preferred channel to join</div>
+        {btn_html}
+      </div>
+    </div>
+    {pixel_js}
+    <script>
+    // Сохраняем fbp cookie если нет (нужен для CAPI matching)
+    (function(){{
+      if(!document.cookie.includes('_fbp')){{
+        var fbp='fb.1.'+Date.now()+'.'+Math.random().toString(36).substr(2,9);
+        document.cookie='_fbp='+fbp+';max-age=7776000;path=/;SameSite=Lax';
+      }}
+    }})();
+    </script>
+    </body></html>"""
 
 
 def _render_client_landing(landing, contacts) -> str:

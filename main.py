@@ -2863,13 +2863,14 @@ async def api_debug(request: Request):
 
     # Последние 10 сообщений из БД
     try:
-        with db._get_conn() as conn:
+        from database import _get_conn
+        with _get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT m.id, m.conv_id, m.sender_type, m.text, m.created_at,
                            c.tg_id, c.name
                     FROM messages m
-                    JOIN conversations c ON c.id = m.conv_id
+                    LEFT JOIN conversations c ON c.id = m.conv_id
                     ORDER BY m.id DESC LIMIT 10
                 """)
                 rows = cur.fetchall()

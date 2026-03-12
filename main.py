@@ -5,7 +5,7 @@ import os
 from contextlib import asynccontextmanager
 from urllib.parse import urlencode, quote
 
-from fastapi import FastAPI, Request, Form, Cookie
+from fastapi import FastAPI, Request, Form, Cookie, File, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -2303,6 +2303,8 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
     right = f"""{header_html}
     <div class="chat-messages" id="wa-msgs">{messages_html}</div>
     <div class="chat-input"><div class="chat-input-row">
+      <input type="file" id="wa-file-input" accept="image/*" style="display:none" onchange="sendWaFile(this)"/>
+      <button class="send-btn-green" style="background:#374151;padding:10px 13px;font-size:1.1rem" onclick="document.getElementById('wa-file-input').click()" title="Отправить фото">📎</button>
       <textarea id="wa-reply" placeholder="Написать в WhatsApp… (Enter — отправить)" rows="1" onkeydown="handleWaKey(event)"></textarea>
       <button class="send-btn-green" onclick="sendWaMsg()">Отправить</button>
     </div></div>""" if active_conv and active_conv["status"] == "open" else (
@@ -2327,6 +2329,23 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
       await fetch('/wa/send',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},
         body:'conv_id={conv_id}&text='+encodeURIComponent(text)}});
       loadNewWaMsgs();
+    }}
+
+    async function sendWaFile(input){{
+      const file=input.files[0]; if(!file) return;
+      const btn=document.querySelector('button[onclick*="wa-file-input"]');
+      btn.textContent='⏳'; btn.disabled=true;
+      const fd=new FormData();
+      fd.append('conv_id','{conv_id}');
+      fd.append('file',file);
+      try{{
+        const res=await fetch('/wa/send_media',{{method:'POST',body:fd}});
+        const data=await res.json();
+        if(data.ok) loadNewWaMsgs();
+        else alert('Ошибка отправки: '+(data.error||'неизвестно'));
+      }}catch(e){{alert('Ошибка: '+e.message);}}
+      btn.textContent='📎'; btn.disabled=false;
+      input.value='';
     }}
     function handleWaKey(e){{if(e.key==='Enter'&&!e.shiftKey){{e.preventDefault();sendWaMsg();}}}}
 
@@ -2505,6 +2524,38 @@ async def wa_send(request: Request, conv_id: int = Form(...), text: str = Form(.
     if not result.get("error"):
         db.save_wa_message(conv_id, conv["wa_chat_id"], "manager", text)
         db.update_wa_last_message(conv["wa_chat_id"], f"Вы: {text}", increment_unread=False)
+    return JSONResponse({"ok": not result.get("error"), "error": result.get("error")})
+
+
+@app.post("/wa/send_media")
+async def wa_send_media(request: Request, conv_id: int = Form(...), file: UploadFile = File(...)):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    conv = db.get_wa_conversation(conv_id)
+    if not conv: return JSONResponse({"error": "not found"}, 404)
+
+    import base64
+    file_data = await file.read()
+    b64 = base64.b64encode(file_data).decode()
+    mimetype = file.content_type or "image/jpeg"
+    filename = file.filename or "photo.jpg"
+
+    to = conv["wa_chat_id"]
+    log.info(f"[WA send_media] to={to} conv_id={conv_id} file={filename} mime={mimetype} size={len(file_data)}")
+
+    result = await wa_api("post", "/send_media", json={
+        "to": to,
+        "data": b64,
+        "mimetype": mimetype,
+        "filename": filename,
+        "caption": ""
+    })
+    log.info(f"[WA send_media] result={result}")
+
+    if not result.get("error"):
+        db.save_wa_message(conv_id, conv["wa_chat_id"], "manager", "[фото]",
+                           media_url=None, media_type=mimetype)
+        db.update_wa_last_message(conv["wa_chat_id"], "Вы: [фото]", increment_unread=False)
     return JSONResponse({"ok": not result.get("error"), "error": result.get("error")})
 
 

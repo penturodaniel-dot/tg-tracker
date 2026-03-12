@@ -2126,47 +2126,91 @@ async def wa_api(method: str, path: str, **kwargs) -> dict:
 async def wa_webhook(request: Request):
     secret = request.headers.get("X-WA-Secret", "")
     if secret != WA_WH_SECRET:
+        log.warning(f"[WA webhook] Wrong secret: {secret!r}")
         return JSONResponse({"error": "unauthorized"}, 401)
-    body  = await request.json()
+    try:
+        body  = await request.json()
+    except Exception as e:
+        log.error(f"[WA webhook] Bad JSON: {e}")
+        return JSONResponse({"ok": True})  # всегда 200 чтобы WA не ретраил
+
     event = body.get("event")
     data  = body.get("data", {})
-    if event == "message":
-        wa_chat_id  = data["wa_chat_id"]
-        wa_number   = data["wa_number"]
-        sender_name = data.get("sender_name", wa_number)
-        text        = data.get("body", "")
-        conv = db.get_or_create_wa_conversation(wa_chat_id, wa_number, sender_name)
-        db.save_wa_message(conv["id"], wa_chat_id, "visitor", text)
-        db.update_wa_last_message(wa_chat_id, text, increment_unread=True)
-        notify_chat = db.get_setting("notify_chat_id")
-        if notify_chat:
-            bot = bot_manager.get_tracker_bot() or bot_manager.get_staff_bot()
-            if bot:
-                try:
-                    from aiogram import types as tg_types
-                    preview = text[:80] + ("..." if len(text) > 80 else "")
-                    await bot.send_message(
-                        int(notify_chat),
-                        f"💚 *WhatsApp — новое сообщение*\n👤 {sender_name} (+{wa_number})\n\n_{preview}_",
-                        parse_mode="Markdown",
-                        reply_markup=tg_types.InlineKeyboardMarkup(inline_keyboard=[[
-                            tg_types.InlineKeyboardButton(
-                                text="Открыть WA чат →",
-                                url=f"{db.get_setting('app_url','')}/wa/chat?conv_id={conv['id']}"
-                            )
-                        ]])
-                    )
-                except Exception as e:
-                    log.warning(f"WA notify error: {e}")
-    elif event == "ready":
-        db.set_setting("wa_connected_number", data.get("number", ""))
-        db.set_setting("wa_status", "ready")
-    elif event == "disconnected":
-        db.set_setting("wa_status", "disconnected")
-        db.set_setting("wa_connected_number", "")
-    elif event == "qr":
-        db.set_setting("wa_qr", data.get("qr", ""))
-        db.set_setting("wa_status", "qr")
+    log.info(f"[WA webhook] event={event} keys={list(data.keys())}")
+
+    try:
+        if event == "message":
+            wa_chat_id  = data.get("wa_chat_id") or data.get("chatId", "")
+            wa_number   = data.get("wa_number")  or data.get("from", wa_chat_id).replace("@c.us","")
+            sender_name = data.get("sender_name") or data.get("pushname") or wa_number
+
+            # Текст — для медиафайлов body может быть None
+            raw_text = data.get("body") or data.get("text") or ""
+            has_media = data.get("hasMedia") or data.get("media_url")
+            if not raw_text and has_media:
+                media_type = data.get("type", "media")
+                raw_text = f"[{media_type}]"
+            text = (raw_text or "").strip() or "[сообщение]"
+
+            if not wa_chat_id:
+                log.warning(f"[WA webhook] no wa_chat_id in data: {data}")
+                return JSONResponse({"ok": True})
+
+            conv = db.get_or_create_wa_conversation(wa_chat_id, wa_number, sender_name)
+            db.save_wa_message(conv["id"], wa_chat_id, "visitor", text)
+            db.update_wa_last_message(wa_chat_id, text, increment_unread=True)
+            log.info(f"[WA webhook] saved msg conv={conv['id']} from={wa_number}: {text[:50]}")
+
+            # Уведомление менеджеру — без Markdown чтобы спецсимволы не ломали
+            notify_chat = db.get_setting("notify_chat_id")
+            if notify_chat:
+                bot = bot_manager.get_tracker_bot() or bot_manager.get_staff_bot()
+                if bot:
+                    try:
+                        from aiogram import types as tg_types
+                        preview = text[:80] + ("..." if len(text) > 80 else "")
+                        # Используем HTML вместо Markdown — надёжнее
+                        safe_name    = sender_name.replace("<","&lt;").replace(">","&gt;")
+                        safe_preview = preview.replace("<","&lt;").replace(">","&gt;")
+                        safe_number  = str(wa_number).replace("<","&lt;")
+                        await bot.send_message(
+                            int(notify_chat),
+                            f"💚 <b>WhatsApp — новое сообщение</b>\n"
+                            f"👤 {safe_name} (+{safe_number})\n\n"
+                            f"{safe_preview}",
+                            parse_mode="HTML",
+                            reply_markup=tg_types.InlineKeyboardMarkup(inline_keyboard=[[
+                                tg_types.InlineKeyboardButton(
+                                    text="Открыть WA чат →",
+                                    url=f"{db.get_setting('app_url','')}/wa/chat?conv_id={conv['id']}"
+                                )
+                            ]])
+                        )
+                    except Exception as e:
+                        log.warning(f"[WA webhook] notify error: {e}")
+
+        elif event == "ready":
+            db.set_setting("wa_connected_number", data.get("number", ""))
+            db.set_setting("wa_status", "ready")
+            log.info(f"[WA webhook] ready, number={data.get('number')}")
+
+        elif event == "disconnected":
+            db.set_setting("wa_status", "disconnected")
+            db.set_setting("wa_connected_number", "")
+            log.info("[WA webhook] disconnected")
+
+        elif event == "qr":
+            db.set_setting("wa_qr", data.get("qr", ""))
+            db.set_setting("wa_status", "qr")
+            log.info("[WA webhook] QR received")
+
+        else:
+            log.info(f"[WA webhook] unknown event: {event}")
+
+    except Exception as e:
+        # Логируем но всегда возвращаем 200 — иначе WA сервис будет ретраить бесконечно
+        log.error(f"[WA webhook] ERROR event={event}: {e}", exc_info=True)
+
     return JSONResponse({"ok": True})
 
 

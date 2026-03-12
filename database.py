@@ -709,14 +709,15 @@ class Database:
                 return [dict(r) for r in cur.fetchall()]
 
     def update_wa_last_message(self, wa_chat_id, text, increment_unread=True):
+        safe_text = (text or "")[:100]
         with self._conn() as conn:
             with conn.cursor() as cur:
                 if increment_unread:
                     cur.execute("UPDATE wa_conversations SET last_message=%s,last_message_at=%s,unread_count=unread_count+1 WHERE wa_chat_id=%s",
-                                (text[:100],datetime.utcnow().isoformat(),wa_chat_id))
+                                (safe_text, datetime.utcnow().isoformat(), wa_chat_id))
                 else:
                     cur.execute("UPDATE wa_conversations SET last_message=%s,last_message_at=%s WHERE wa_chat_id=%s",
-                                (text[:100],datetime.utcnow().isoformat(),wa_chat_id))
+                                (safe_text, datetime.utcnow().isoformat(), wa_chat_id))
             conn.commit()
 
     def mark_wa_read(self, conv_id):

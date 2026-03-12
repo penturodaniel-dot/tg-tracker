@@ -1252,6 +1252,26 @@ async def settings_page(request: Request, msg: str = ""):
     {bot_card("🔵 Бот 1 — Трекер (Клиенты)", "blue", b1_info, "bot1_token", "settings/bot1")}
     {bot_card("🟠 Бот 2 — Сотрудники", "orange", b2_info, "bot2_token", "settings/bot2")}
 
+    <div class="section" style="border-left:3px solid #25d366">
+      <div class="section-head"><h3>💚 WhatsApp</h3>
+        <span style="font-size:.82rem">{
+            '<span style="color:#34d399">● Подключён · +' + db.get_setting("wa_connected_number","") + '</span>'
+            if db.get_setting("wa_status") == "ready"
+            else ('<span style="color:#fbbf24">● Ожидает QR...</span>'
+                  if db.get_setting("wa_status") == "qr"
+                  else '<span style="color:#ef4444">● Не подключён</span>')
+        }</span>
+      </div>
+      <div class="section-body">
+        <a href="/wa/setup" class="btn" style="background:#059669;display:inline-flex;align-items:center;gap:8px;text-decoration:none">
+          📱 Открыть подключение WhatsApp / QR-код
+        </a>
+        <div style="font-size:.78rem;color:var(--text3);margin-top:8px">
+          Здесь сканируешь QR для подключения номера. После деплоя нужно переподключать если статус ⚫.
+        </div>
+      </div>
+    </div>
+
     <div class="section">
       <div class="section-head"><h3>📡 Meta Pixel & CAPI</h3></div>
       <div class="section-body">

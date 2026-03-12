@@ -102,8 +102,14 @@ async def start_tracker_bot(token: str):
     try:
         _tracker_bot = Bot(token=token)
         _tracker_dp  = _build_tracker_dp()
+        # drop_pending_updates=True — сбрасывает накопившиеся обновления при рестарте
+        # Без этого старые обновления могут конфликтовать
         _tracker_task = asyncio.create_task(
-            _tracker_dp.start_polling(_tracker_bot, allowed_updates=["chat_member"])
+            _tracker_dp.start_polling(
+                _tracker_bot,
+                allowed_updates=["chat_member"],
+                drop_pending_updates=True,
+            )
         )
         info = await _tracker_bot.get_me()
         log.info(f"[BOT1] Started: @{info.username}")
@@ -117,6 +123,9 @@ async def stop_tracker_bot():
     if _tracker_task and not _tracker_task.done():
         _tracker_task.cancel()
         try: await _tracker_task
+        except: pass
+    if _tracker_dp:
+        try: await _tracker_dp.stop_polling()
         except: pass
     if _tracker_bot:
         try: await _tracker_bot.session.close()
@@ -223,7 +232,11 @@ async def start_staff_bot(token: str):
         _staff_bot = Bot(token=token)
         _staff_dp  = _build_staff_dp()
         _staff_task = asyncio.create_task(
-            _staff_dp.start_polling(_staff_bot, allowed_updates=["message"])
+            _staff_dp.start_polling(
+                _staff_bot,
+                allowed_updates=["message"],
+                drop_pending_updates=True,
+            )
         )
         info = await _staff_bot.get_me()
         log.info(f"[BOT2] Started: @{info.username}")
@@ -237,6 +250,9 @@ async def stop_staff_bot():
     if _staff_task and not _staff_task.done():
         _staff_task.cancel()
         try: await _staff_task
+        except: pass
+    if _staff_dp:
+        try: await _staff_dp.stop_polling()
         except: pass
     if _staff_bot:
         try: await _staff_bot.session.close()

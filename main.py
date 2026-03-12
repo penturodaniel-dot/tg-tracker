@@ -226,11 +226,14 @@ def nav_html(active: str, request: Request) -> str:
     wa_status  = db.get_setting("wa_status", "disconnected")
     role = user["role"] if user else "manager"
 
-    def item(icon, label, page, section_color="blue", badge_count=0, url=None):
+    def item(icon, label, page, section_color="blue", badge_count=0, url=None, badge_id=None):
         href = url or f"/{page}"
         act  = page == active or (url and url.strip("/") == active)
         cls  = f"nav-item active {section_color}" if act else "nav-item"
-        bdg  = f'<span class="badge-count">{badge_count}</span>' if badge_count > 0 else ""
+        # Всегда рендерим badge — JS может обновить его без перезагрузки
+        bid  = f' id="{badge_id}"' if badge_id else ""
+        hide = ' style="display:none"' if badge_count == 0 else ""
+        bdg  = f'<span class="badge-count"{bid}{hide}>{badge_count if badge_count else ""}</span>'
         return f'<a href="{href}"><div class="{cls}"><span class="nav-label">{icon} {label}</span>{bdg}</div></a>'
 
     admin_section = ""
@@ -262,8 +265,8 @@ def nav_html(active: str, request: Request) -> str:
       {item("📈", "Статистика", "analytics_clients", "blue", url="/analytics/clients")}
       <div class="nav-divider"></div>
       <div class="nav-section">👔 Сотрудники</div>
-      {item("💬", "TG Чаты", "chat", "orange", badge_count=unread)}
-      {item("💚", "WA Чаты", "wa_chat", "orange", badge_count=wa_unread, url="/wa/chat")}
+      {item("💬", "TG Чаты", "chat", "orange", badge_count=unread, badge_id="nav-tg-badge")}
+      {item("💚", "WA Чаты", "wa_chat", "orange", badge_count=wa_unread, url="/wa/chat", badge_id="nav-wa-badge")}
       {item("🗂", "База", "staff", "orange")}
       {item("🌐", "Лендинги HR", "landings_staff", "orange")}
       {item("📊", "Статистика", "analytics_staff", "orange", url="/analytics/staff")}
@@ -317,19 +320,21 @@ def nav_html(active: str, request: Request) -> str:
     }}
     // Global unread polling (all pages)
     let _lastTgUnread = {unread}, _lastWaUnread = {wa_unread};
+    function updateBadge(id, count){{
+      const el = document.getElementById(id);
+      if(!el) return;
+      if(count > 0){{ el.textContent = count; el.style.display = ''; }}
+      else {{ el.textContent = ''; el.style.display = 'none'; }}
+    }}
     async function pollUnread(){{
       try{{
         const r = await fetch('/api/stats');
         const d = await r.json();
-        // Update badges in nav
-        const tgBadge = document.querySelector('a[href="/chat"] .badge-count');
-        const waBadge = document.querySelector('a[href="/wa/chat"] .badge-count');
-        if(tgBadge) tgBadge.textContent = d.unread || '';
-        if(waBadge) waBadge.textContent = d.wa_unread || '';
-        // Toasts on new messages
+        updateBadge('nav-tg-badge', d.unread || 0);
+        updateBadge('nav-wa-badge', d.wa_unread || 0);
         if(d.unread > _lastTgUnread) showToast('💬 TG — новое сообщение', 'Перейти в TG чаты', 'tg-toast', '/chat');
         if(d.wa_unread > _lastWaUnread) showToast('💚 WA — новое сообщение', 'Перейти в WA чаты', 'wa-toast', '/wa/chat');
-        _lastTgUnread = d.unread; _lastWaUnread = d.wa_unread;
+        _lastTgUnread = d.unread || 0; _lastWaUnread = d.wa_unread || 0;
       }}catch(e){{}}
     }}
     setInterval(pollUnread, 5000);

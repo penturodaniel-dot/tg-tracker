@@ -204,6 +204,9 @@ class Database:
                     # wa_messages — колонки для медиа
                     "ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS media_url TEXT",
                     "ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS media_type TEXT",
+                    # messages (TG) — колонки для медиа
+                    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_url TEXT",
+                    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type TEXT",
                 ]
                 for m in migrations:
                     try:

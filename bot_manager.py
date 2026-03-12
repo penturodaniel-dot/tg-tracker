@@ -186,11 +186,46 @@ def _build_staff_dp() -> Dispatcher:
         if message.chat.type != "private": return
         user = message.from_user
         name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "Сотрудник"
-        text = message.text or message.caption or "[медиафайл]"
+        text = message.text or message.caption or ""
+
+        media_url  = None
+        media_type = None
+
+        # Скачиваем медиа через Telegram file API
+        file_obj = None
+        if message.photo:
+            file_obj = message.photo[-1]  # наибольшее разрешение
+            media_type = "image/jpeg"
+            if not text: text = "[фото]"
+        elif message.document:
+            file_obj = message.document
+            media_type = message.document.mime_type or "application/octet-stream"
+            if not text: text = f"[файл: {message.document.file_name or 'документ'}]"
+        elif message.video:
+            file_obj = message.video
+            media_type = "video/mp4"
+            if not text: text = "[видео]"
+        elif message.voice:
+            file_obj = message.voice
+            media_type = "audio/ogg"
+            if not text: text = "[голосовое]"
+
+        if file_obj:
+            try:
+                tg_file = await _staff_bot.get_file(file_obj.file_id)
+                # Прямая ссылка на файл через Telegram CDN
+                bot_token = _db.get_setting("bot2_token") or ""
+                if bot_token:
+                    media_url = f"https://api.telegram.org/file/bot{bot_token}/{tg_file.file_path}"
+            except Exception as e:
+                log.warning(f"[BOT2] Media download error: {e}")
+
+        if not text: text = "[сообщение]"
 
         conv = _db.get_or_create_conversation(str(user.id), name, user.username)
         _db.get_or_create_staff(str(user.id), name, user.username, conv["id"])
-        _db.save_message(conv["id"], str(user.id), "visitor", text, message.message_id)
+        _db.save_message(conv["id"], str(user.id), "visitor", text, message.message_id,
+                         media_url=media_url, media_type=media_type)
         _db.update_conversation_last_message(str(user.id), text, increment_unread=True)
 
         # Уведомление менеджеру

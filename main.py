@@ -128,6 +128,7 @@ a{color:inherit;text-decoration:none}
 .msg.manager .msg-bubble{background:#ea580c;color:#fff;border-bottom-right-radius:4px}
 .msg-time{font-size:.69rem;color:#475569;margin-top:3px}
 .msg.visitor .msg-time{text-align:left}.msg.manager .msg-time{text-align:right}
+.msg-img{max-width:220px;max-height:220px;border-radius:10px;display:block;cursor:pointer;margin:2px 0}
 .chat-input{padding:14px 18px;border-top:1px solid #1a2030;background:#0b0e17;flex-shrink:0}
 .chat-input-row{display:flex;gap:8px;align-items:flex-end}
 .chat-input textarea{flex:1;background:#0a0d14;border:1px solid #1a2030;border-radius:10px;padding:10px 13px;color:#e2e8f0;font-size:.87rem;outline:none;resize:none;max-height:120px;font-family:system-ui}
@@ -965,6 +966,8 @@ async def chat_panel(request: Request, conv_id: int = 0):
     right = f"""{header_html}
     <div class="chat-messages" id="msgs">{messages_html}</div>
     <div class="chat-input"><div class="chat-input-row">
+      <input type="file" id="tg-file-input" accept="image/*,video/*,.pdf,.doc,.docx" style="display:none" onchange="sendTgFile(this)"/>
+      <button class="send-btn-orange" style="background:#374151;padding:10px 13px;font-size:1.1rem" onclick="document.getElementById('tg-file-input').click()" title="Отправить файл">📎</button>
       <textarea id="reply-text" placeholder="Ответить… (Enter — отправить)" rows="1" onkeydown="handleKey(event)"></textarea>
       <button class="send-btn-orange" onclick="sendMsg()">Отправить</button>
     </div></div>""" if active_conv else '<div class="no-conv"><div style="font-size:2.5rem">👔</div><div>Выбери диалог</div></div>'
@@ -986,6 +989,19 @@ async def chat_panel(request: Request, conv_id: int = 0):
       loadNewMsgs();
     }}
     function handleKey(e){{if(e.key==='Enter'&&!e.shiftKey){{e.preventDefault();sendMsg();}}}}
+    async function sendTgFile(input){{
+      const file=input.files[0]; if(!file) return;
+      const btn=document.querySelector('button[onclick*="tg-file-input"]');
+      btn.textContent='⏳'; btn.disabled=true;
+      const fd=new FormData(); fd.append('conv_id','{conv_id}'); fd.append('file',file);
+      try{{
+        const res=await fetch('/chat/send_media',{{method:'POST',body:fd}});
+        const data=await res.json();
+        if(data.ok) loadNewMsgs();
+        else alert('Ошибка: '+(data.error||'неизвестно'));
+      }}catch(e){{alert('Ошибка: '+e.message);}}
+      btn.textContent='📎'; btn.disabled=false; input.value='';
+    }}
     {"setInterval(loadNewMsgs,3000);" if active_conv else ""}
     async function loadNewMsgs(){{
       const msgs=document.querySelectorAll('#msgs .msg[data-id]');
@@ -1021,6 +1037,61 @@ async def chat_send(request: Request, conv_id: int = Form(...), text: str = Form
         db.save_message(conv_id, conv["tg_chat_id"], "manager", text)
         db.update_conversation_last_message(conv["tg_chat_id"], f"Вы: {text}", increment_unread=False)
     return JSONResponse({"ok": ok})
+
+
+@app.post("/chat/send_media")
+async def chat_send_media(request: Request, conv_id: int = Form(...), file: UploadFile = File(...)):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    conv = db.get_conversation(conv_id)
+    if not conv: return JSONResponse({"error": "not found"}, 404)
+
+    import io
+    from aiogram.types import BufferedInputFile
+    file_data = await file.read()
+    mimetype  = file.content_type or "application/octet-stream"
+    filename  = file.filename or "file"
+    tg_chat_id = conv["tg_chat_id"]
+
+    bot = bot_manager.get_staff_bot()
+    if not bot:
+        return JSONResponse({"ok": False, "error": "Bot not connected"})
+
+    try:
+        buf = BufferedInputFile(file_data, filename=filename)
+        if mimetype.startswith("image/"):
+            sent = await bot.send_photo(int(tg_chat_id), buf)
+            text = "[фото]"
+        elif mimetype.startswith("video/"):
+            sent = await bot.send_video(int(tg_chat_id), buf)
+            text = "[видео]"
+        else:
+            sent = await bot.send_document(int(tg_chat_id), buf)
+            text = f"[файл: {filename}]"
+
+        # Сохраняем ссылку через Telegram file_id
+        bot_token = db.get_setting("bot2_token") or ""
+        media_url = None
+        if bot_token:
+            try:
+                if mimetype.startswith("image/") and sent.photo:
+                    tg_file = await bot.get_file(sent.photo[-1].file_id)
+                elif mimetype.startswith("video/") and sent.video:
+                    tg_file = await bot.get_file(sent.video.file_id)
+                elif sent.document:
+                    tg_file = await bot.get_file(sent.document.file_id)
+                else:
+                    tg_file = None
+                if tg_file:
+                    media_url = f"https://api.telegram.org/file/bot{bot_token}/{tg_file.file_path}"
+            except Exception: pass
+
+        db.save_message(conv_id, tg_chat_id, "manager", text, media_url=media_url, media_type=mimetype)
+        db.update_conversation_last_message(tg_chat_id, f"Вы: {text}", increment_unread=False)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        log.error(f"[chat/send_media] error: {e}")
+        return JSONResponse({"ok": False, "error": str(e)})
 
 
 @app.post("/chat/close")

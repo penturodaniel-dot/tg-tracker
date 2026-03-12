@@ -2469,7 +2469,13 @@ async def wa_send(request: Request, conv_id: int = Form(...), text: str = Form(.
     if err: return JSONResponse({"error": "unauthorized"}, 401)
     conv = db.get_wa_conversation(conv_id)
     if not conv: return JSONResponse({"error": "not found"}, 404)
-    result = await wa_api("post", "/send", json={"to": conv["wa_number"], "message": text})
+
+    # WA ожидает номер в формате "38088390742096@c.us"
+    wa_number = conv["wa_number"]
+    if "@" not in wa_number:
+        wa_number = wa_number + "@c.us"
+
+    result = await wa_api("post", "/send", json={"to": wa_number, "message": text})
     if not result.get("error"):
         db.save_wa_message(conv_id, conv["wa_chat_id"], "manager", text)
         db.update_wa_last_message(conv["wa_chat_id"], f"Вы: {text}", increment_unread=False)

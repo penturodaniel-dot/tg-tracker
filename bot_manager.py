@@ -72,12 +72,20 @@ def get_staff_bot():
 async def _tg_download_to_cloudinary(bot, file_id: str, resource_type: str) -> str | None:
     """Скачивает файл из Telegram и загружает в Cloudinary."""
     try:
-        if not _cu:
-            log.warning("Cloudinary not configured")
+        if not (_cu and _cu.cloud):
+            log.warning("Cloudinary not configured — check env vars")
             return None
         file = await bot.get_file(file_id)
-        url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
-        return await _cu.upload_from_url(url, resource_type=resource_type, folder="tg_chat")
+        # aiogram v3: скачиваем байты через bot.download()
+        import io
+        buf = io.BytesIO()
+        await bot.download(file, destination=buf)
+        buf.seek(0)
+        data = buf.read()
+        if not data:
+            log.warning("Empty file downloaded from TG")
+            return None
+        return await _cu.upload_bytes(data, resource_type=resource_type, folder="tg_chat")
     except Exception as e:
         log.warning(f"_tg_download_to_cloudinary error: {e}")
         return None
@@ -252,7 +260,9 @@ async def start_tracker_bot(token: str | None):
         _tracker_task = asyncio.create_task(_run_bot(_tracker_dp, _tracker_bot))
         info = await _tracker_bot.get_me()
         log.info(f"Tracker bot @{info.username} started")
-        _db.set_setting("bot1_name", f"@{info.username}")
+        # Only set username if no custom name saved yet
+        if not _db.get_setting("bot1_name"):
+            _db.set_setting("bot1_name", f"@{info.username}")
     except Exception as e:
         log.error(f"start_tracker_bot error: {e}")
         _tracker_bot = None
@@ -287,7 +297,9 @@ async def start_staff_bot(token: str | None):
         _staff_task = asyncio.create_task(_run_bot(_staff_dp, _staff_bot))
         info = await _staff_bot.get_me()
         log.info(f"Staff bot @{info.username} started")
-        _db.set_setting("bot2_name", f"@{info.username}")
+        # Only set username if no custom name saved yet
+        if not _db.get_setting("bot2_name"):
+            _db.set_setting("bot2_name", f"@{info.username}")
     except Exception as e:
         log.error(f"start_staff_bot error: {e}")
         _staff_bot = None

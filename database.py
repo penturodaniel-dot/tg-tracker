@@ -491,11 +491,22 @@ class Database:
                 r = cur.fetchone()
             conn.commit(); return dict(r)
 
-    def get_conversations(self):
+    def get_conversations(self, status=None):
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT * FROM conversations ORDER BY COALESCE(last_message_at,created_at) DESC")
+                if status:
+                    cur.execute("SELECT * FROM conversations WHERE status=%s ORDER BY COALESCE(last_message_at,created_at) DESC", (status,))
+                else:
+                    cur.execute("SELECT * FROM conversations ORDER BY COALESCE(last_message_at,created_at) DESC")
                 return [dict(r) for r in cur.fetchall()]
+
+    def delete_conversation(self, conv_id):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM messages WHERE conversation_id=%s", (conv_id,))
+                cur.execute("DELETE FROM utm_tracking WHERE conversation_id=%s", (conv_id,))
+                cur.execute("DELETE FROM conversations WHERE id=%s", (conv_id,))
+            conn.commit()
 
     def get_conversation(self, conv_id):
         with self._conn() as conn:
@@ -691,11 +702,21 @@ class Database:
                 r = cur.fetchone()
             conn.commit(); return dict(r)
 
-    def get_wa_conversations(self):
+    def get_wa_conversations(self, status=None):
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT * FROM wa_conversations ORDER BY COALESCE(last_message_at,created_at) DESC")
+                if status:
+                    cur.execute("SELECT * FROM wa_conversations WHERE status=%s ORDER BY COALESCE(last_message_at,created_at) DESC", (status,))
+                else:
+                    cur.execute("SELECT * FROM wa_conversations ORDER BY COALESCE(last_message_at,created_at) DESC")
                 return [dict(r) for r in cur.fetchall()]
+
+    def delete_wa_conversation(self, conv_id):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM wa_messages WHERE conversation_id=%s", (conv_id,))
+                cur.execute("DELETE FROM wa_conversations WHERE id=%s", (conv_id,))
+            conn.commit()
 
     def get_wa_conversation(self, conv_id):
         with self._conn() as conn:

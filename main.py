@@ -872,11 +872,11 @@ def _analytics_css():
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/chat", response_class=HTMLResponse)
-async def chat_panel(request: Request, conv_id: int = 0):
+async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "open"):
     user, err = require_auth(request)
     if err: return err
 
-    convs = db.get_conversations()
+    convs = db.get_conversations(status=status_filter if status_filter != "all" else None)
     messages_html = ""
     header_html = ""
     active_conv = None
@@ -899,22 +899,32 @@ async def chat_panel(request: Request, conv_id: int = 0):
             uname = f"@{active_conv['username']}" if active_conv.get('username') else active_conv.get('tg_chat_id','')
             status_color = "var(--green)" if active_conv["status"] == "open" else "var(--red)"
 
+            # UTM и источник
             utm_tags = ""
-            if utm:
-                tags = []
-                if utm.get("utm_source"):   tags.append(f"src:{utm['utm_source']}")
-                if utm.get("utm_campaign"): tags.append(f"camp:{utm['utm_campaign']}")
-                if utm.get("fbclid"):       tags.append("fbclid ✓")
-                if tags:
-                    utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:5px">' + "".join(f'<span class="utm-tag">{t}</span>' for t in tags) + '</div>'
+            if utm or active_conv.get("utm_source") or active_conv.get("fbclid"):
+                src = utm.get("utm_source") if utm else active_conv.get("utm_source","")
+                campaign = utm.get("utm_campaign") if utm else active_conv.get("utm_campaign","")
+                fbclid = utm.get("fbclid") if utm else active_conv.get("fbclid","")
+                utm_medium = utm.get("utm_medium","") if utm else ""
+                utm_content = utm.get("utm_content","") if utm else ""
+                utm_term = utm.get("utm_term","") if utm else ""
 
-            fb_btn = ""
-            if staff:
-                icon, label, badge_cls = STAFF_STATUSES.get(staff.get("status","new"), ("🆕","Новый","badge-gray"))
-                if staff.get("fb_event_sent"):
-                    fb_btn = '<span class="badge-green" style="font-size:.72rem;padding:3px 9px">FB Lead ✓ отправлен</span>'
-                else:
-                    fb_btn = f'<form method="post" action="/chat/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.74rem">📤 Lead → FB</button></form>'
+                tags = []
+                if fbclid or src in ("facebook","fb","instagram"):
+                    tags.append('<span class="utm-tag" style="background:#1e3a5f;color:#60a5fa">🔵 Facebook</span>')
+                elif src:
+                    tags.append(f'<span class="utm-tag">{src}</span>')
+                if campaign: tags.append(f'<span class="utm-tag" title="campaign">🎯 {campaign[:25]}</span>')
+                if utm_content: tags.append(f'<span class="utm-tag" title="ad">📌 {utm_content[:20]}</span>')
+                if utm_term: tags.append(f'<span class="utm-tag" title="adset">{utm_term[:20]}</span>')
+                if fbclid: tags.append('<span class="utm-tag badge-green">fbclid ✓</span>')
+                if tags:
+                    utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' + "".join(tags) + '</div>'
+
+            # Lead статус
+            is_lead = staff and staff.get("fb_event_sent")
+            lead_badge = '<span class="badge-green" style="font-size:.7rem;padding:2px 8px">✅ Lead отправлен</span>' if is_lead else \
+                         f'<form method="post" action="/chat/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
 
             tg_number = active_conv.get("tg_chat_id","")
             call_btn = f'<a href="tg://user?id={tg_number}" class="btn-gray btn-sm" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;font-size:.74rem;border:1px solid var(--border);text-decoration:none">📞 Звонок</a>' if tg_number else ""
@@ -922,6 +932,8 @@ async def chat_panel(request: Request, conv_id: int = 0):
             close_btn = (f'<form method="post" action="/chat/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>'
                         if active_conv["status"] == "open"
                         else f'<form method="post" action="/chat/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-orange btn-sm">↺ Открыть</button></form>')
+
+            delete_btn = f'<button class="btn-gray btn-sm" style="color:#ef4444;border-color:#7f1d1d" onclick="deleteConv({conv_id})">🗑</button>'
 
             staff_link = f'<a href="/staff?edit={staff["id"]}" style="color:var(--orange);font-size:.74rem">Карточка →</a>' if staff else ""
 
@@ -932,12 +944,12 @@ async def chat_panel(request: Request, conv_id: int = 0):
                   <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.72rem">●</span></div>
                   <div style="font-size:.78rem;color:var(--text3)">{uname} {staff_link}</div>
                   <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">
-                    {fb_btn} {call_btn}
+                    {lead_badge} {call_btn}
                   </div>
                   {utm_tags}
                 </div>
               </div>
-              <div style="display:flex;gap:6px;flex-shrink:0">{close_btn}</div>
+              <div style="display:flex;gap:6px;flex-shrink:0">{close_btn} {delete_btn}</div>
             </div>"""
 
     conv_items = ""
@@ -955,18 +967,25 @@ async def chat_panel(request: Request, conv_id: int = 0):
             src_badge = '<span class="source-badge source-organic">organic</span>'
         utm_line = ""
         if c.get("utm_campaign"):
-            utm_line = f'<div class="conv-meta"><span class="utm-tag">{c["utm_campaign"][:20]}</span></div>'
-        conv_items += f"""<a href="/chat?conv_id={c['id']}"><div class="{cls}">
+            utm_line = f'<div class="conv-meta"><span class="utm-tag">🎯 {c["utm_campaign"][:22]}</span></div>'
+        conv_items += f"""<a href="/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}">
           <div class="conv-name"><span>{dot} {c['visitor_name']}</span>{ucount}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
           <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">{t} {src_badge}</div>
           {utm_line}</div></a>"""
 
     if not conv_items:
-        conv_items = '<div class="empty" style="padding:36px 14px">Диалогов пока нет</div>'
+        conv_items = '<div class="empty" style="padding:36px 14px">Диалогов нет</div>'
 
     b2 = bot_manager.get_staff_bot()
     bot_warn = "" if b2 else '<div style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:9px 12px;font-size:.79rem;color:var(--orange);margin-bottom:8px">⚠️ Бот не запущен — <a href="/settings" style="color:var(--orange);text-decoration:underline">Настройки</a></div>'
+
+    # Табы фильтра статуса
+    def stab(label, val):
+        active_tab = "background:var(--orange);color:#fff" if val == status_filter else "background:var(--bg3);color:var(--text3)"
+        return f'<a href="/chat?status_filter={val}" style="flex:1;text-align:center;padding:5px 0;border-radius:7px;font-size:.78rem;font-weight:600;text-decoration:none;{active_tab}">{label}</a>'
+
+    status_tabs = f'<div style="display:flex;gap:4px;background:var(--bg2);border-radius:9px;padding:3px;margin-bottom:8px">{stab("🟢 Открытые","open")}{stab("⚫ Закрытые","closed")}{stab("Все","all")}</div>'
 
     right = f"""{header_html}
     <div class="chat-messages" id="msgs">{messages_html}</div>
@@ -979,7 +998,7 @@ async def chat_panel(request: Request, conv_id: int = 0):
 
     content = f"""<div class="chat-layout">
       <div class="conv-list">
-        <div class="conv-search">{bot_warn}<input type="text" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
+        <div class="conv-search">{bot_warn}{status_tabs}<input type="text" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
         <div id="conv-items">{conv_items}</div>
       </div>
       <div class="chat-window">{right}</div>
@@ -1006,6 +1025,13 @@ async def chat_panel(request: Request, conv_id: int = 0):
         else alert('Ошибка: '+(data.error||'неизвестно'));
       }}catch(e){{alert('Ошибка: '+e.message);}}
       btn.textContent='📎'; btn.disabled=false; input.value='';
+    }}
+    async function deleteConv(id){{
+      if(!confirm('Удалить чат и все сообщения? Это действие нельзя отменить.')) return;
+      const r=await fetch('/chat/delete',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+id}});
+      const d=await r.json();
+      if(d.ok) window.location.href='/chat?status_filter={status_filter}';
+      else alert('Ошибка удаления');
     }}
     {"setInterval(loadNewMsgs,3000);" if active_conv else ""}
     async function loadNewMsgs(){{
@@ -1096,6 +1122,18 @@ async def chat_send_media(request: Request, conv_id: int = Form(...), file: Uplo
         return JSONResponse({"ok": True})
     except Exception as e:
         log.error(f"[chat/send_media] error: {e}")
+        return JSONResponse({"ok": False, "error": str(e)})
+
+
+@app.post("/chat/delete")
+async def chat_delete(request: Request, conv_id: int = Form(...)):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    try:
+        db.delete_conversation(conv_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        log.error(f"[chat/delete] error: {e}")
         return JSONResponse({"ok": False, "error": str(e)})
 
 
@@ -2312,10 +2350,10 @@ async def wa_webhook(request: Request):
 
 
 @app.get("/wa/chat", response_class=HTMLResponse)
-async def wa_chat_page(request: Request, conv_id: int = 0):
+async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = "open"):
     user, err = require_auth(request)
     if err: return err
-    convs = db.get_wa_conversations()
+    convs = db.get_wa_conversations(status=status_filter if status_filter != "all" else None)
     messages_html = ""
     header_html   = ""
     active_conv   = None
@@ -2339,21 +2377,36 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
                   <div class="msg-bubble">{content_html}</div>
                   <div class="msg-time">{t}</div></div>"""
             fb_sent = active_conv.get("fb_event_sent")
-            fb_btn  = '<span class="badge-green">FB Lead ✓ отправлен</span>' if fb_sent else \
-                      f'<form method="post" action="/wa/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-green btn-sm">📤 Отправить Lead в FB</button></form>'
+            fb_btn  = '<span class="badge-green">✅ Lead отправлен</span>' if fb_sent else \
+                      f'<form method="post" action="/wa/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-green btn-sm">📤 Lead → FB</button></form>'
             status_color = "#34d399" if active_conv["status"] == "open" else "#ef4444"
             close_btn = f'<form method="post" action="/wa/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>' if active_conv["status"] == "open" else \
                         f'<form method="post" action="/wa/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-green btn-sm">↺ Открыть</button></form>'
+            delete_wa_btn = f'<button class="btn-gray btn-sm" style="color:#ef4444;border-color:#7f1d1d" onclick="deleteWaConv({conv_id})">🗑</button>'
+
+            # UTM теги для WA
+            wa_utm_tags = ""
+            utm_parts = []
+            if active_conv.get("fbclid"):
+                utm_parts.append('<span style="background:#1e3a5f;color:#60a5fa;padding:2px 8px;border-radius:5px;font-size:.72rem">🔵 Facebook</span>')
+            elif active_conv.get("utm_source"):
+                utm_parts.append(f'<span style="background:#1a2030;color:#94a3b8;padding:2px 8px;border-radius:5px;font-size:.72rem">{active_conv["utm_source"]}</span>')
+            if active_conv.get("utm_campaign"):
+                utm_parts.append(f'<span style="background:#1a2030;color:#94a3b8;padding:2px 8px;border-radius:5px;font-size:.72rem">🎯 {active_conv["utm_campaign"][:25]}</span>')
+            if utm_parts:
+                wa_utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">' + "".join(utm_parts) + '</div>'
+
             header_html = f"""<div class="chat-header">
-              <div style="display:flex;align-items:center;gap:12px">
-                <div style="width:36px;height:36px;border-radius:50%;background:#052e16;display:flex;align-items:center;justify-content:center;font-size:1.2rem">💚</div>
-                <div>
+              <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
+                <div style="width:36px;height:36px;border-radius:50%;background:#052e16;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">💚</div>
+                <div style="flex:1">
                   <div style="font-weight:700;color:#fff">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.74rem">●</span></div>
                   <div style="font-size:.79rem;color:#475569">+{active_conv['wa_number']}</div>
                   <div style="margin-top:6px">{fb_btn}</div>
+                  {wa_utm_tags}
                 </div>
               </div>
-              <div style="display:flex;gap:8px">{close_btn}</div>
+              <div style="display:flex;gap:6px;flex-shrink:0">{close_btn} {delete_wa_btn}</div>
             </div>"""
     conv_items = ""
     for c in convs:
@@ -2361,10 +2414,18 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T"," ")
         ucount = f'<span class="unread-num" style="background:#25d366">{c["unread_count"]}</span>' if c["unread_count"] > 0 else ""
         dot = "🟢" if c["status"] == "open" else "⚫"
-        conv_items += f"""<a href="/wa/chat?conv_id={c['id']}"><div class="{cls}" data-conv-id="{c['id']}">
+        if c.get("fbclid"):
+            src_badge = '<span class="source-badge source-fb">🔵 FB</span>'
+        elif c.get("utm_source"):
+            src_badge = f'<span class="source-badge source-tg">{c["utm_source"][:12]}</span>'
+        else:
+            src_badge = '<span class="source-badge source-organic">organic</span>'
+        utm_line = f'<div class="conv-meta"><span class="utm-tag">🎯 {c["utm_campaign"][:22]}</span></div>' if c.get("utm_campaign") else ""
+        conv_items += f"""<a href="/wa/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}" data-conv-id="{c['id']}">
           <div class="conv-name"><span>{dot} {c['visitor_name']}</span>{ucount}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
-          <div class="conv-time">💚 +{c['wa_number']} · {t}</div></div></a>"""
+          <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +{c['wa_number'][:10]} · {t[-5:]} {src_badge}</div>
+          {utm_line}</div></a>"""
     if not conv_items:
         conv_items = '<div class="empty" style="padding:36px 14px">Нет WA диалогов.<br><br>Подключи WhatsApp<br>в разделе WA Настройка</div>'
     wa_status = db.get_setting("wa_status", "disconnected")
@@ -2375,6 +2436,12 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
         status_bar = f'<div style="background:#422006;border:1px solid #92400e;border-radius:7px;padding:8px 12px;font-size:.8rem;color:#fbbf24;margin-bottom:8px">📱 Ожидает QR → <a href="/wa/setup" style="color:#fbbf24;text-decoration:underline">Открыть</a></div>'
     else:
         status_bar = f'<div style="background:#2d0a0a;border:1px solid #7f1d1d;border-radius:7px;padding:8px 12px;font-size:.8rem;color:#fca5a5;margin-bottom:8px">⚠️ Не подключён → <a href="/wa/setup" style="color:#fca5a5;text-decoration:underline">Подключить</a></div>'
+
+    def wa_stab(label, val):
+        active_tab = "background:#25d366;color:#fff" if val == status_filter else "background:var(--bg3);color:var(--text3)"
+        return f'<a href="/wa/chat?status_filter={val}" style="flex:1;text-align:center;padding:5px 0;border-radius:7px;font-size:.78rem;font-weight:600;text-decoration:none;{active_tab}">{label}</a>'
+    status_tabs = f'<div style="display:flex;gap:4px;background:var(--bg2);border-radius:9px;padding:3px;margin-bottom:8px">{wa_stab("🟢 Открытые","open")}{wa_stab("⚫ Закрытые","closed")}{wa_stab("Все","all")}</div>'
+
     WA_CSS = "<style>.send-btn-green{background:#25d366;color:#fff;border:none;border-radius:10px;padding:10px 18px;cursor:pointer;font-size:.87rem;font-weight:600;height:42px;flex-shrink:0}.send-btn-green:hover{background:#128c7e}.btn-green{background:#059669;color:#fff;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:.85rem;font-weight:600;white-space:nowrap}.btn-green:hover{background:#047857}</style>"
     right = f"""{header_html}
     <div class="chat-messages" id="wa-msgs">{messages_html}</div>
@@ -2389,7 +2456,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
     )
     content = f"""{WA_CSS}<div class="chat-layout">
       <div class="conv-list">
-        <div class="conv-search">{status_bar}<input type="text" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
+        <div class="conv-search">{status_bar}{status_tabs}<input type="text" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
         <div id="conv-items">{conv_items}</div>
       </div>
       <div class="chat-window">{right}</div>
@@ -2502,6 +2569,13 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
     function filterConvs(q){{document.querySelectorAll('.conv-item').forEach(el=>{{
       const n=el.querySelector('.conv-name')?.textContent?.toLowerCase()||'';
       el.parentElement.style.display=n.includes(q.toLowerCase())?'':'none';}});}}
+    async function deleteWaConv(id){{
+      if(!confirm('Удалить WA чат и все сообщения? Это нельзя отменить.')) return;
+      const r=await fetch('/wa/delete',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+id}});
+      const d=await r.json();
+      if(d.ok) window.location.href='/wa/chat?status_filter={status_filter}';
+      else alert('Ошибка удаления');
+    }}
     </script>"""
     return HTMLResponse(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>WA Чаты</title>{CSS}</head><body>{nav_html("wa_chat",request)}<div class="main">{content}</div></body></html>')
 
@@ -2633,6 +2707,18 @@ async def wa_send_media(request: Request, conv_id: int = Form(...), file: Upload
                            media_url=None, media_type=mimetype)
         db.update_wa_last_message(conv["wa_chat_id"], "Вы: [фото]", increment_unread=False)
     return JSONResponse({"ok": not result.get("error"), "error": result.get("error")})
+
+
+@app.post("/wa/delete")
+async def wa_delete(request: Request, conv_id: int = Form(...)):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    try:
+        db.delete_wa_conversation(conv_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        log.error(f"[wa/delete] error: {e}")
+        return JSONResponse({"ok": False, "error": str(e)})
 
 
 @app.post("/wa/send_lead")

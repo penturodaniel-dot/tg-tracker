@@ -477,7 +477,7 @@ class Database:
                        COUNT(*) as clicks,
                        SUM(CASE WHEN fbclid IS NOT NULL THEN 1 ELSE 0 END) as with_fbclid
                 FROM click_tracking
-                WHERE created_at >= (NOW() - INTERVAL '%s days')::TEXT
+                WHERE created_at >= NOW() - INTERVAL '1 day' * %s
                 GROUP BY day ORDER BY day
             """, (days,))
             return _rows(cur)
@@ -677,7 +677,7 @@ class Database:
                        COUNT(*) as cnt,
                        SUM(CASE WHEN campaign_name!='organic' THEN 1 ELSE 0 END) as from_ads
                 FROM joins
-                WHERE joined_at >= (NOW() - INTERVAL '%s days')::TEXT
+                WHERE joined_at >= NOW() - INTERVAL '1 day' * %s
                 GROUP BY day ORDER BY day
             """, (days,))
             return _rows(cur)
@@ -699,7 +699,7 @@ class Database:
             cur.execute("""
                 SELECT DATE(created_at::timestamp) as day, COUNT(*) as cnt
                 FROM staff
-                WHERE created_at >= (NOW() - INTERVAL '%s days')::TEXT
+                WHERE created_at >= NOW() - INTERVAL '1 day' * %s
                 GROUP BY day ORDER BY day
             """, (days,))
             return _rows(cur)

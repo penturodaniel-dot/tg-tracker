@@ -180,17 +180,18 @@ class Database:
                 """)
 
                 # ── Миграции для уже существующих БД ─────────────────────────
-                # Добавляем новые колонки если их нет (безопасно для старых БД)
+                # Меняем структуру старой таблицы campaigns (убираем NOT NULL с channel_id)
                 migrations = [
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS slug TEXT",
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''",
-                    # slug уникальность — только если колонка только что добавлена
+                    "ALTER TABLE campaigns ALTER COLUMN channel_id DROP NOT NULL",
+                    "ALTER TABLE campaigns ALTER COLUMN invite_link DROP NOT NULL",
                 ]
                 for m in migrations:
                     try:
                         cur.execute(m)
-                    except Exception:
-                        pass
+                    except Exception as ex:
+                        log.warning(f"Migration skipped: {ex}")
 
                 # Заполняем slug для старых кампаний где он NULL
                 cur.execute("UPDATE campaigns SET slug = LOWER(REPLACE(name, ' ', '-')) || '-' || id WHERE slug IS NULL OR slug = ''")

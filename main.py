@@ -2163,12 +2163,13 @@ async def wa_webhook(request: Request):
             wa_number   = data.get("wa_number")  or data.get("from", wa_chat_id).replace("@c.us","")
             sender_name = data.get("sender_name") or data.get("pushname") or wa_number
 
-            # Текст — для медиафайлов body может быть None
-            raw_text = data.get("body") or data.get("text") or ""
-            has_media = data.get("hasMedia") or data.get("media_url")
+            raw_text  = data.get("body") or data.get("text") or ""
+            media_url  = data.get("media_url")
+            media_type = data.get("media_type", "")
+            has_media  = data.get("hasMedia") or media_url
+
             if not raw_text and has_media:
-                media_type = data.get("type", "media")
-                raw_text = f"[{media_type}]"
+                raw_text = "[фото]" if (media_type or "").startswith("image/") else "[файл]"
             text = (raw_text or "").strip() or "[сообщение]"
 
             if not wa_chat_id:
@@ -2176,7 +2177,8 @@ async def wa_webhook(request: Request):
                 return JSONResponse({"ok": True})
 
             conv = db.get_or_create_wa_conversation(wa_chat_id, wa_number, sender_name)
-            db.save_wa_message(conv["id"], wa_chat_id, "visitor", text)
+            db.save_wa_message(conv["id"], wa_chat_id, "visitor", text,
+                               media_url=media_url, media_type=media_type)
             db.update_wa_last_message(wa_chat_id, text, increment_unread=True)
             log.info(f"[WA webhook] saved msg conv={conv['id']} from={wa_number}: {text[:50]}")
 
@@ -2248,8 +2250,17 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
             msgs = db.get_wa_messages(conv_id)
             for m in msgs:
                 t = m["created_at"][11:16]
+                content_html = ""
+                if m.get("media_url") and (m.get("media_type","") or "").startswith("image/"):
+                    content_html = f'<img src="{m["media_url"]}" style="max-width:220px;max-height:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)" />'
+                    if m.get("content") and m["content"] not in ("[фото]","[медиафайл]"):
+                        content_html += f'<div style="margin-top:4px">{(m["content"] or "").replace("<","&lt;")}</div>'
+                elif m.get("media_url"):
+                    content_html = f'<a href="{m["media_url"]}" target="_blank" style="color:#60a5fa">📎 Открыть файл</a>'
+                else:
+                    content_html = (m["content"] or "").replace("<","&lt;")
                 messages_html += f"""<div class="msg {m['sender_type']}" data-id="{m['id']}">
-                  <div class="msg-bubble">{(m['content'] or '').replace('<','&lt;')}</div>
+                  <div class="msg-bubble">{content_html}</div>
                   <div class="msg-time">{t}</div></div>"""
             fb_sent = active_conv.get("fb_event_sent")
             fb_btn  = '<span class="badge-green">FB Lead ✓ отправлен</span>' if fb_sent else \
@@ -2329,9 +2340,22 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
       const data=await res.json();
       if(data.messages&&data.messages.length>0){{
         const c=document.getElementById('wa-msgs');
-        data.messages.forEach(m=>{{const d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
-          d.innerHTML='<div class="msg-bubble">'+esc(m.content)+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
-          c.appendChild(d);}});c.scrollTop=c.scrollHeight;}}
+        data.messages.forEach(m=>{{
+          const d=document.createElement('div');
+          d.className='msg '+m.sender_type;
+          d.dataset.id=m.id;
+          let contentHtml='';
+          if(m.media_url && m.media_type && m.media_type.startsWith('image/')){{
+            contentHtml='<img src="'+m.media_url+'" style="max-width:220px;max-height:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)"/>';
+            if(m.content && m.content!='[фото]' && m.content!='[медиафайл]') contentHtml+='<div style="margin-top:4px">'+esc(m.content)+'</div>';
+          }} else if(m.media_url) {{
+            contentHtml='<a href="'+m.media_url+'" target="_blank" style="color:#60a5fa">📎 Открыть файл</a>';
+          }} else {{
+            contentHtml=esc(m.content);
+          }}
+          d.innerHTML='<div class="msg-bubble">'+contentHtml+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
+          c.appendChild(d);
+        }});c.scrollTop=c.scrollHeight;}}
     }}
 
     // Авто-обновление списка диалогов каждые 4 сек

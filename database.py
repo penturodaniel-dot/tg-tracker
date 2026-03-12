@@ -187,29 +187,34 @@ class Database:
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS landing_id INTEGER DEFAULT NULL",
                     "ALTER TABLE campaigns ALTER COLUMN channel_id DROP NOT NULL",
                     "ALTER TABLE campaigns ALTER COLUMN invite_link DROP NOT NULL",
-                    # wa_conversations — старая таблица могла создаться без этих колонок
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_source TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_campaign TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbclid TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fb_event_sent TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'open'",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS unread_count INTEGER DEFAULT 0",
-                    # conversations (TG) — старая таблица могла создаться без этих колонок
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS utm_source TEXT",
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS utm_campaign TEXT",
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS fbclid TEXT",
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS fb_event_sent TEXT",
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'open'",
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS unread_count INTEGER DEFAULT 0",
-                    # wa_messages — колонки для медиа
                     "ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS media_url TEXT",
                     "ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS media_type TEXT",
-                    # messages (TG) — колонки для медиа
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_url TEXT",
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type TEXT",
-                    # staff — поддержка карточек из WA чатов
                     "ALTER TABLE staff ADD COLUMN IF NOT EXISTS wa_conv_id INTEGER DEFAULT NULL",
                     "ALTER TABLE staff ALTER COLUMN tg_chat_id DROP NOT NULL",
+                    # Профиль пользователей TG/WA
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS photo_url TEXT",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS phone TEXT",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS bio TEXT",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS photo_url TEXT",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS wa_bio TEXT",
+                    # Права доступа менеджеров
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT DEFAULT ''",
+                    # Раздельные пиксели клиенты/сотрудники
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT ''",
                 ]
                 for m in migrations:
                     try:
@@ -252,15 +257,33 @@ class Database:
     def get_users(self):
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id,username,role,created_at FROM users ORDER BY created_at")
+                cur.execute("SELECT id,username,role,created_at,permissions FROM users ORDER BY created_at")
                 return [dict(r) for r in cur.fetchall()]
 
-    def create_user(self, username, password, role="manager"):
+    def get_user_by_id(self, user_id):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id,username,role,created_at,permissions FROM users WHERE id=%s", (user_id,))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def create_user(self, username, password, role="manager", permissions=""):
         pwd = hashlib.sha256(password.encode()).hexdigest()
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("INSERT INTO users (username,password,role,created_at) VALUES (%s,%s,%s,%s)",
-                            (username, pwd, role, datetime.utcnow().isoformat()))
+                cur.execute("INSERT INTO users (username,password,role,created_at,permissions) VALUES (%s,%s,%s,%s,%s)",
+                            (username, pwd, role, datetime.utcnow().isoformat(), permissions))
+            conn.commit()
+
+    def update_user(self, user_id, username, role, permissions, new_password=None):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if new_password:
+                    pwd = hashlib.sha256(new_password.encode()).hexdigest()
+                    cur.execute("UPDATE users SET username=%s,role=%s,permissions=%s,password=%s WHERE id=%s",
+                                (username, role, permissions, pwd, user_id))
+                else:
+                    cur.execute("UPDATE users SET username=%s,role=%s,permissions=%s WHERE id=%s",
+                                (username, role, permissions, user_id))
             conn.commit()
 
     def delete_user(self, user_id):
@@ -275,6 +298,26 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM users WHERE username=%s AND password=%s", (username, pwd))
                 r = cur.fetchone(); return dict(r) if r else None
+
+    def update_conv_profile(self, conv_id, photo_url=None, phone=None, bio=None):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if photo_url is not None:
+                    cur.execute("UPDATE conversations SET photo_url=%s WHERE id=%s", (photo_url, conv_id))
+                if phone is not None:
+                    cur.execute("UPDATE conversations SET phone=%s WHERE id=%s", (phone, conv_id))
+                if bio is not None:
+                    cur.execute("UPDATE conversations SET bio=%s WHERE id=%s", (bio, conv_id))
+            conn.commit()
+
+    def update_wa_conv_profile(self, conv_id, photo_url=None, bio=None):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if photo_url is not None:
+                    cur.execute("UPDATE wa_conversations SET photo_url=%s WHERE id=%s", (photo_url, conv_id))
+                if bio is not None:
+                    cur.execute("UPDATE wa_conversations SET wa_bio=%s WHERE id=%s", (bio, conv_id))
+            conn.commit()
 
     # ── Channels ──────────────────────────────────────────────────────────────
     def add_channel(self, name, channel_id):

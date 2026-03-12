@@ -71,12 +71,18 @@ def check_session(request: Request) -> dict | None:
     return None
 
 
-def require_auth(request: Request, role: str = None):
+def require_auth(request: Request, role: str = None, tab: str = None):
     user = check_session(request)
     if not user:
         return None, RedirectResponse("/login", 303)
     if role and user["role"] != role and user["role"] != "admin":
         return None, HTMLResponse("<h2>Нет доступа</h2>", 403)
+    # Проверяем доступ к вкладке для менеджеров
+    if tab and user["role"] != "admin":
+        perms = user.get("permissions", "") or ""
+        allowed = [p.strip() for p in perms.split(",") if p.strip()]
+        if allowed and tab not in allowed:
+            return None, HTMLResponse(f'<html><body style="background:#0a0d14;color:#e2e8f0;font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px"><div style="font-size:2rem">🚫</div><div style="font-size:1.1rem;font-weight:600">Нет доступа к этому разделу</div><a href="/" style="color:#f97316;font-size:.9rem">← Назад</a></body></html>', 403)
     return user, None
 
 
@@ -226,11 +232,18 @@ def nav_html(active: str, request: Request) -> str:
     wa_status  = db.get_setting("wa_status", "disconnected")
     role = user["role"] if user else "manager"
 
+    # Разрешённые вкладки для менеджера
+    perms_str = (user.get("permissions", "") or "") if user else ""
+    allowed_tabs = [p.strip() for p in perms_str.split(",") if p.strip()]
+    def can(tab):
+        if role == "admin": return True
+        return not allowed_tabs or tab in allowed_tabs
+
     def item(icon, label, page, section_color="blue", badge_count=0, url=None, badge_id=None):
+        if not can(page): return ""
         href = url or f"/{page}"
         act  = page == active or (url and url.strip("/") == active)
         cls  = f"nav-item active {section_color}" if act else "nav-item"
-        # Всегда рендерим badge — JS может обновить его без перезагрузки
         bid  = f' id="{badge_id}"' if badge_id else ""
         hide = ' style="display:none"' if badge_count == 0 else ""
         bdg  = f'<span class="badge-count"{bid}{hide}>{badge_count if badge_count else ""}</span>'
@@ -905,6 +918,20 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
 
             uname = f"@{active_conv['username']}" if active_conv.get('username') else active_conv.get('tg_chat_id','')
             status_color = "var(--green)" if active_conv["status"] == "open" else "var(--red)"
+            # Аватарка
+            photo_url = active_conv.get("photo_url","")
+            if photo_url:
+                avatar_html = f'<img src="{photo_url}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'">' \
+                              f'<div class="avatar" style="display:none">{active_conv["visitor_name"][0].upper()}</div>'
+            else:
+                avatar_html = f'<div class="avatar">{active_conv["visitor_name"][0].upper()}</div>'
+
+            # Доп инфо из профиля TG
+            profile_info = ""
+            if active_conv.get("phone"):
+                profile_info += f'<span style="font-size:.75rem;color:#60a5fa">📱 {active_conv["phone"]}</span> '
+            if active_conv.get("bio"):
+                profile_info += f'<div style="font-size:.74rem;color:var(--text3);margin-top:2px;font-style:italic">{active_conv["bio"][:80]}</div>'
 
             # UTM и источник
             utm_tags = ""
@@ -947,10 +974,11 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
 
             header_html = f"""<div class="chat-header">
               <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
-                <div class="avatar">{active_conv['visitor_name'][0].upper()}</div>
+                {avatar_html}
                 <div style="flex:1">
                   <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.72rem">●</span></div>
                   <div style="font-size:.78rem;color:var(--text3)">{uname} {staff_link}</div>
+                  {profile_info}
                   <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">
                     {lead_badge} {call_btn}
                   </div>
@@ -1170,8 +1198,9 @@ async def chat_send_lead(request: Request, conv_id: int = Form(...)):
     if not conv: return RedirectResponse("/chat", 303)
     if staff and staff.get("fb_event_sent"):
         return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
-    pixel_id   = db.get_setting("pixel_id")
-    meta_token = db.get_setting("meta_token")
+    # Пиксель сотрудников
+    pixel_id   = db.get_setting("pixel_id_staff") or db.get_setting("pixel_id")
+    meta_token = db.get_setting("meta_token_staff") or db.get_setting("meta_token")
     sent = await meta_capi.send_lead_event(
         pixel_id, meta_token,
         user_id=conv.get("tg_chat_id",""),
@@ -1179,6 +1208,9 @@ async def chat_send_lead(request: Request, conv_id: int = Form(...)):
     )
     if sent and staff:
         db.set_staff_fb_event(staff["id"], "Lead")
+    elif sent:
+        # Если нет staff записи — помечаем в conversations
+        db.set_conv_fb_event(conv_id, "Lead")
     return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
 
 
@@ -1326,35 +1358,108 @@ async def staff_create_from_wa(request: Request, conv_id: int = 0):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/users", response_class=HTMLResponse)
-async def users_page(request: Request, msg: str = ""):
+async def users_page(request: Request, msg: str = "", edit: int = 0):
     user, err = require_auth(request, role="admin")
     if err: return err
     users = db.get_users()
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
-    rows = "".join(f"""<tr>
-        <td><b>{u['username']}</b></td>
-        <td><span class="{'badge' if u['role']=='admin' else 'badge-gray'}">{u['role']}</span></td>
-        <td>{u['created_at'][:10]}</td>
-        <td>{'<form method="post" action="/users/delete"><input type="hidden" name="user_id" value="' + str(u['id']) + '"/><button class="del-btn">✕</button></form>' if u['username'] != user['username'] else '—'}</td>
-    </tr>""" for u in users)
+
+    # Все вкладки и их названия
+    ALL_TABS = [
+        ("overview",         "📊 Обзор"),
+        ("channels",         "📡 Каналы"),
+        ("campaigns",        "🔗 Кампании"),
+        ("landings",         "🎨 Шаблоны"),
+        ("analytics_clients","📈 Статистика Клиентов"),
+        ("chat",             "💬 TG Чаты"),
+        ("wa_chat",          "💚 WA Чаты"),
+        ("staff",            "🗂 База сотрудников"),
+        ("landings_staff",   "🌐 Лендинги HR"),
+        ("analytics_staff",  "📊 Статистика Сотрудников"),
+    ]
+
+    def perm_checkboxes(selected_perms):
+        sel = [p.strip() for p in selected_perms.split(",") if p.strip()]
+        boxes = ""
+        for tab_id, tab_name in ALL_TABS:
+            checked = "checked" if (not sel or tab_id in sel) else ""
+            boxes += f'''<label style="display:flex;align-items:center;gap:7px;padding:5px 10px;background:var(--bg3);border-radius:7px;cursor:pointer;font-size:.82rem">
+              <input type="checkbox" name="perm_{tab_id}" value="{tab_id}" {checked} style="accent-color:var(--orange)">
+              {tab_name}
+            </label>'''
+        return f'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;margin-top:8px">{boxes}</div>'
+
+    # Форма редактирования
+    edit_form = ""
+    if edit:
+        eu = db.get_user_by_id(edit)
+        if eu and eu["username"] != user["username"]:
+            eu_perms = eu.get("permissions") or ""
+            edit_form = f"""<div class="section" style="border-left:3px solid #f97316;margin-bottom:20px">
+              <div class="section-head"><h3>✏️ Редактировать: {eu['username']}</h3></div>
+              <div class="section-body">
+                <form method="post" action="/users/update">
+                  <input type="hidden" name="user_id" value="{eu['id']}"/>
+                  <div class="grid-2" style="margin-bottom:12px">
+                    <div class="field-group"><div class="field-label">Логин</div>
+                      <input type="text" name="username" value="{eu['username']}" required/></div>
+                    <div class="field-group"><div class="field-label">Роль</div>
+                      <select name="role">
+                        <option value="manager" {"selected" if eu["role"]=="manager" else ""}>manager</option>
+                        <option value="admin" {"selected" if eu["role"]=="admin" else ""}>admin</option>
+                      </select></div>
+                    <div class="field-group"><div class="field-label">Новый пароль (оставь пустым — не менять)</div>
+                      <input type="password" name="new_password" placeholder="Новый пароль..."/></div>
+                  </div>
+                  <div class="field-group" style="margin-bottom:12px">
+                    <div class="field-label">🔒 Доступы к вкладкам (отмеченные вкладки доступны менеджеру)</div>
+                    {perm_checkboxes(eu_perms)}
+                  </div>
+                  <div style="display:flex;gap:8px">
+                    <button class="btn-orange">💾 Сохранить</button>
+                    <a href="/users"><button class="btn-gray" type="button">Отмена</button></a>
+                  </div>
+                </form>
+              </div></div>"""
+
+    rows = ""
+    for u in users:
+        perms = u.get("permissions") or ""
+        perm_count = len([p for p in perms.split(",") if p.strip()]) if perms else len(ALL_TABS)
+        perm_badge = f'<span class="badge-gray" style="font-size:.7rem">{perm_count}/{len(ALL_TABS)} вкладок</span>'
+        edit_btn = f'<a href="/users?edit={u["id"]}"><button class="btn-gray btn-sm">✏️</button></a>' if u["username"] != user["username"] else ""
+        del_btn  = f'<form method="post" action="/users/delete" style="display:inline"><input type="hidden" name="user_id" value="{u["id"]}"/><button class="del-btn btn-sm">✕</button></form>' if u["username"] != user["username"] else ""
+        rows += f"""<tr>
+            <td><b>{u['username']}</b></td>
+            <td><span class="{'badge' if u['role']=='admin' else 'badge-gray'}">{u['role']}</span></td>
+            <td>{perm_badge}</td>
+            <td>{u['created_at'][:10]}</td>
+            <td style="white-space:nowrap">{edit_btn} {del_btn}</td>
+        </tr>"""
+
     content = f"""<div class="page-wrap">
     <div class="page-title">🔐 Пользователи</div>
-    <div class="page-sub">Управление доступом к системе</div>
+    <div class="page-sub">Управление доступом и правами</div>
     {alert}
+    {edit_form}
     <div class="section"><div class="section-head"><h3>➕ Добавить пользователя</h3></div>
     <div class="section-body">
       <form method="post" action="/users/add">
-        <div class="form-row">
+        <div class="grid-2" style="margin-bottom:12px">
           <div class="field-group"><div class="field-label">Логин</div><input type="text" name="username" required/></div>
           <div class="field-group"><div class="field-label">Пароль</div><input type="password" name="password" required/></div>
-          <div class="field-group" style="max-width:160px"><div class="field-label">Роль</div>
+          <div class="field-group"><div class="field-label">Роль</div>
             <select name="role"><option value="manager">manager</option><option value="admin">admin</option></select></div>
-          <div style="display:flex;align-items:flex-end"><button class="btn">Добавить</button></div>
         </div>
+        <div class="field-group" style="margin-bottom:12px">
+          <div class="field-label">🔒 Доступы к вкладкам (по умолчанию — все открыты)</div>
+          {perm_checkboxes("")}
+        </div>
+        <button class="btn">Добавить</button>
       </form>
     </div></div>
     <div class="section"><div class="section-head"><h3>👤 Пользователи ({len(users)})</h3></div>
-    <table><thead><tr><th>Логин</th><th>Роль</th><th>Создан</th><th></th></tr></thead>
+    <table><thead><tr><th>Логин</th><th>Роль</th><th>Доступы</th><th>Создан</th><th></th></tr></thead>
     <tbody>{rows}</tbody></table></div></div>"""
     return HTMLResponse(base(content, "users", request))
 
@@ -1363,11 +1468,32 @@ async def users_page(request: Request, msg: str = ""):
 async def users_add(request: Request, username: str = Form(...), password: str = Form(...), role: str = Form("manager")):
     user, err = require_auth(request, role="admin")
     if err: return err
+    ALL_TAB_IDS = ["overview","channels","campaigns","landings","analytics_clients",
+                   "chat","wa_chat","staff","landings_staff","analytics_staff"]
+    form = await request.form()
+    # Собираем отмеченные чекбоксы
+    checked = [t for t in ALL_TAB_IDS if form.get(f"perm_{t}")]
+    # Если все отмечены — пустая строка (полный доступ)
+    perms = "" if len(checked) == len(ALL_TAB_IDS) else ",".join(checked)
     try:
-        db.create_user(username.strip(), password, role)
+        db.create_user(username.strip(), password, role, perms)
         return RedirectResponse("/users?msg=Пользователь+добавлен", 303)
     except:
         return RedirectResponse("/users?msg=Такой+логин+уже+существует", 303)
+
+
+@app.post("/users/update")
+async def users_update(request: Request, user_id: int = Form(...), username: str = Form(...),
+                        role: str = Form("manager"), new_password: str = Form("")):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    ALL_TAB_IDS = ["overview","channels","campaigns","landings","analytics_clients",
+                   "chat","wa_chat","staff","landings_staff","analytics_staff"]
+    form = await request.form()
+    checked = [t for t in ALL_TAB_IDS if form.get(f"perm_{t}")]
+    perms = "" if len(checked) == len(ALL_TAB_IDS) else ",".join(checked)
+    db.update_user(user_id, username.strip(), role, perms, new_password.strip() or None)
+    return RedirectResponse("/users?msg=Сохранено", 303)
 
 
 @app.post("/users/delete")
@@ -1389,14 +1515,16 @@ async def settings_page(request: Request, msg: str = ""):
 
     b1_info = await bot_manager.get_bot_info(bot_manager.get_tracker_bot())
     b2_info = await bot_manager.get_bot_info(bot_manager.get_staff_bot())
-    pixel_id      = db.get_setting("pixel_id")
-    meta_token    = db.get_setting("meta_token")
-    land_title    = db.get_setting("landing_title", "Наши каналы")
-    land_sub      = db.get_setting("landing_subtitle", "Подписывайся и будь в курсе")
-    staff_welcome = db.get_setting("staff_welcome", "Привет! Напиши своё имя и должность 👋")
-    notify_chat   = db.get_setting("notify_chat_id", "")
-    app_url       = db.get_setting("app_url", "")
-    masked = meta_token[:12] + "..." + meta_token[-6:] if len(meta_token) > 20 else meta_token
+    # Раздельные пиксели
+    pixel_clients   = db.get_setting("pixel_id_clients",   db.get_setting("pixel_id", ""))
+    token_clients   = db.get_setting("meta_token_clients", db.get_setting("meta_token", ""))
+    pixel_staff     = db.get_setting("pixel_id_staff",     "")
+    token_staff     = db.get_setting("meta_token_staff",   "")
+    notify_chat     = db.get_setting("notify_chat_id", "")
+    app_url         = db.get_setting("app_url", "")
+
+    def masked_tok(t): return t[:12] + "..." + t[-6:] if len(t) > 20 else (t or "—")
+
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
 
     def bot_card(title, color, info, field, route):
@@ -1442,11 +1570,25 @@ async def settings_page(request: Request, msg: str = ""):
       <div class="section-head"><h3>📡 Meta Pixel & CAPI</h3></div>
       <div class="section-body">
         <form method="post" action="/settings/pixel">
-          <div class="grid-2" style="margin-bottom:12px">
-            <div class="field-group"><div class="field-label">Pixel ID</div><input type="text" name="pixel_id" value="{pixel_id}"/></div>
-            <div class="field-group"><div class="field-label">Access Token (сейчас: {masked})</div><input type="text" name="meta_token" placeholder="Оставь пустым — не менять"/></div>
+          <div style="margin-bottom:16px">
+            <div style="font-size:.78rem;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">👥 Клиенты (Subscribe — при подписке на канал)</div>
+            <div class="grid-2">
+              <div class="field-group"><div class="field-label">Pixel ID (Клиенты)</div>
+                <input type="text" name="pixel_id_clients" value="{pixel_clients}" placeholder="123456789012345"/></div>
+              <div class="field-group"><div class="field-label">Access Token (сейчас: {masked_tok(token_clients)})</div>
+                <input type="text" name="meta_token_clients" placeholder="Оставь пустым — не менять"/></div>
+            </div>
           </div>
-          <button class="btn">💾 Сохранить</button>
+          <div style="margin-bottom:16px">
+            <div style="font-size:.78rem;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">👔 Сотрудники (Lead — вручную в чате)</div>
+            <div class="grid-2">
+              <div class="field-group"><div class="field-label">Pixel ID (Сотрудники)</div>
+                <input type="text" name="pixel_id_staff" value="{pixel_staff}" placeholder="987654321098765"/></div>
+              <div class="field-group"><div class="field-label">Access Token (сейчас: {masked_tok(token_staff)})</div>
+                <input type="text" name="meta_token_staff" placeholder="Оставь пустым — не менять"/></div>
+            </div>
+          </div>
+          <button class="btn">💾 Сохранить пиксели</button>
         </form>
       </div>
     </div>
@@ -1501,12 +1643,19 @@ async def settings_bot2(request: Request, bot2_token: str = Form("")):
 
 
 @app.post("/settings/pixel")
-async def settings_pixel(request: Request, pixel_id: str = Form(""), meta_token: str = Form("")):
+async def settings_pixel(request: Request,
+                          pixel_id_clients: str = Form(""), meta_token_clients: str = Form(""),
+                          pixel_id_staff: str   = Form(""), meta_token_staff: str   = Form("")):
     user, err = require_auth(request, role="admin")
     if err: return err
-    if pixel_id.strip():   db.set_setting("pixel_id",   pixel_id.strip())
-    if meta_token.strip(): db.set_setting("meta_token", meta_token.strip())
-    return RedirectResponse("/settings?msg=Пиксель+обновлён", 303)
+    if pixel_id_clients.strip():   db.set_setting("pixel_id_clients",   pixel_id_clients.strip())
+    if meta_token_clients.strip(): db.set_setting("meta_token_clients", meta_token_clients.strip())
+    if pixel_id_staff.strip():     db.set_setting("pixel_id_staff",     pixel_id_staff.strip())
+    if meta_token_staff.strip():   db.set_setting("meta_token_staff",   meta_token_staff.strip())
+    # Совместимость — дублируем в pixel_id/meta_token для старого кода
+    if pixel_id_clients.strip():   db.set_setting("pixel_id",   pixel_id_clients.strip())
+    if meta_token_clients.strip(): db.set_setting("meta_token", meta_token_clients.strip())
+    return RedirectResponse("/settings?msg=Пиксели+сохранены", 303)
 
 
 @app.post("/settings/notify")
@@ -1935,12 +2084,16 @@ async def public_landing(request: Request, slug: str,
                           fbclid: str = None, utm_source: str = None,
                           utm_medium: str = None, utm_campaign: str = None,
                           utm_content: str = None, utm_term: str = None):
+    # Пиксели по направлениям
+    pixel_clients = db.get_setting("pixel_id_clients") or db.get_setting("pixel_id", "")
+    pixel_staff   = db.get_setting("pixel_id_staff", "")
+
     # Ищем как Campaign slug
     campaign = db.get_campaign_by_slug(slug)
     if campaign:
         channels = db.get_campaign_channels(campaign["id"])
         app_url  = db.get_setting("app_url", "").rstrip("/")
-        pixel_id = db.get_setting("pixel_id", "")
+        pixel_id = pixel_clients  # Клиентские кампании
 
         # Строим /go ссылки для каждого канала
         btns = []
@@ -1950,24 +2103,20 @@ async def public_landing(request: Request, slug: str,
             if utm_content: go_url += f"&utm_content={utm_content}"
             btns.append({"url": go_url, "label": cc.get("channel_name") or "Вступить в группу"})
 
-        # Если у кампании выбран кастомный шаблон — рендерим его
         if campaign.get("landing_id"):
             landing  = db.get_landing(campaign["landing_id"])
             contacts = db.get_landing_contacts(campaign["landing_id"]) if landing else []
-            # Заменяем контакты на каналы кампании
             if landing:
-                # Передаём каналы как контакты с /go ссылками
                 chan_contacts = [{"type": "telegram", "label": b["label"], "url": b["url"]} for b in btns]
                 return HTMLResponse(_render_client_landing(landing, chan_contacts, pixel_id=pixel_id))
 
-        # Дефолтный шаблон (Relaxation)
         return HTMLResponse(_render_campaign_landing(campaign, btns, pixel_id, fbclid))
 
-    # Иначе ищем как Staff Landing slug
+    # Staff Landing slug
     landing = db.get_landing_by_slug(slug)
     if not landing: return HTMLResponse("<h2>Not found</h2>", 404)
     contacts = db.get_landing_contacts(landing["id"])
-    return HTMLResponse(_render_staff_landing(landing, contacts))
+    return HTMLResponse(_render_staff_landing(landing, contacts, pixel_id=pixel_staff))
 
 
 def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = None) -> str:
@@ -2168,7 +2317,7 @@ def _render_client_landing(landing, contacts, pixel_id: str = "") -> str:
     </div></body></html>"""
 
 
-def _render_staff_landing(landing, contacts) -> str:
+def _render_staff_landing(landing, contacts, pixel_id: str = "") -> str:
     btn_html = ""
     for c in contacts:
         if c["type"] == "telegram":
@@ -2181,9 +2330,31 @@ def _render_staff_landing(landing, contacts) -> str:
     if not btn_html:
         btn_html = '<p style="text-align:center;color:#a9b4bf">Контакты не настроены</p>'
 
+    pixel_js = ""
+    if pixel_id:
+        pixel_js = f"""<script>
+!function(f,b,e,v,n,t,s){{if(f.fbq)return;n=f.fbq=function(){{n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)}};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}}(window,document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '{pixel_id}');
+fbq('track', 'PageView');
+// Трекинг кликов по кнопкам контактов
+document.addEventListener('click', function(e){{
+  var btn = e.target.closest('.call-button');
+  if(btn) fbq('track', 'Contact');
+}});
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id={pixel_id}&ev=PageView&noscript=1"/></noscript>"""
+
     return f"""<!DOCTYPE html><html lang="ru"><head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>GREN SPA — Работа для массажисток в США</title>
+    {pixel_js}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -2427,6 +2598,13 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
                 messages_html += f"""<div class="msg {m['sender_type']}" data-id="{m['id']}">
                   <div class="msg-bubble">{content_html}</div>
                   <div class="msg-time">{t}</div></div>"""
+            # Фото профиля WA
+            wa_photo = active_conv.get("photo_url","")
+            if wa_photo:
+                wa_avatar = f'<img src="{wa_photo}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #25d366" onerror="this.style.display=\'none\'">'
+            else:
+                wa_avatar = '<div style="width:40px;height:40px;border-radius:50%;background:#052e16;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">💚</div>'
+
             fb_sent = active_conv.get("fb_event_sent")
             fb_btn  = '<span class="badge-green">✅ Lead отправлен</span>' if fb_sent else \
                       f'<form method="post" action="/wa/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-green btn-sm">📤 Lead → FB</button></form>'
@@ -2454,7 +2632,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
 
             header_html = f"""<div class="chat-header">
               <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
-                <div style="width:36px;height:36px;border-radius:50%;background:#052e16;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">💚</div>
+                {wa_avatar}
                 <div style="flex:1">
                   <div style="font-weight:700;color:#fff">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.74rem">●</span></div>
                   <div style="font-size:.79rem;color:#475569">+{active_conv['wa_number']} · {wa_card_link}</div>
@@ -2462,7 +2640,10 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
                   {wa_utm_tags}
                 </div>
               </div>
-              <div style="display:flex;gap:6px;flex-shrink:0">{close_btn} {delete_wa_btn}</div>
+              <div style="display:flex;gap:6px;flex-shrink:0">
+                <button class="btn-gray btn-sm" title="Обновить профиль" onclick="fetchWaProfile({conv_id})" style="font-size:.8rem">🔄</button>
+                {close_btn} {delete_wa_btn}
+              </div>
             </div>"""
     conv_items = ""
     for c in convs:
@@ -2632,6 +2813,15 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
       if(d.ok) window.location.href='/wa/chat?status_filter={status_filter}';
       else alert('Ошибка удаления');
     }}
+    async function fetchWaProfile(convId){{
+      const btn=document.querySelector('button[onclick*="fetchWaProfile"]');
+      if(btn){{btn.textContent='⏳';btn.disabled=true;}}
+      const r=await fetch('/wa/fetch_profile',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+convId}});
+      const d=await r.json();
+      if(d.ok) window.location.reload();
+      else alert('Не удалось получить профиль: '+(d.error||''));
+      if(btn){{btn.textContent='🔄';btn.disabled=false;}}
+    }}
     </script>"""
     return HTMLResponse(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>WA Чаты</title>{CSS}</head><body>{nav_html("wa_chat",request)}<div class="main">{content}</div></body></html>')
 
@@ -2777,6 +2967,33 @@ async def wa_delete(request: Request, conv_id: int = Form(...)):
         return JSONResponse({"ok": False, "error": str(e)})
 
 
+@app.post("/wa/fetch_profile")
+async def wa_fetch_profile(request: Request, conv_id: int = Form(...)):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    conv = db.get_wa_conversation(conv_id)
+    if not conv: return JSONResponse({"ok": False, "error": "not found"})
+    try:
+        result = await wa_api("post", "/contact_info", {"wa_chat_id": conv["wa_chat_id"]})
+        if result.get("ok"):
+            db.update_wa_conv_profile(
+                conv_id,
+                photo_url=result.get("photo_url"),
+                bio=result.get("about")
+            )
+            # Обновляем имя если получили
+            if result.get("name") and result["name"] != conv["visitor_name"]:
+                with db._conn() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("UPDATE wa_conversations SET visitor_name=%s WHERE id=%s",
+                                    (result["name"], conv_id))
+                    conn.commit()
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        log.error(f"[wa/fetch_profile] {e}")
+        return JSONResponse({"ok": False, "error": str(e)})
+
+
 @app.post("/wa/send_lead")
 async def wa_send_lead(request: Request, conv_id: int = Form(...)):
     user, err = require_auth(request)
@@ -2785,8 +3002,9 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
     if not conv: return RedirectResponse("/wa/chat", 303)
     if conv.get("fb_event_sent"):
         return RedirectResponse(f"/wa/chat?conv_id={conv_id}", 303)
-    pixel_id   = db.get_setting("pixel_id")
-    meta_token = db.get_setting("meta_token")
+    # Пиксель сотрудников
+    pixel_id   = db.get_setting("pixel_id_staff") or db.get_setting("pixel_id")
+    meta_token = db.get_setting("meta_token_staff") or db.get_setting("meta_token")
     sent = await meta_capi.send_lead_event(pixel_id, meta_token, user_id=conv["wa_number"], campaign="whatsapp")
     if sent:
         db.set_wa_fb_event(conv_id, "Lead")

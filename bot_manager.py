@@ -150,6 +150,16 @@ def _build_staff_dp() -> Dispatcher:
         conv = _db.get_or_create_conversation(str(user.id), name, user.username)
         staff = _db.get_or_create_staff(str(user.id), name, user.username, conv["id"])
 
+        # Получаем фото профиля
+        try:
+            photos = await message.bot.get_user_profile_photos(user.id, limit=1)
+            if photos.total_count > 0:
+                file = await message.bot.get_file(photos.photos[0][-1].file_id)
+                photo_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file.file_path}"
+                _db.update_conv_profile(conv["id"], photo_url=photo_url)
+        except Exception as e:
+            log.warning(f"[BOT2] photo fetch error: {e}")
+
         # Проверяем UTM из start параметра
         start_param = message.text.split()[-1] if len(message.text.split()) > 1 else None
         if start_param and start_param.startswith("ref_"):
@@ -162,8 +172,8 @@ def _build_staff_dp() -> Dispatcher:
         # Отправляем Lead в Meta CAPI если ещё не отправляли
         if not staff.get("fb_event_sent"):
             utm = _db.get_utm_by_conv(conv["id"])
-            pixel_id   = _db.get_setting("pixel_id")
-            meta_token = _db.get_setting("meta_token")
+            pixel_id   = _db.get_setting("pixel_id_staff") or _db.get_setting("pixel_id")
+            meta_token = _db.get_setting("meta_token_staff") or _db.get_setting("meta_token")
             sent = await _meta.send_lead_event(
                 pixel_id, meta_token, str(user.id),
                 campaign=utm.get("utm_campaign", "staff_bot") if utm else "staff_bot",

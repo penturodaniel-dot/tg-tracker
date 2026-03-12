@@ -239,32 +239,39 @@ def _register_staff_handlers(dp, bot):
 
 async def _run_bot(dp, bot):
     try:
+        log.info(f"Bot polling started for {bot}")
         await dp.start_polling(bot, handle_signals=False)
+        log.info("Bot polling stopped normally")
     except asyncio.CancelledError:
-        pass
+        log.info("Bot polling cancelled")
     except Exception as e:
-        log.error(f"Bot polling error: {e}")
+        log.error(f"Bot polling CRASHED: {e}", exc_info=True)
 
 
 async def start_tracker_bot(token: str | None):
     global _tracker_bot, _tracker_dp, _tracker_task
     if not token:
-        log.warning("Tracker bot token not set")
+        log.warning("Tracker bot: token not set — skipping")
         return
     try:
         from aiogram import Bot, Dispatcher
         await stop_tracker_bot()
         _tracker_bot = Bot(token=token)
+        # Снимаем webhook если был установлен — иначе polling не работает
+        wh = await _tracker_bot.get_webhook_info()
+        if wh.url:
+            log.info(f"Tracker bot: removing webhook {wh.url}")
+            await _tracker_bot.delete_webhook(drop_pending_updates=True)
         _tracker_dp  = Dispatcher()
         _register_tracker_handlers(_tracker_dp, _tracker_bot)
-        _tracker_task = asyncio.create_task(_run_bot(_tracker_dp, _tracker_bot))
         info = await _tracker_bot.get_me()
-        log.info(f"Tracker bot @{info.username} started")
-        # Only set username if no custom name saved yet
+        log.info(f"Tracker bot @{info.username} (id={info.id}) starting polling...")
         if not _db.get_setting("bot1_name"):
             _db.set_setting("bot1_name", f"@{info.username}")
+        _tracker_task = asyncio.create_task(_run_bot(_tracker_dp, _tracker_bot))
+        log.info(f"Tracker bot @{info.username} polling task created ✅")
     except Exception as e:
-        log.error(f"start_tracker_bot error: {e}")
+        log.error(f"start_tracker_bot FAILED: {e}", exc_info=True)
         _tracker_bot = None
 
 
@@ -286,22 +293,26 @@ async def stop_tracker_bot():
 async def start_staff_bot(token: str | None):
     global _staff_bot, _staff_dp, _staff_task
     if not token:
-        log.warning("Staff bot token not set")
+        log.warning("Staff bot: token not set — skipping")
         return
     try:
         from aiogram import Bot, Dispatcher
         await stop_staff_bot()
         _staff_bot = Bot(token=token)
+        wh = await _staff_bot.get_webhook_info()
+        if wh.url:
+            log.info(f"Staff bot: removing webhook {wh.url}")
+            await _staff_bot.delete_webhook(drop_pending_updates=True)
         _staff_dp  = Dispatcher()
         _register_staff_handlers(_staff_dp, _staff_bot)
-        _staff_task = asyncio.create_task(_run_bot(_staff_dp, _staff_bot))
         info = await _staff_bot.get_me()
-        log.info(f"Staff bot @{info.username} started")
-        # Only set username if no custom name saved yet
+        log.info(f"Staff bot @{info.username} (id={info.id}) starting polling...")
         if not _db.get_setting("bot2_name"):
             _db.set_setting("bot2_name", f"@{info.username}")
+        _staff_task = asyncio.create_task(_run_bot(_staff_dp, _staff_bot))
+        log.info(f"Staff bot @{info.username} polling task created ✅")
     except Exception as e:
-        log.error(f"start_staff_bot error: {e}")
+        log.error(f"start_staff_bot FAILED: {e}", exc_info=True)
         _staff_bot = None
 
 

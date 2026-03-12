@@ -2821,6 +2821,28 @@ async def api_stats(request: Request):
     return JSONResponse(db.get_stats())
 
 
+@app.get("/api/bot_status")
+async def api_bot_status(request: Request):
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    b1 = bot_manager.get_tracker_bot()
+    b2 = bot_manager.get_staff_bot()
+    async def probe(bot):
+        if not bot: return {"running": False, "reason": "bot object is None"}
+        try:
+            me = await bot.get_me()
+            wh = await bot.get_webhook_info()
+            return {"running": True, "username": me.username, "id": me.id, "webhook_url": wh.url or None}
+        except Exception as e:
+            return {"running": False, "error": str(e)}
+    return JSONResponse({
+        "bot1": await probe(b1),
+        "bot2": await probe(b2),
+        "bot1_token_set": bool(db.get_setting("bot1_token")),
+        "bot2_token_set": bool(db.get_setting("bot2_token")),
+    })
+
+
 @app.get("/api/conversations")
 async def api_conversations(request: Request):
     user = check_session(request)

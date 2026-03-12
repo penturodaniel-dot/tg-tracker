@@ -2843,6 +2843,67 @@ async def api_bot_status(request: Request):
     })
 
 
+@app.get("/api/debug")
+async def api_debug(request: Request):
+    """Debug endpoint — статус ботов + последние события + последние сообщения из БД."""
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+
+    b1 = bot_manager.get_tracker_bot()
+    b2 = bot_manager.get_staff_bot()
+
+    async def probe(bot, name):
+        if not bot: return {"running": False, "reason": f"{name} object is None"}
+        try:
+            me = await bot.get_me()
+            wh = await bot.get_webhook_info()
+            return {"running": True, "username": me.username, "id": me.id, "webhook_url": wh.url or None}
+        except Exception as e:
+            return {"running": False, "error": str(e)}
+
+    # Последние 10 сообщений из БД
+    try:
+        with db._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT m.id, m.conv_id, m.sender_type, m.text, m.created_at,
+                           c.tg_id, c.name
+                    FROM messages m
+                    JOIN conversations c ON c.id = m.conv_id
+                    ORDER BY m.id DESC LIMIT 10
+                """)
+                rows = cur.fetchall()
+                recent_msgs = [
+                    {"id": r[0], "conv_id": r[1], "sender": r[2],
+                     "text": (r[3] or "")[:60], "ts": str(r[4]),
+                     "tg_id": r[5], "name": r[6]}
+                    for r in rows
+                ]
+    except Exception as e:
+        recent_msgs = [{"error": str(e)}]
+
+    # Последние конверсации
+    try:
+        convs = db.get_conversations()[:5]
+        recent_convs = [{"id": c.get("id"), "name": c.get("name"), "tg_id": c.get("tg_id"),
+                         "last_msg": (c.get("last_message") or "")[:40],
+                         "unread": c.get("unread_count")} for c in convs]
+    except Exception as e:
+        recent_convs = [{"error": str(e)}]
+
+    return JSONResponse({
+        "bots": {
+            "tracker": await probe(b1, "tracker"),
+            "staff": await probe(b2, "staff"),
+            "bot1_token_set": bool(db.get_setting("bot1_token")),
+            "bot2_token_set": bool(db.get_setting("bot2_token")),
+        },
+        "bot_manager_log": bot_manager.get_debug_log(),
+        "recent_db_messages": recent_msgs,
+        "recent_conversations": recent_convs,
+    })
+
+
 @app.get("/api/conversations")
 async def api_conversations(request: Request):
     user = check_session(request)

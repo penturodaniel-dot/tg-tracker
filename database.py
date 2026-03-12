@@ -184,6 +184,7 @@ class Database:
                 migrations = [
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS slug TEXT",
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''",
+                    "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS landing_id INTEGER DEFAULT NULL",
                     "ALTER TABLE campaigns ALTER COLUMN channel_id DROP NOT NULL",
                     "ALTER TABLE campaigns ALTER COLUMN invite_link DROP NOT NULL",
                 ]
@@ -281,16 +282,22 @@ class Database:
                 return [r["channel_id"] for r in cur.fetchall()]
 
     # ── Campaigns (новая модель: 1 кампания = много каналов) ──────────────────
-    def create_campaign(self, name: str, slug: str, description: str = "") -> int:
+    def create_campaign(self, name: str, slug: str, description: str = "", landing_id: int = None) -> int:
         import re
         clean_slug = re.sub(r'[^a-z0-9-]', '-', slug.lower().strip())
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("INSERT INTO campaigns (name,slug,description,created_at) VALUES (%s,%s,%s,%s) RETURNING id",
-                            (name.strip(), clean_slug, description, datetime.utcnow().isoformat()))
+                cur.execute("INSERT INTO campaigns (name,slug,description,landing_id,created_at) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+                            (name.strip(), clean_slug, description, landing_id, datetime.utcnow().isoformat()))
                 r = cur.fetchone()
             conn.commit()
             return r["id"]
+
+    def update_campaign_landing(self, campaign_id: int, landing_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE campaigns SET landing_id=%s WHERE id=%s", (landing_id, campaign_id))
+            conn.commit()
 
     def get_campaigns(self, channel_id=None):
         with self._conn() as conn:

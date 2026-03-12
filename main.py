@@ -258,7 +258,7 @@ def nav_html(active: str, request: Request) -> str:
       <div class="nav-section">👥 Клиенты</div>
       {item("📡", "Каналы", "channels", "blue")}
       {item("🔗", "Кампании", "campaigns", "blue")}
-      {item("🌐", "Лендинги", "landings", "blue")}
+      {item("🎨", "Шаблоны", "landings", "blue")}
       <div class="nav-divider"></div>
       <div class="nav-section">👔 Сотрудники</div>
       {item("💬", "TG Чаты", "chat", "orange", badge_count=unread)}
@@ -1148,26 +1148,43 @@ async def campaigns_page(request: Request, msg: str = "", err_msg: str = ""):
     if err: return err
     channels  = db.get_channels()
     campaigns = db.get_campaigns()
+    templates = db.get_landings(ltype="client")  # шаблоны лендингов
     app_url   = db.get_setting("app_url", "").rstrip("/")
+
+    # Опции выбора шаблона
+    tpl_opts = '<option value="">— Дефолтный (Relaxation) —</option>' + \
+               "".join(f'<option value="{t["id"]}">{t["name"]}</option>' for t in templates)
 
     campaign_cards = ""
     for c in campaigns:
         slug_url = f"{app_url}/l/{c.get('slug','')}"
         cchans = db.get_campaign_channels(c["id"])
+
+        # Текущий шаблон
+        tpl = next((t for t in templates if t["id"] == c.get("landing_id")), None)
+        tpl_badge = f'<span class="badge-green" style="font-size:.71rem">🎨 {tpl["name"]}</span>' if tpl else \
+                    '<span class="badge-gray" style="font-size:.71rem">🎨 Дефолтный</span>'
+
+        # Смена шаблона — inline select
+        tpl_select_opts = '<option value="">— Дефолтный —</option>' + \
+                          "".join(f'<option value="{t["id"]}" {"selected" if t["id"]==c.get("landing_id") else ""}>{t["name"]}</option>' for t in templates)
+        tpl_switch = f"""<form method="post" action="/campaigns/set_template" style="display:flex;gap:6px;align-items:center">
+          <input type="hidden" name="campaign_id" value="{c['id']}"/>
+          <select name="landing_id" style="font-size:.77rem;padding:4px 8px;border-radius:7px;width:auto">{tpl_select_opts}</select>
+          <button class="btn btn-sm" style="font-size:.74rem;padding:5px 10px">Сменить шаблон</button>
+        </form>"""
+
         chan_rows = ""
         for cc in cchans:
-            go_url = f"{app_url}/go?to={cc['invite_link']}&utm_campaign={c['name']}&utm_source=facebook&utm_medium=paid"
             chan_rows += f"""<tr>
               <td style="font-weight:600">{cc.get('channel_name') or cc['channel_id']}</td>
-              <td><div class="link-box" style="font-size:.69rem;padding:5px 9px">{cc['invite_link'][:45]}...</div></td>
+              <td><div class="link-box" style="font-size:.69rem;padding:5px 9px">{cc['invite_link'][:50]}...</div></td>
               <td style="color:var(--green);font-weight:700">{cc['joins']}</td>
-              <td>
-                <form method="post" action="/campaigns/channel/delete" style="display:inline">
-                  <input type="hidden" name="cc_id" value="{cc['id']}"/>
-                  <input type="hidden" name="campaign_id" value="{c['id']}"/>
-                  <button class="del-btn btn-sm">✕</button>
-                </form>
-              </td>
+              <td><form method="post" action="/campaigns/channel/delete" style="display:inline">
+                <input type="hidden" name="cc_id" value="{cc['id']}"/>
+                <input type="hidden" name="campaign_id" value="{c['id']}"/>
+                <button class="del-btn btn-sm">✕</button>
+              </form></td>
             </tr>"""
         if not chan_rows:
             chan_rows = '<tr><td colspan="4"><div class="empty" style="padding:12px">Нет каналов — добавь ниже</div></td></tr>'
@@ -1177,20 +1194,24 @@ async def campaigns_page(request: Request, msg: str = "", err_msg: str = ""):
         campaign_cards += f"""
         <div class="section" style="border-left:3px solid var(--accent)">
           <div class="section-head">
-            <h3>🎯 {c['name']} <span class="badge" style="font-size:.72rem">{c['total_joins']} подписок</span></h3>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <h3>🎯 {c['name']}</h3>
+              <span class="badge" style="font-size:.72rem">{c['total_joins']} подписок</span>
+              {tpl_badge}
+            </div>
             <div style="display:flex;gap:8px;align-items:center">
-              <a href="{slug_url}" target="_blank" class="btn-gray btn-sm">🌐 Открыть лендинг</a>
+              <a href="{slug_url}" target="_blank" class="btn-gray btn-sm">🌐 Лендинг</a>
               <form method="post" action="/campaigns/delete">
                 <input type="hidden" name="campaign_id" value="{c['id']}"/>
-                <button class="del-btn">✕ Удалить</button>
+                <button class="del-btn">✕</button>
               </form>
             </div>
           </div>
           <div class="section-body">
             <div style="margin-bottom:12px;padding:10px 14px;background:var(--bg3);border-radius:9px;border:1px solid var(--border)">
-              <div style="font-size:.75rem;color:var(--text3);margin-bottom:5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">🔗 Ссылка на лендинг кампании (используй в рекламе)</div>
+              <div style="font-size:.74rem;color:var(--text3);margin-bottom:5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">🔗 Ссылка в рекламу</div>
               <div class="link-box">{slug_url}</div>
-              <div style="font-size:.72rem;color:var(--text3);margin-top:6px">💡 fbclid и utm_ автоматически захватываются когда пользователь кликает из FB</div>
+              <div style="margin-top:10px">{tpl_switch}</div>
             </div>
             <table><thead><tr><th>Канал</th><th>Invite Link</th><th>Подписок</th><th></th></tr></thead>
             <tbody>{chan_rows}</tbody></table>
@@ -1211,10 +1232,15 @@ async def campaigns_page(request: Request, msg: str = "", err_msg: str = ""):
     if not campaign_cards:
         campaign_cards = '<div class="empty" style="padding:40px">Кампаний нет — создай первую</div>'
 
+    # Подсказка если нет шаблонов
+    tpl_hint = ""
+    if not templates:
+        tpl_hint = f'<div style="font-size:.8rem;color:var(--text3);margin-top:6px">💡 Нет кастомных шаблонов — <a href="/landings" style="color:var(--accent)">создай шаблон →</a> или будет использован дефолтный дизайн</div>'
+
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else (f'<div class="alert-red">❌ {err_msg}</div>' if err_msg else "")
     content = f"""<div class="page-wrap">
     <div class="page-title">🔗 Кампании</div>
-    <div class="page-sub">Каждая кампания = несколько групп + лендинг. Пользователь переходит на лендинг → вступает в группу → фиксируется подписка в FB CAPI.</div>
+    <div class="page-sub">Кампания = каналы + шаблон лендинга. Ставишь ссылку /l/slug в рекламу — пользователь подписывается — фиксируется Subscribe в FB CAPI.</div>
     {alert}
     <div class="section">
       <div class="section-head"><h3>➕ Создать кампанию</h3></div>
@@ -1222,10 +1248,13 @@ async def campaigns_page(request: Request, msg: str = "", err_msg: str = ""):
         <form method="post" action="/campaigns/create"><div class="form-row">
           <div class="field-group"><div class="field-label">Название (будет в UTM)</div>
             <input type="text" name="name" placeholder="FB_Broad_March_NYC" required/></div>
-          <div class="field-group" style="max-width:220px"><div class="field-label">URL slug лендинга</div>
+          <div class="field-group" style="max-width:200px"><div class="field-label">URL slug</div>
             <input type="text" name="slug" placeholder="march-nyc"/></div>
+          <div class="field-group" style="max-width:240px"><div class="field-label">🎨 Шаблон лендинга</div>
+            <select name="landing_id">{tpl_opts}</select></div>
           <div style="display:flex;align-items:flex-end"><button class="btn">Создать</button></div>
         </div></form>
+        {tpl_hint}
       </div>
     </div>
     {campaign_cards}
@@ -1234,17 +1263,29 @@ async def campaigns_page(request: Request, msg: str = "", err_msg: str = ""):
 
 
 @app.post("/campaigns/create")
-async def campaigns_create(request: Request, name: str = Form(...), slug: str = Form("")):
+async def campaigns_create(request: Request, name: str = Form(...), slug: str = Form(""),
+                            landing_id: str = Form("")):
     user, err = require_auth(request)
     if err: return err
     import re, secrets as _sec
     if not slug.strip():
         slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-') + "-" + _sec.token_hex(3)
+    lid = int(landing_id) if landing_id.strip().isdigit() else None
     try:
-        db.create_campaign(name.strip(), slug.strip())
+        db.create_campaign(name.strip(), slug.strip(), landing_id=lid)
         return RedirectResponse(f"/campaigns?msg=Кампания+{name}+создана", 303)
     except Exception as e:
         return RedirectResponse(f"/campaigns?err_msg={str(e)}", 303)
+
+
+@app.post("/campaigns/set_template")
+async def campaigns_set_template(request: Request, campaign_id: int = Form(...),
+                                  landing_id: str = Form("")):
+    user, err = require_auth(request)
+    if err: return err
+    lid = int(landing_id) if landing_id.strip().isdigit() else None
+    db.update_campaign_landing(campaign_id, lid)
+    return RedirectResponse("/campaigns?msg=Шаблон+обновлён", 303)
 
 
 @app.post("/campaigns/delete")
@@ -1302,8 +1343,12 @@ async def landings_staff_page(request: Request, msg: str = ""):
 
 def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
     landings = db.get_landings(ltype)
-    icon = "🌐" if ltype == "client" else "💼"
-    title = f"{icon} Лендинги {'Клиентов' if ltype == 'client' else 'Сотрудников'}"
+    if ltype == "staff":
+        title = "💼 Лендинги HR"
+        sub   = "Лендинги для рекрутинга. Кнопки контактов (TG/WA) настраиваются из админки."
+    else:
+        title = "🎨 Шаблоны лендингов"
+        sub   = "Создай несколько дизайнов. При создании кампании выбираешь какой шаблон использовать."
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
     rows = ""
     for l in landings:
@@ -1316,19 +1361,19 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
             <a href="/landings/edit?id={l['id']}" class="btn-gray btn-sm">✏️ Редакт.</a>
             <form method="post" action="/landings/delete" style="display:inline"><input type="hidden" name="id" value="{l['id']}"/><button class="del-btn btn-sm">✕</button></form>
           </td></tr>"""
-    rows = rows or f'<tr><td colspan="4"><div class="empty">Нет лендингов — создай первый</div></td></tr>'
+    rows = rows or f'<tr><td colspan="4"><div class="empty">Нет шаблонов — создай первый</div></td></tr>'
     return f"""<div class="page-wrap"><div class="page-title">{title}</div>
-    <div class="page-sub">Создавай несколько лендингов и выбирай нужный при запуске кампании</div>{alert}
-    <div class="section"><div class="section-head"><h3>➕ Создать лендинг</h3></div><div class="section-body">
+    <div class="page-sub">{sub}</div>{alert}
+    <div class="section"><div class="section-head"><h3>➕ Создать шаблон</h3></div><div class="section-body">
     <form method="post" action="/landings/create"><input type="hidden" name="ltype" value="{ltype}"/>
     <input type="hidden" name="redirect" value="/landings{'_staff' if ltype=='staff' else ''}"/>
     <div class="form-row">
-      <div class="field-group"><div class="field-label">Название</div><input type="text" name="name" placeholder="Лендинг 1 — Массаж NYC" required/></div>
-      <div class="field-group" style="max-width:200px"><div class="field-label">URL slug</div><input type="text" name="slug" placeholder="nyc-massage" required/></div>
+      <div class="field-group"><div class="field-label">Название шаблона</div><input type="text" name="name" placeholder="{'Лендинг HR v2' if ltype=='staff' else 'Массаж NYC — стиль 2'}" required/></div>
+      <div class="field-group" style="max-width:200px"><div class="field-label">URL slug {'(только для HR)' if ltype=='staff' else '(только для предпросмотра)'}</div><input type="text" name="slug" placeholder="{'hr-v2' if ltype=='staff' else 'nyc-v2'}" required/></div>
       <div style="display:flex;align-items:flex-end"><button class="btn">Создать</button></div>
     </div></form></div></div>
-    <div class="section"><div class="section-head"><h3>📋 Лендинги ({len(landings)})</h3></div>
-    <table><thead><tr><th>Название</th><th>URL</th><th>Статус</th><th>Действия</th></tr></thead>
+    <div class="section"><div class="section-head"><h3>📋 Шаблоны ({len(landings)})</h3></div>
+    <table><thead><tr><th>Название</th><th>URL предпросмотра</th><th>Статус</th><th>Действия</th></tr></thead>
     <tbody>{rows}</tbody></table></div></div>"""
 
 
@@ -1426,32 +1471,39 @@ async def public_landing(request: Request, slug: str,
                           fbclid: str = None, utm_source: str = None,
                           utm_medium: str = None, utm_campaign: str = None,
                           utm_content: str = None, utm_term: str = None):
-    import json
-    # Сначала ищем как Campaign slug
+    # Ищем как Campaign slug
     campaign = db.get_campaign_by_slug(slug)
     if campaign:
         channels = db.get_campaign_channels(campaign["id"])
         app_url  = db.get_setting("app_url", "").rstrip("/")
         pixel_id = db.get_setting("pixel_id", "")
 
-        # Строим кнопки — каждый канал = /go ссылка которая трекает клик
+        # Строим /go ссылки для каждого канала
         btns = []
         for cc in channels:
             go_url = f"{app_url}/go?to={cc['invite_link']}&utm_campaign={campaign['name']}&utm_source={utm_source or 'facebook'}&utm_medium={utm_medium or 'paid'}"
-            if fbclid: go_url += f"&fbclid={fbclid}"
+            if fbclid:      go_url += f"&fbclid={fbclid}"
             if utm_content: go_url += f"&utm_content={utm_content}"
-            btns.append({"url": go_url, "label": cc.get("channel_name") or "Вступить в группу", "type": "telegram"})
+            btns.append({"url": go_url, "label": cc.get("channel_name") or "Вступить в группу"})
 
+        # Если у кампании выбран кастомный шаблон — рендерим его
+        if campaign.get("landing_id"):
+            landing  = db.get_landing(campaign["landing_id"])
+            contacts = db.get_landing_contacts(campaign["landing_id"]) if landing else []
+            # Заменяем контакты на каналы кампании
+            if landing:
+                # Передаём каналы как контакты с /go ссылками
+                chan_contacts = [{"type": "telegram", "label": b["label"], "url": b["url"]} for b in btns]
+                return HTMLResponse(_render_client_landing(landing, chan_contacts, pixel_id=pixel_id))
+
+        # Дефолтный шаблон (Relaxation)
         return HTMLResponse(_render_campaign_landing(campaign, btns, pixel_id, fbclid))
 
-    # Иначе ищем как Landing slug (для Staff лендингов)
+    # Иначе ищем как Staff Landing slug
     landing = db.get_landing_by_slug(slug)
     if not landing: return HTMLResponse("<h2>Not found</h2>", 404)
     contacts = db.get_landing_contacts(landing["id"])
-    if landing["type"] == "staff":
-        return HTMLResponse(_render_staff_landing(landing, contacts))
-    else:
-        return HTMLResponse(_render_client_landing(landing, contacts))
+    return HTMLResponse(_render_staff_landing(landing, contacts))
 
 
 def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = None) -> str:
@@ -1566,7 +1618,7 @@ def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = 
     </body></html>"""
 
 
-def _render_client_landing(landing, contacts) -> str:
+def _render_client_landing(landing, contacts, pixel_id: str = "") -> str:
     btn_html = ""
     for c in contacts:
         if c["type"] == "telegram":

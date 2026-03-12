@@ -197,27 +197,40 @@ textarea{resize:vertical;min-height:80px}
 /* CHART */
 .chart-wrap{height:160px;display:flex;align-items:flex-end;gap:3px;padding:8px 0}
 .chart-bar-wrap{display:flex;flex-direction:column;align-items:center;flex:1;height:100%}
-.chart-bar{width:100%;border-radius:3px 3px 0 0;min-height:2px;transition:height .3s}
-.chart-bar.blue{background:#3b82f6}
-.chart-bar.orange{background:#f97316}
-.chart-label{font-size:.6rem;color:#334155;margin-top:3px;transform:rotate(-45deg);transform-origin:top right;white-space:nowrap}
+.chart-bar{width:100%;border-radius:4px 4px 0 0;min-height:2px;transition:height .3s}
+.chart-bar.blue{background:linear-gradient(180deg,#6366f1,#4f46e5)}
+.chart-bar.orange{background:linear-gradient(180deg,#f97316,#ea580c)}
+.chart-bar.green{background:linear-gradient(180deg,#34d399,#10b981)}
+.chart-label{font-size:.58rem;color:var(--text3);margin-top:3px;transform:rotate(-45deg);transform-origin:top right;white-space:nowrap}
+/* ── TOAST ────────────────────────────────────────────────────────────────── */
+#toast-container{position:fixed;top:18px;right:18px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;box-shadow:0 8px 32px rgba(0,0,0,.5);max-width:300px;pointer-events:auto;animation:toastIn .25s ease;cursor:pointer}
+.toast.tg-toast{border-left:3px solid #38bdf8}
+.toast.wa-toast{border-left:3px solid #25d366}
+.toast-title{font-size:.81rem;font-weight:700;color:var(--text);margin-bottom:2px}
+.toast-body{font-size:.75rem;color:var(--text2)}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
 </style>"""
 
 
 def nav_html(active: str, request: Request) -> str:
     user = check_session(request)
     stats = db.get_stats()
-    unread = stats.get("unread", 0)
+    unread     = stats.get("unread", 0)
+    wa_unread  = stats.get("wa_unread", 0)
     b1 = bot_manager.get_tracker_bot()
     b2 = bot_manager.get_staff_bot()
     b1_name = db.get_setting("bot1_name", "Бот трекер")
     b2_name = db.get_setting("bot2_name", "Бот сотрудники")
+    wa_status  = db.get_setting("wa_status", "disconnected")
     role = user["role"] if user else "manager"
 
-    def item(icon, label, page, section_color="blue", badge=False):
-        cls = f"nav-item active {section_color}" if page == active else "nav-item"
-        bdg = f'<span class="badge-count">{unread}</span>' if badge and unread > 0 else ""
-        return f'<a href="/{page}"><div class="{cls}"><span class="nav-label">{icon} {label}</span>{bdg}</div></a>'
+    def item(icon, label, page, section_color="blue", badge_count=0, url=None):
+        href = url or f"/{page}"
+        act  = page == active or (url and url.strip("/") == active)
+        cls  = f"nav-item active {section_color}" if act else "nav-item"
+        bdg  = f'<span class="badge-count">{badge_count}</span>' if badge_count > 0 else ""
+        return f'<a href="{href}"><div class="{cls}"><span class="nav-label">{icon} {label}</span>{bdg}</div></a>'
 
     admin_section = ""
     if role == "admin":
@@ -226,11 +239,18 @@ def nav_html(active: str, request: Request) -> str:
         {item("🔐", "Пользователи", "users", "blue")}
         {item("⚙️", "Настройки", "settings", "blue")}"""
 
+    wa_dot = "dot-green" if wa_status == "ready" else ("dot-yellow" if wa_status == "qr" else "dot-red")
+
     return f"""
-    <div class="sidebar">
+    <div class="sidebar" id="sidebar">
       <div class="logo">
-        <div>📡 TG<span>Tracker</span></div>
-        <div class="logo-user">{user['username'] if user else ''}</div>
+        <div>
+          <div class="logo-brand">📡 TGTracker</div>
+          <div class="logo-user">{user['username'] if user else ''}</div>
+        </div>
+        <div class="logo-right">
+          <div class="theme-toggle" onclick="toggleTheme()" title="Сменить тему" id="theme-btn">🌙</div>
+        </div>
       </div>
       {item("📊", "Обзор", "overview", "blue")}
       {item("📈", "Статистика", "analytics", "blue")}
@@ -238,26 +258,84 @@ def nav_html(active: str, request: Request) -> str:
       <div class="nav-section">👥 Клиенты</div>
       {item("📡", "Каналы", "channels", "blue")}
       {item("🔗", "Кампании", "campaigns", "blue")}
-      {item("🌐", "Лендинг", "landing", "blue")}
-      {item("💬", "Msg Flow", "flow_clients", "blue")}
+      {item("🌐", "Лендинги", "landings", "blue")}
       <div class="nav-divider"></div>
       <div class="nav-section">👔 Сотрудники</div>
-      {item("💬", "Чаты", "chat", "orange", badge=True)}
-      {item("💚", "WA Чаты", "wa/chat", "orange")}
-      {item("📱", "WA Настройка", "wa/setup", "orange")}
+      {item("💬", "TG Чаты", "chat", "orange", badge_count=unread)}
+      {item("💚", "WA Чаты", "wa_chat", "orange", badge_count=wa_unread, url="/wa/chat")}
       {item("🗂", "База", "staff", "orange")}
-      {item("💬", "Msg Flow HR", "flow_staff", "orange")}
+      {item("🌐", "Лендинги HR", "landings_staff", "orange")}
       {admin_section}
       <div class="sidebar-footer">
         <div class="bot-status"><div class="dot {'dot-green' if b1 else 'dot-red'}"></div><span>{b1_name}</span></div>
         <div class="bot-status"><div class="dot {'dot-green' if b2 else 'dot-red'}"></div><span>{b2_name}</span></div>
-        <a href="/logout"><div style="padding:8px 10px;font-size:.76rem;color:#475569;cursor:pointer">⬅ Выйти</div></a>
+        <div class="bot-status"><div class="dot {wa_dot}"></div><span>WhatsApp {'✓' if wa_status == 'ready' else ('QR...' if wa_status == 'qr' else '✗')}</span></div>
+        <a href="/logout"><div style="padding:7px 9px;font-size:.74rem;color:var(--text3);cursor:pointer">⬅ Выйти</div></a>
       </div>
-    </div>"""
+    </div>
+    <div id="toast-container"></div>
+    <script>
+    // Theme
+    (function(){{
+      const t = localStorage.getItem('theme') || 'dark';
+      if(t === 'light') document.body.classList.add('light');
+      const btn = document.getElementById('theme-btn');
+      if(btn) btn.textContent = t === 'light' ? '🌙' : '☀️';
+    }})();
+    function toggleTheme(){{
+      const isLight = document.body.classList.toggle('light');
+      localStorage.setItem('theme', isLight ? 'light' : 'dark');
+      const btn = document.getElementById('theme-btn');
+      if(btn) btn.textContent = isLight ? '🌙' : '☀️';
+    }}
+    // Toast notifications
+    let audioCtx = null;
+    function playPing(){{
+      try{{
+        if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.connect(g); g.connect(audioCtx.destination);
+        o.frequency.setValueAtTime(880, audioCtx.currentTime);
+        o.frequency.setValueAtTime(1100, audioCtx.currentTime + 0.1);
+        g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+        o.start(); o.stop(audioCtx.currentTime + 0.4);
+      }}catch(e){{}}
+    }}
+    function showToast(title, body, type, url){{
+      const c = document.getElementById('toast-container');
+      const d = document.createElement('div');
+      d.className = 'toast ' + (type || '');
+      d.innerHTML = '<div class="toast-title">' + title + '</div><div class="toast-body">' + body + '</div>';
+      if(url) d.onclick = () => location.href = url;
+      c.appendChild(d);
+      playPing();
+      setTimeout(() => {{ d.style.animation = 'toastIn .25s ease reverse'; setTimeout(() => d.remove(), 250); }}, 5000);
+    }}
+    // Global unread polling (all pages)
+    let _lastTgUnread = {unread}, _lastWaUnread = {wa_unread};
+    async function pollUnread(){{
+      try{{
+        const r = await fetch('/api/stats');
+        const d = await r.json();
+        // Update badges in nav
+        const tgBadge = document.querySelector('a[href="/chat"] .badge-count');
+        const waBadge = document.querySelector('a[href="/wa/chat"] .badge-count');
+        if(tgBadge) tgBadge.textContent = d.unread || '';
+        if(waBadge) waBadge.textContent = d.wa_unread || '';
+        // Toasts on new messages
+        if(d.unread > _lastTgUnread) showToast('💬 TG — новое сообщение', 'Перейти в TG чаты', 'tg-toast', '/chat');
+        if(d.wa_unread > _lastWaUnread) showToast('💚 WA — новое сообщение', 'Перейти в WA чаты', 'wa-toast', '/wa/chat');
+        _lastTgUnread = d.unread; _lastWaUnread = d.wa_unread;
+      }}catch(e){{}}
+    }}
+    setInterval(pollUnread, 5000);
+    </script>"""
 
 
 def base(content: str, active: str, request: Request) -> str:
-    return f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>TG Tracker</title>{CSS}</head><body>{nav_html(active, request)}<div class="main">{content}</div></body></html>'
+    return f'<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>TGTracker</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">{CSS}</head><body>{nav_html(active, request)}<div class="main">{content}</div></body></html>'
 
 
 STAFF_STATUSES = {
@@ -525,14 +603,15 @@ async def chat_panel(request: Request, conv_id: int = 0):
             utm = db.get_utm_by_conv(conv_id)
             for m in msgs:
                 t = m["created_at"][11:16]
-                messages_html += f"""<div class="msg {m['sender_type']}" data-id="{m['id']}">
-                  <div class="msg-bubble">{(m['content'] or '').replace('<','&lt;')}</div>
-                  <div class="msg-time">{t}</div></div>"""
+                if m.get("media_url") and m.get("media_type","").startswith("image"):
+                    bubble = f'<img src="{m["media_url"]}" class="msg-img" onclick="window.open(this.src)" />'
+                else:
+                    bubble = f'<div class="msg-bubble">{(m["content"] or "").replace("<","&lt;").replace(chr(10),"<br>")}</div>'
+                messages_html += f'<div class="msg {m["sender_type"]}" data-id="{m["id"]}">{bubble}<div class="msg-time">{t}</div></div>'
 
             uname = f"@{active_conv['username']}" if active_conv.get('username') else active_conv.get('tg_chat_id','')
-            status_color = "#34d399" if active_conv["status"] == "open" else "#ef4444"
+            status_color = "var(--green)" if active_conv["status"] == "open" else "var(--red)"
 
-            # UTM теги
             utm_tags = ""
             if utm:
                 tags = []
@@ -540,34 +619,38 @@ async def chat_panel(request: Request, conv_id: int = 0):
                 if utm.get("utm_campaign"): tags.append(f"camp:{utm['utm_campaign']}")
                 if utm.get("fbclid"):       tags.append("fbclid ✓")
                 if tags:
-                    utm_tags = '<div class="utm-row">' + "".join(f'<span class="utm-tag">{t}</span>' for t in tags) + '</div>'
+                    utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:5px">' + "".join(f'<span class="utm-tag">{t}</span>' for t in tags) + '</div>'
 
-            # Карточка сотрудника
-            staff_info = ""
-            fb_sent = ""
+            fb_btn = ""
             if staff:
                 icon, label, badge_cls = STAFF_STATUSES.get(staff.get("status","new"), ("🆕","Новый","badge-gray"))
-                fb_sent = f'<span class="badge-green" style="font-size:.72rem">FB Lead ✓</span>' if staff.get("fb_event_sent") else ""
-                staff_info = f"""<div style="font-size:.79rem;color:#64748b;margin-top:4px">
-                  <span class="{badge_cls}">{icon} {label}</span>
-                  {f' · {staff["position"]}' if staff.get("position") else ''}
-                  {f' · 📞 {staff["phone"]}' if staff.get("phone") else ''}
-                  {fb_sent}
-                  <a href="/staff?edit={staff['id']}" style="color:#f97316;margin-left:8px">Карточка →</a>
-                </div>"""
+                if staff.get("fb_event_sent"):
+                    fb_btn = '<span class="badge-green" style="font-size:.72rem;padding:3px 9px">FB Lead ✓ отправлен</span>'
+                else:
+                    fb_btn = f'<form method="post" action="/chat/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.74rem">📤 Lead → FB</button></form>'
 
-            close_btn = f'<form method="post" action="/chat/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>' if active_conv["status"] == "open" else f'<form method="post" action="/chat/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-orange btn-sm">↺ Открыть</button></form>'
+            tg_number = active_conv.get("tg_chat_id","")
+            call_btn = f'<a href="tg://user?id={tg_number}" class="btn-gray btn-sm" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;font-size:.74rem;border:1px solid var(--border);text-decoration:none">📞 Звонок</a>' if tg_number else ""
+
+            close_btn = (f'<form method="post" action="/chat/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>'
+                        if active_conv["status"] == "open"
+                        else f'<form method="post" action="/chat/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-orange btn-sm">↺ Открыть</button></form>')
+
+            staff_link = f'<a href="/staff?edit={staff["id"]}" style="color:var(--orange);font-size:.74rem">Карточка →</a>' if staff else ""
+
             header_html = f"""<div class="chat-header">
-              <div style="display:flex;align-items:flex-start;gap:12px">
+              <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
                 <div class="avatar">{active_conv['visitor_name'][0].upper()}</div>
-                <div>
-                  <div style="font-weight:700;color:#fff">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.74rem">●</span></div>
-                  <div style="font-size:.79rem;color:#475569">{uname}</div>
-                  {staff_info}
+                <div style="flex:1">
+                  <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.72rem">●</span></div>
+                  <div style="font-size:.78rem;color:var(--text3)">{uname} {staff_link}</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">
+                    {fb_btn} {call_btn}
+                  </div>
                   {utm_tags}
                 </div>
               </div>
-              <div style="display:flex;gap:8px;flex-shrink:0">{close_btn}</div>
+              <div style="display:flex;gap:6px;flex-shrink:0">{close_btn}</div>
             </div>"""
 
     conv_items = ""
@@ -576,21 +659,32 @@ async def chat_panel(request: Request, conv_id: int = 0):
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T"," ")
         ucount = f'<span class="unread-num">{c["unread_count"]}</span>' if c["unread_count"] > 0 else ""
         dot = "🟢" if c["status"] == "open" else "⚫"
+        # Source badge
+        if c.get("fbclid"):
+            src_badge = '<span class="source-badge source-fb">🔵 FB</span>'
+        elif c.get("utm_source"):
+            src_badge = f'<span class="source-badge source-tg">{c["utm_source"][:12]}</span>'
+        else:
+            src_badge = '<span class="source-badge source-organic">organic</span>'
+        utm_line = ""
+        if c.get("utm_campaign"):
+            utm_line = f'<div class="conv-meta"><span class="utm-tag">{c["utm_campaign"][:20]}</span></div>'
         conv_items += f"""<a href="/chat?conv_id={c['id']}"><div class="{cls}">
           <div class="conv-name"><span>{dot} {c['visitor_name']}</span>{ucount}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
-          <div class="conv-time">{t}</div></div></a>"""
+          <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">{t} {src_badge}</div>
+          {utm_line}</div></a>"""
 
     if not conv_items:
         conv_items = '<div class="empty" style="padding:36px 14px">Диалогов пока нет</div>'
 
     b2 = bot_manager.get_staff_bot()
-    bot_warn = "" if b2 else '<div style="background:#431407;border:1px solid #7c2d12;border-radius:7px;padding:9px 12px;font-size:.8rem;color:#fb923c;margin-bottom:8px">⚠️ Бот не запущен — <a href="/settings" style="color:#fb923c;text-decoration:underline">Настройки</a></div>'
+    bot_warn = "" if b2 else '<div style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:9px 12px;font-size:.79rem;color:var(--orange);margin-bottom:8px">⚠️ Бот не запущен — <a href="/settings" style="color:var(--orange);text-decoration:underline">Настройки</a></div>'
 
     right = f"""{header_html}
     <div class="chat-messages" id="msgs">{messages_html}</div>
     <div class="chat-input"><div class="chat-input-row">
-      <textarea id="reply-text" placeholder="Ответить сотруднику… (Enter — отправить)" rows="1" onkeydown="handleKey(event)"></textarea>
+      <textarea id="reply-text" placeholder="Ответить… (Enter — отправить)" rows="1" onkeydown="handleKey(event)"></textarea>
       <button class="send-btn-orange" onclick="sendMsg()">Отправить</button>
     </div></div>""" if active_conv else '<div class="no-conv"><div style="font-size:2.5rem">👔</div><div>Выбери диалог</div></div>'
 
@@ -611,22 +705,20 @@ async def chat_panel(request: Request, conv_id: int = 0):
       loadNewMsgs();
     }}
     function handleKey(e){{if(e.key==='Enter'&&!e.shiftKey){{e.preventDefault();sendMsg();}}}}
-    {"setInterval(loadNewMsgs,3000);" if active_conv else "setInterval(checkUnread,5000);"}
+    {"setInterval(loadNewMsgs,3000);" if active_conv else ""}
     async function loadNewMsgs(){{
-      const msgs=document.querySelectorAll('.msg[data-id]');
+      const msgs=document.querySelectorAll('#msgs .msg[data-id]');
       const lastId=msgs.length?msgs[msgs.length-1].dataset.id:0;
       const res=await fetch('/api/messages/{conv_id}?after='+lastId);
       const data=await res.json();
       if(data.messages&&data.messages.length>0){{
         const c=document.getElementById('msgs');
         data.messages.forEach(m=>{{const d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
-          d.innerHTML='<div class="msg-bubble">'+esc(m.content)+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
+          let inner = m.media_url && (m.media_type||'').startsWith('image') ?
+            '<img src="'+m.media_url+'" class="msg-img" onclick="window.open(this.src)"/>' :
+            '<div class="msg-bubble">'+esc(m.content||'')+'</div>';
+          d.innerHTML=inner+'<div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
           c.appendChild(d);}});c.scrollTop=c.scrollHeight;}}
-    }}
-    async function checkUnread(){{
-      const r=await fetch('/api/stats');const d=await r.json();
-      const b=document.querySelector('.badge-count');
-      if(d.unread>0){{if(b)b.textContent=d.unread;}}else if(b)b.remove();
     }}
     function esc(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>');}}
     function filterConvs(q){{document.querySelectorAll('.conv-item').forEach(el=>{{
@@ -634,7 +726,7 @@ async def chat_panel(request: Request, conv_id: int = 0):
       el.parentElement.style.display=n.includes(q.toLowerCase())?'':'none';}});}}
     </script>"""
 
-    return HTMLResponse(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>Чаты</title>{CSS}</head><body>{nav_html("chat",request)}<div class="main">{content}</div></body></html>')
+    return HTMLResponse(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>TG Чаты</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">{CSS}</head><body>{nav_html("chat",request)}<div class="main">{content}</div></body></html>')
 
 
 @app.post("/chat/send")
@@ -663,6 +755,27 @@ async def chat_reopen(request: Request, conv_id: int = Form(...)):
     user, err = require_auth(request)
     if err: return err
     db.reopen_conversation(conv_id)
+    return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
+
+
+@app.post("/chat/send_lead")
+async def chat_send_lead(request: Request, conv_id: int = Form(...)):
+    user, err = require_auth(request)
+    if err: return err
+    conv  = db.get_conversation(conv_id)
+    staff = db.get_staff_by_conv(conv_id) if conv else None
+    if not conv: return RedirectResponse("/chat", 303)
+    if staff and staff.get("fb_event_sent"):
+        return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
+    pixel_id   = db.get_setting("pixel_id")
+    meta_token = db.get_setting("meta_token")
+    sent = await meta_capi.send_lead_event(
+        pixel_id, meta_token,
+        user_id=conv.get("tg_chat_id",""),
+        campaign=conv.get("utm_campaign","telegram")
+    )
+    if sent and staff:
+        db.set_staff_fb_event(staff["id"], "Lead")
     return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
 
 
@@ -1073,121 +1186,322 @@ async def campaigns_create(request: Request, channel_id: str = Form(...), name: 
         return RedirectResponse(f"/campaigns?err_msg={str(e)}", 303)
 
 
-@app.get("/landing", response_class=HTMLResponse)
-async def landing_admin(request: Request, msg: str = ""):
+@app.get("/landings", response_class=HTMLResponse)
+async def landings_client(request: Request, msg: str = ""):
     user, err = require_auth(request)
     if err: return err
-    links = db.get_landing_links()
-    rows = "".join(f"""<tr><td style="font-size:1.2rem">{l['emoji']}</td><td><b>{l['title']}</b></td>
-        <td><a href="{l['tg_link']}" target="_blank" style="color:#60a5fa">{l['tg_link']}</a></td>
-        <td><form method="post" action="/landing/delete"><input type="hidden" name="link_id" value="{l['id']}"/>
-        <button class="del-btn">✕</button></form></td></tr>""" for l in links
-    ) or '<tr><td colspan="4"><div class="empty">Нет ссылок</div></td></tr>'
+    return HTMLResponse(base(_landings_page(ltype="client", active="landings", msg=msg, request=request), "landings", request))
+
+
+@app.get("/landings_staff", response_class=HTMLResponse)
+async def landings_staff_page(request: Request, msg: str = ""):
+    user, err = require_auth(request)
+    if err: return err
+    return HTMLResponse(base(_landings_page(ltype="staff", active="landings_staff", msg=msg, request=request), "landings_staff", request))
+
+
+def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
+    landings = db.get_landings(ltype)
+    icon = "🌐" if ltype == "client" else "💼"
+    title = f"{icon} Лендинги {'Клиентов' if ltype == 'client' else 'Сотрудников'}"
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
-    content = f"""<div class="page-wrap"><div class="page-title">🌐 Лендинг</div>
-    <div class="page-sub">Публичная страница: <a href="/page" target="_blank" style="color:#3b82f6">/page →</a></div>
-    <div class="section"><div class="section-head"><h3>➕ Добавить кнопку</h3></div><div class="section-body">
-    {alert}<form method="post" action="/landing/add"><div class="form-row">
-    <div class="field-group" style="max-width:80px"><div class="field-label">Эмодзи</div><input type="text" name="emoji" value="📢"/></div>
-    <div class="field-group"><div class="field-label">Название</div><input type="text" name="title" placeholder="Phoenix" required/></div>
-    <div class="field-group"><div class="field-label">Ссылка TG</div><input type="text" name="tg_link" placeholder="https://t.me/+xxx" required/></div>
-    <div style="display:flex;align-items:flex-end"><button class="btn">Добавить</button></div>
+    rows = ""
+    for l in landings:
+        slug_url = f"/l/{l['slug']}"
+        rows += f"""<tr>
+          <td><b>{l['name']}</b></td>
+          <td><a href="{slug_url}" target="_blank" class="link-box" style="display:inline-block">{slug_url}</a></td>
+          <td><span class="{'badge-green' if l['active'] else 'badge-gray'}">{'Активен' if l['active'] else 'Скрыт'}</span></td>
+          <td>
+            <a href="/landings/edit?id={l['id']}" class="btn-gray btn-sm">✏️ Редакт.</a>
+            <form method="post" action="/landings/delete" style="display:inline"><input type="hidden" name="id" value="{l['id']}"/><button class="del-btn btn-sm">✕</button></form>
+          </td></tr>"""
+    rows = rows or f'<tr><td colspan="4"><div class="empty">Нет лендингов — создай первый</div></td></tr>'
+    return f"""<div class="page-wrap"><div class="page-title">{title}</div>
+    <div class="page-sub">Создавай несколько лендингов и выбирай нужный при запуске кампании</div>{alert}
+    <div class="section"><div class="section-head"><h3>➕ Создать лендинг</h3></div><div class="section-body">
+    <form method="post" action="/landings/create"><input type="hidden" name="ltype" value="{ltype}"/>
+    <input type="hidden" name="redirect" value="/landings{'_staff' if ltype=='staff' else ''}"/>
+    <div class="form-row">
+      <div class="field-group"><div class="field-label">Название</div><input type="text" name="name" placeholder="Лендинг 1 — Массаж NYC" required/></div>
+      <div class="field-group" style="max-width:200px"><div class="field-label">URL slug</div><input type="text" name="slug" placeholder="nyc-massage" required/></div>
+      <div style="display:flex;align-items:flex-end"><button class="btn">Создать</button></div>
     </div></form></div></div>
-    <div class="section"><div class="section-head"><h3>🔗 Кнопки ({len(links)}/10)</h3></div>
-    <table><thead><tr><th></th><th>Название</th><th>Ссылка</th><th></th></tr></thead>
-    <tbody>{rows}</tbody></table></div></div>"""
-    return HTMLResponse(base(content, "landing", request))
-
-
-@app.post("/landing/add")
-async def landing_add(request: Request, title: str = Form(...), tg_link: str = Form(...), emoji: str = Form("📢")):
-    user, err = require_auth(request)
-    if err: return err
-    db.add_landing_link(title.strip(), tg_link.strip(), emoji.strip() or "📢")
-    return RedirectResponse("/landing?msg=Добавлено", 303)
-
-
-@app.post("/landing/delete")
-async def landing_delete(request: Request, link_id: int = Form(...)):
-    user, err = require_auth(request)
-    if err: return err
-    db.delete_landing_link(link_id)
-    return RedirectResponse("/landing", 303)
-
-
-@app.get("/page", response_class=HTMLResponse)
-async def public_page():
-    links = db.get_landing_links()
-    title = db.get_setting("landing_title", "Наши каналы")
-    sub   = db.get_setting("landing_subtitle", "Подписывайся и будь в курсе")
-    btns  = "".join(f'<a href="{l["tg_link"]}" target="_blank" class="ch-btn"><span style="font-size:1.4rem">{l["emoji"]}</span><span style="flex:1;font-weight:600;color:#fff">{l["title"]}</span><span style="color:#3b82f6">→</span></a>' for l in links) or '<p style="text-align:center;color:#475569">Скоро</p>'
-    return HTMLResponse(f"""<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title>
-    <style>*{{box-sizing:border-box;margin:0;padding:0}}body{{background:#0a0d14;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui;padding:24px}}
-    .wrap{{width:100%;max-width:420px}}h1{{font-size:1.5rem;font-weight:700;text-align:center;margin-bottom:8px;color:#fff}}
-    .sub{{text-align:center;color:#475569;font-size:.9rem;margin-bottom:28px}}
-    .ch-btn{{display:flex;align-items:center;gap:14px;background:#111827;border:1px solid #1a2030;border-radius:14px;padding:16px 20px;margin-bottom:10px;transition:all .2s;text-decoration:none}}
-    .ch-btn:hover{{background:#1a2030;border-color:#3b82f6;transform:translateY(-2px)}}</style></head>
-    <body><div class="wrap"><h1>{title}</h1><p class="sub">{sub}</p>{btns}</div></body></html>""")
-
-
-@app.get("/flow_clients", response_class=HTMLResponse)
-async def flow_clients(request: Request, msg: str = ""):
-    user, err = require_auth(request)
-    if err: return err
-    return HTMLResponse(base(await _flow_content("tracker", "flow_clients", "💬 Msg Flow — Клиенты", "Автосообщения после вступления в канал", msg), "flow_clients", request))
-
-
-@app.get("/flow_staff", response_class=HTMLResponse)
-async def flow_staff(request: Request, msg: str = ""):
-    user, err = require_auth(request)
-    if err: return err
-    return HTMLResponse(base(await _flow_content("staff", "flow_staff", "💬 Msg Flow — HR", "Автосообщения новым сотрудникам", msg), "flow_staff", request))
-
-
-async def _flow_content(bot_type, page, title, sub, msg):
-    channels = db.get_channels()
-    flows    = db.get_flows(bot_type=bot_type)
-    ch_opts  = "".join(f'<option value="{c["channel_id"]}">{c["name"]}</option>' for c in channels) or '<option value="all">Все</option>'
-    ch_map   = {c["channel_id"]: c["name"] for c in channels}
-    btn = "btn" if bot_type == "tracker" else "btn-orange"
-    rows = "".join(f"""<tr><td><span class="badge">{ch_map.get(f['channel_id'],f['channel_id'])}</span></td>
-        <td>Шаг {f['step']}</td><td>{f['delay_min']} мин</td>
-        <td style="max-width:300px">{f['message'][:80]}{'…' if len(f['message'])>80 else ''}</td>
-        <td><form method="post" action="/flow/delete?next={page}"><input type="hidden" name="flow_id" value="{f['id']}"/>
-        <button class="del-btn">✕</button></form></td></tr>""" for f in flows
-    ) or '<tr><td colspan="5"><div class="empty">Нет шагов</div></td></tr>'
-    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
-    return f"""<div class="page-wrap"><div class="page-title">{title}</div><div class="page-sub">{sub}</div>
-    <div class="section"><div class="section-head"><h3>➕ Добавить шаг</h3></div><div class="section-body">
-    {alert}<form method="post" action="/flow/add?next={page}">
-    <input type="hidden" name="bot_type" value="{bot_type}"/>
-    <div class="form-row" style="margin-bottom:12px">
-    <div class="field-group"><div class="field-label">Канал</div><select name="channel_id">{ch_opts}</select></div>
-    <div class="field-group" style="max-width:100px"><div class="field-label">Шаг №</div><input type="number" name="step" value="0" min="0"/></div>
-    <div class="field-group" style="max-width:160px"><div class="field-label">Задержка (мин)</div><input type="number" name="delay_min" value="0" min="0"/></div></div>
-    <div class="field-group" style="margin-bottom:12px"><div class="field-label">Текст</div>
-    <textarea name="message" placeholder="Текст автосообщения..." required></textarea></div>
-    <button class="{btn}">Добавить шаг</button></form></div></div>
-    <div class="section"><div class="section-head"><h3>📋 Шаги ({len(flows)})</h3></div>
-    <table><thead><tr><th>Канал</th><th>Шаг</th><th>Задержка</th><th>Сообщение</th><th></th></tr></thead>
+    <div class="section"><div class="section-head"><h3>📋 Лендинги ({len(landings)})</h3></div>
+    <table><thead><tr><th>Название</th><th>URL</th><th>Статус</th><th>Действия</th></tr></thead>
     <tbody>{rows}</tbody></table></div></div>"""
 
 
-@app.post("/flow/add")
-async def flow_add(request: Request, next: str = "flow_clients", channel_id: str = Form(...),
-                   bot_type: str = Form("tracker"), step: int = Form(0), delay_min: int = Form(0), message: str = Form(...)):
+@app.post("/landings/create")
+async def landings_create(request: Request, name: str = Form(...), slug: str = Form(...),
+                           ltype: str = Form("client"), redirect: str = Form("/landings")):
     user, err = require_auth(request)
     if err: return err
-    db.add_flow_step(channel_id, bot_type, step, delay_min, message)
-    return RedirectResponse(f"/{next}?msg=Шаг+добавлен", 303)
+    import re, json
+    clean_slug = re.sub(r'[^a-z0-9-]', '-', slug.lower().strip())
+    if ltype == "staff":
+        content = json.dumps({"type": "staff"})
+    else:
+        content = json.dumps({"type": "client"})
+    try:
+        db.create_landing(name.strip(), ltype, clean_slug, content)
+        return RedirectResponse(f"{redirect}?msg=Лендинг+создан", 303)
+    except Exception as e:
+        return RedirectResponse(f"{redirect}?msg=Ошибка:+{str(e)}", 303)
 
 
-@app.post("/flow/delete")
-async def flow_delete(request: Request, next: str = "flow_clients", flow_id: int = Form(...)):
+@app.post("/landings/delete")
+async def landings_delete_route(request: Request, id: int = Form(...)):
     user, err = require_auth(request)
     if err: return err
-    db.delete_flow_step(flow_id)
-    return RedirectResponse(f"/{next}", 303)
+    db.delete_landing(id)
+    return RedirectResponse("/landings", 303)
+
+
+@app.get("/landings/edit", response_class=HTMLResponse)
+async def landings_edit(request: Request, id: int = 0, msg: str = ""):
+    user, err = require_auth(request)
+    if err: return err
+    landing = db.get_landing(id)
+    if not landing: return RedirectResponse("/landings", 303)
+    contacts = db.get_landing_contacts(id)
+    app_url  = db.get_setting("app_url", "")
+    alert    = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+
+    contact_rows = ""
+    for c in contacts:
+        type_icon = "📱" if c["type"] == "telegram" else "💚"
+        contact_rows += f"""<tr>
+          <td>{type_icon} <span class="badge">{c['type']}</span></td>
+          <td>{c['label']}</td>
+          <td><a href="{c['url']}" target="_blank" style="color:var(--accent);font-size:.8rem">{c['url'][:40]}...</a></td>
+          <td><form method="post" action="/landings/contact/delete"><input type="hidden" name="contact_id" value="{c['id']}"/><input type="hidden" name="landing_id" value="{id}"/><button class="del-btn">✕</button></form></td></tr>"""
+    contact_rows = contact_rows or '<tr><td colspan="4"><div class="empty">Нет контактов</div></td></tr>'
+
+    public_url = f"{app_url}/l/{landing['slug']}"
+    back = "/landings_staff" if landing["type"] == "staff" else "/landings"
+    content = f"""<div class="page-wrap">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <a href="{back}" class="btn-gray btn-sm">← Назад</a>
+      <div class="page-title">✏️ {landing['name']}</div>
+    </div>
+    {alert}
+    <div class="section"><div class="section-head"><h3>🔗 Публичная ссылка</h3></div>
+    <div class="section-body"><div class="link-box">{public_url}</div>
+    <a href="{public_url}" target="_blank" class="btn btn-sm" style="margin-top:10px;display:inline-block">Открыть лендинг →</a></div></div>
+    <div class="section"><div class="section-head"><h3>➕ Добавить контакт / кнопку</h3><small style="color:var(--text3)">Эти кнопки появятся на лендинге</small></div>
+    <div class="section-body"><form method="post" action="/landings/contact/add"><input type="hidden" name="landing_id" value="{id}"/>
+    <div class="form-row">
+      <div class="field-group" style="max-width:160px"><div class="field-label">Тип</div>
+      <select name="ctype"><option value="telegram">📱 Telegram</option><option value="whatsapp">💚 WhatsApp</option><option value="other">🔗 Другое</option></select></div>
+      <div class="field-group" style="max-width:180px"><div class="field-label">Текст кнопки</div><input type="text" name="label" placeholder="Написать в Telegram" required/></div>
+      <div class="field-group"><div class="field-label">URL</div><input type="text" name="url" placeholder="https://t.me/username или https://wa.me/1..." required/></div>
+      <div style="display:flex;align-items:flex-end"><button class="btn">Добавить</button></div>
+    </div></form></div></div>
+    <div class="section"><div class="section-head"><h3>🔘 Кнопки контактов ({len(contacts)})</h3></div>
+    <table><thead><tr><th>Тип</th><th>Текст</th><th>URL</th><th></th></tr></thead>
+    <tbody>{contact_rows}</tbody></table></div></div>"""
+    return HTMLResponse(base(content, landing["type"] + "_landing", request))
+
+
+@app.post("/landings/contact/add")
+async def landing_contact_add(request: Request, landing_id: int = Form(...),
+                               ctype: str = Form(...), label: str = Form(...), url: str = Form(...)):
+    user, err = require_auth(request)
+    if err: return err
+    db.add_landing_contact(landing_id, ctype, label.strip(), url.strip())
+    return RedirectResponse(f"/landings/edit?id={landing_id}&msg=Контакт+добавлен", 303)
+
+
+@app.post("/landings/contact/delete")
+async def landing_contact_delete(request: Request, contact_id: int = Form(...), landing_id: int = Form(...)):
+    user, err = require_auth(request)
+    if err: return err
+    db.delete_landing_contact(contact_id)
+    return RedirectResponse(f"/landings/edit?id={landing_id}", 303)
+
+
+@app.get("/l/{slug}", response_class=HTMLResponse)
+async def public_landing(request: Request, slug: str):
+    import json
+    landing = db.get_landing_by_slug(slug)
+    if not landing: return HTMLResponse("<h2>Not found</h2>", 404)
+    contacts = db.get_landing_contacts(landing["id"])
+
+    if landing["type"] == "staff":
+        return HTMLResponse(_render_staff_landing(landing, contacts))
+    else:
+        return HTMLResponse(_render_client_landing(landing, contacts))
+
+
+def _render_client_landing(landing, contacts) -> str:
+    btn_html = ""
+    for c in contacts:
+        if c["type"] == "telegram":
+            btn_html += f'<a class="lnd-btn lnd-tg" href="{c["url"]}" target="_blank"><svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>{c["label"]}</a>'
+        elif c["type"] == "whatsapp":
+            btn_html += f'<a class="lnd-btn lnd-wa" href="{c["url"]}" target="_blank"><svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5Z"/></svg>{c["label"]}</a>'
+        else:
+            btn_html += f'<a class="lnd-btn" href="{c["url"]}" target="_blank" style="background:rgba(255,255,255,.12)">{c["label"]}</a>'
+
+    if not btn_html:
+        btn_html = '<p style="color:rgba(255,255,255,.5);text-align:center">Контакты не настроены</p>'
+
+    return f"""<!DOCTYPE html><html lang="en"><head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Relaxation and Balance 🌿✨</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+    *{{box-sizing:border-box;margin:0;padding:0}}
+    body{{font-family:'Inter',system-ui;background:#060a0f;color:#e8f0f8;min-height:100vh}}
+    .top-bar{{background:linear-gradient(135deg,#1a0a2e,#0d1a2e);border-bottom:1px solid rgba(255,255,255,.08);padding:12px 20px;text-align:center;font-size:.82rem;font-weight:600;color:#f8d56b;letter-spacing:.02em}}
+    .hero{{position:relative;min-height:50vh;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}}
+    .hero::before{{content:"";position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop') center/cover;filter:brightness(.35)}}
+    .hero::after{{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 30%,#060a0f)}}
+    .hero-inner{{position:relative;z-index:1;padding:48px 20px 32px}}
+    .hero h1{{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:800;line-height:1.15;margin-bottom:10px}}
+    .hero p{{color:rgba(255,255,255,.7);max-width:500px;margin:0 auto;font-size:.95rem;line-height:1.7}}
+    .wrap{{max-width:600px;margin:0 auto;padding:0 20px 60px}}
+    .section-title{{font-size:1.1rem;font-weight:700;margin:32px 0 16px;color:#e8f0f8}}
+    .utp-list{{display:flex;flex-direction:column;gap:10px;margin-bottom:32px}}
+    .utp-item{{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:13px;padding:14px 18px;font-size:.9rem;line-height:1.5}}
+    .desc-box{{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);border-radius:13px;padding:16px 20px;font-size:.88rem;line-height:1.7;color:rgba(255,255,255,.8);margin-bottom:32px}}
+    .rates{{display:flex;flex-direction:column;gap:8px;margin-bottom:32px}}
+    .rate-item{{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:14px 20px;font-weight:600}}
+    .rate-price{{font-size:1.15rem;color:#a5f3fc}}
+    .info-box{{background:rgba(248,212,0,.06);border:1px solid rgba(248,212,0,.2);border-radius:13px;padding:16px 20px;margin-bottom:32px}}
+    .info-item{{font-size:.86rem;line-height:1.8;color:rgba(255,255,255,.8)}}
+    .contact-section{{text-align:center;padding:32px 0}}
+    #contact-anchor{{scroll-margin-top:20px}}
+    .contact-title{{font-size:1.3rem;font-weight:800;margin-bottom:8px}}
+    .contact-sub{{color:rgba(255,255,255,.5);font-size:.88rem;margin-bottom:24px}}
+    .lnd-btn{{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:15px;border-radius:13px;font-weight:700;font-size:.95rem;text-decoration:none;margin-bottom:10px;transition:opacity .15s}}
+    .lnd-btn:hover{{opacity:.88}}
+    .lnd-tg{{background:#26A5E4;color:#fff}}
+    .lnd-wa{{background:#25D366;color:#fff}}
+    .cta-btn{{display:flex;align-items:center;justify-content:center;width:100%;padding:15px;border-radius:13px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;font-weight:600;font-size:.9rem;text-decoration:none;margin-bottom:10px;cursor:pointer;transition:background .15s}}
+    .cta-btn:hover{{background:rgba(255,255,255,.16)}}
+    .media-row{{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:32px}}
+    .msg-book{{text-align:center;font-size:1rem;color:rgba(255,255,255,.6);padding:20px;border-top:1px solid rgba(255,255,255,.07)}}
+    </style></head><body>
+    <div class="top-bar">⚠️ No Fake Service 💯</div>
+    <div class="hero"><div class="hero-inner">
+      <h1>Relaxation and Balance 🌿✨</h1>
+      <p>I invite you to enjoy a soothing body massage in a comfortable, private setting.</p>
+      <a href="#contact-anchor" class="cta-btn" style="max-width:280px;margin:20px auto 0" onclick="document.getElementById('contact-anchor').scrollIntoView({{behavior:'smooth'}});return false">Contact me ↓</a>
+    </div></div>
+    <div class="wrap">
+      <div class="section-title">Included in the session:</div>
+      <div class="utp-list">
+        <div class="utp-item">💆‍♂️ Full body massage</div>
+        <div class="utp-item">🤍 Full body contact massage</div>
+        <div class="utp-item">🔥 Relaxation completion</div>
+      </div>
+      <div class="desc-box">✨ I'll greet you in elegant attire and provide a relaxing massage in comfortable, minimal clothing. Touching me is not allowed.</div>
+      <a href="#contact-anchor" class="cta-btn" onclick="document.getElementById('contact-anchor').scrollIntoView({{behavior:'smooth'}});return false">Contact me ↓</a>
+      <div class="section-title">💰 Rates:</div>
+      <div class="rates">
+        <div class="rate-item"><span>60 min</span><span class="rate-price">$230</span></div>
+        <div class="rate-item"><span>30 min</span><span class="rate-price">$200</span></div>
+        <div class="rate-item"><span>15 min</span><span class="rate-price">$140</span></div>
+      </div>
+      <a href="#contact-anchor" class="cta-btn" onclick="document.getElementById('contact-anchor').scrollIntoView({{behavior:'smooth'}});return false">Contact me ↓</a>
+      <div class="info-box">
+        <div class="info-item">📌 Extra services can only be discussed in person during the session.</div>
+        <div class="info-item">💵 Payment is accepted in cash only. Please prepare the exact amount.</div>
+        <div class="info-item">⚠️ Same-day appointments only. Advance bookings are not available.</div>
+      </div>
+      <div class="msg-book">💌 Message me to book your session!</div>
+      <div class="contact-section" id="contact-anchor">
+        <div class="contact-title">Contact me:</div>
+        <div class="contact-sub">Choose your preferred way to reach out</div>
+        {btn_html}
+      </div>
+    </div></body></html>"""
+
+
+def _render_staff_landing(landing, contacts) -> str:
+    btn_html = ""
+    for c in contacts:
+        if c["type"] == "telegram":
+            btn_html += f'<a id="btn-telegram" class="btn tg call-button" href="{c["url"]}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg><span>{c["label"]}</span></a>'
+        elif c["type"] == "whatsapp":
+            btn_html += f'<a id="btn-whatsapp" class="btn wa call-button" href="{c["url"]}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5ZM6.5 18.4l.1-.3-.1.3Zm10.4-3.8c-.2.6-1.1 1.1-1.6 1.2-.4.1-.9.1-1.5-.1-.3-.1-.7-.2-1.2-.5-2.2-1.2-3.6-3-4-3.4-.2-.2-.9-1.1-.9-2 0-.9.5-1.3.6-1.5.1-.2.3-.3.5-.3h.4c.1 0 .3 0 .4.3.2.6.6 1.6.7 1.7.1.2.1.3 0 .5-.2.3-.4.5-.5.6-.1.1-.3.3-.1.6.2.3.9 1.5 2.1 2.4 1.5 1.1 2.4 1.3 2.7 1.4.3.1.5.1.6-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.6-.1.2.1 1.5.7 1.7.8.2.1.3.1.3.2 0 .1 0 .6-.2 1.2Z"/></svg><span>{c["label"]}</span></a>'
+        else:
+            btn_html += f'<a class="btn" href="{c["url"]}" target="_blank" style="background:rgba(255,255,255,.15)">{c["label"]}</a>'
+
+    if not btn_html:
+        btn_html = '<p style="text-align:center;color:#a9b4bf">Контакты не настроены</p>'
+
+    return f"""<!DOCTYPE html><html lang="ru"><head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>GREN SPA — Работа для массажисток в США</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+    :root{{--bg:#0b0d0f;--card:#12161a;--text:#e7edf3;--muted:#a9b4bf;--accent:#32d27f;--tg:#26A5E4;--wa:#25D366;--shadow:0 10px 30px rgba(0,0,0,.35)}}
+    *{{box-sizing:border-box}}html,body{{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Montserrat',system-ui,sans-serif}}
+    a{{color:inherit;text-decoration:none}}
+    .container{{width:min(1080px,92vw);margin:0 auto}}
+    .btn{{display:inline-flex;align-items:center;gap:.6rem;padding:1rem 1.4rem;border-radius:14px;font-weight:700;letter-spacing:.2px;box-shadow:var(--shadow);transition:transform .15s ease,opacity .15s;width:100%;justify-content:center}}
+    .btn:hover{{transform:translateY(-1px);opacity:.92}}
+    .btn svg{{width:1.2rem;height:1.2rem;flex-shrink:0}}
+    .hero{{position:relative;min-height:74vh;display:grid;place-items:center;text-align:center;overflow:hidden}}
+    .hero::before{{content:"";position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop') center/cover no-repeat;filter:brightness(.55)}}
+    .hero::after{{content:"";position:absolute;inset:0;background:radial-gradient(1200px 600px at 50% 20%,rgba(50,210,127,.22),transparent 55%),linear-gradient(to top,rgba(11,13,15,.85),rgba(11,13,15,.25))}}
+    .hero .inner{{position:relative;z-index:1;padding:4rem 1rem}}
+    .hero h1{{font-size:clamp(2rem,3vw + 1.2rem,3.2rem);margin:0 0 .7rem;line-height:1.1}}
+    .hero p{{margin:0 auto 1.6rem;max-width:740px;color:var(--muted);font-weight:500}}
+    .chip{{display:inline-block;padding:.5rem .8rem;border-radius:999px;background:rgba(255,255,255,.08);color:#fff;font-weight:600;font-size:.9rem;margin-bottom:1rem}}
+    section#about{{padding:56px 0}}
+    .card{{background:var(--card);border-radius:18px;padding:clamp(18px,3vw,28px);box-shadow:var(--shadow)}}
+    .about-grid{{display:grid;grid-template-columns:1.1fr .9fr;gap:22px}}
+    .about h2{{margin:0 0 .6rem;font-size:clamp(1.2rem,1.6vw + .8rem,1.8rem)}}
+    .about p.lead{{color:var(--muted);margin:.2rem 0 1rem}}
+    .about ul{{margin:0;padding-left:1.1rem;line-height:1.7}}
+    .about li{{margin:.25rem 0}}
+    .note{{margin-top:1rem;background:rgba(38,165,228,.08);border:1px solid rgba(38,165,228,.25);padding:.9rem 1rem;border-radius:14px;color:#d8f1ff}}
+    section#contact{{padding:56px 0 84px}}
+    .cta-card{{display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;max-width:480px;margin:0 auto;width:100%}}
+    .tg{{background:var(--tg);color:#fff}}
+    .wa{{background:var(--wa);color:#fff}}
+    .sub{{color:var(--muted);font-size:.95rem}}
+    footer{{text-align:center;padding:26px 0 40px;color:#8492a2;font-size:.9rem}}
+    @media(max-width:860px){{.about-grid{{grid-template-columns:1fr}}}}
+    </style></head><body>
+    <header class="hero"><div class="inner container">
+      <span class="chip">Сеть СПА-салонов №1 в США</span>
+      <h1>GREN SPA приглашает массажисток</h1>
+      <p>Ищешь высокооплачиваемую работу в США с обучением, жильём и гибким графиком? Присоединяйся к команде GREN SPA и начни зарабатывать с первого дня.</p>
+    </div></header>
+    <section id="about"><div class="container"><div class="card about">
+      <div class="about-grid"><div>
+        <h2>Описание вакансии</h2>
+        <p class="lead">Вас приветствует сеть СПА-салонов №1 в США — <strong>GREN SPA</strong>! 🌿</p>
+        <h3 style="margin:1rem 0 .6rem;font-size:1.05rem">Преимущества работы с нами:</h3>
+        <ul>
+          <li>Высокий доход с первого дня (от 400$ в день).</li>
+          <li>Обучение и постоянная поддержка со стороны компании.</li>
+          <li>Жильё предоставляет компания (при необходимости).</li>
+          <li>Простая система оформления: не требуем документов и знания английского.</li>
+          <li>Гибкий график — дни смен строишь сама.</li>
+          <li>Множество локаций в больших городах США.</li>
+        </ul>
+        <p class="note">Не веришь? Мы предоставляем пробную смену, которая оплачивается на общих основаниях 💵</p>
+        <p style="margin-top:1rem">Для связи напиши в удобный мессенджер 📲</p>
+      </div>
+      <div><div class="card" style="background:linear-gradient(135deg,rgba(38,165,228,.18),rgba(50,210,127,.18));height:100%;display:flex;align-items:center;justify-content:center;text-align:center">
+        <div><h3 style="margin:0 0 .8rem">Выбери мессенджер</h3><p class="sub">Наш HR оперативно ответит.</p></div>
+      </div></div></div></div></div></section>
+    <section id="contact"><div class="container"><div class="cta-card">
+      <h2 style="margin:.2rem 0 .3rem">Связаться с HR-менеджером</h2>
+      <p class="sub">Выберите удобный канал связи.</p>
+      <div style="display:flex;flex-direction:column;gap:.8rem;width:100%;max-width:400px">
+        {btn_html}
+      </div>
+    </div></div></section>
+    <footer>© {__import__('datetime').datetime.now().year} GREN SPA. Все права защищены.</footer>
+    </body></html>"""
 
 
 # ── API ───────────────────────────────────────────────────────────────────────
@@ -1204,7 +1518,6 @@ async def api_stats(request: Request):
     user = check_session(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
     return JSONResponse(db.get_stats())
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # WHATSAPP

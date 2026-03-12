@@ -3,6 +3,8 @@ uvicorn[standard]==0.24.0
 aiogram==3.7.0
 httpx==0.25.2
 python-multipart==0.0.9
+psycopg2-binary==2.9.9
 annotated-types==0.6.0
 pydantic==2.5.3
 pydantic-core==2.14.6
+cloudinary==1.38.0

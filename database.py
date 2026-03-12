@@ -1,9 +1,13 @@
-import sqlite3
 import os
+import logging
+import hashlib
 import secrets
 from datetime import datetime
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
-DB_PATH = os.getenv("DB_PATH", "tracker.db")
+log = logging.getLogger(__name__)
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 
 class Database:
@@ -11,605 +15,581 @@ class Database:
         self._init_db()
 
     def _conn(self):
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        return conn
+        return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
     def _init_db(self):
         with self._conn() as conn:
-            conn.executescript("""
-                CREATE TABLE IF NOT EXISTS settings (
-                    key   TEXT PRIMARY KEY,
-                    value TEXT NOT NULL
-                );
-
-                -- РОЛИ
+            with conn.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS users (
-                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username     TEXT NOT NULL UNIQUE,
-                    password     TEXT NOT NULL,
-                    role         TEXT NOT NULL DEFAULT 'manager',
-                    created_at   TEXT NOT NULL
-                );
-
-                -- КАНАЛЫ / КАМПАНИИ / ПОДПИСКИ
+                    id SERIAL PRIMARY KEY, username TEXT NOT NULL UNIQUE,
+                    password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'manager', created_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS channels (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name        TEXT NOT NULL,
-                    channel_id  TEXT NOT NULL UNIQUE,
-                    created_at  TEXT NOT NULL
-                );
+                    id SERIAL PRIMARY KEY, name TEXT NOT NULL,
+                    channel_id TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS campaigns (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name        TEXT NOT NULL,
-                    channel_id  TEXT NOT NULL,
-                    invite_link TEXT NOT NULL UNIQUE,
-                    created_at  TEXT NOT NULL
-                );
+                    id SERIAL PRIMARY KEY, name TEXT NOT NULL, channel_id TEXT NOT NULL,
+                    invite_link TEXT NOT NULL UNIQUE, landing_id INTEGER DEFAULT NULL, created_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS joins (
-                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id       INTEGER NOT NULL,
-                    channel_id    TEXT,
-                    invite_link   TEXT,
-                    campaign_name TEXT NOT NULL DEFAULT 'organic',
-                    click_id      TEXT,
-                    joined_at     TEXT NOT NULL
-                );
-
-                -- ТРЕКИНГ КЛИКОВ
+                    id SERIAL PRIMARY KEY, user_id BIGINT NOT NULL, channel_id TEXT,
+                    invite_link TEXT, campaign_name TEXT NOT NULL DEFAULT 'organic',
+                    click_id TEXT, joined_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS click_tracking (
-                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                    click_id     TEXT NOT NULL UNIQUE,
-                    fbclid       TEXT,
-                    fbp          TEXT,
-                    utm_source   TEXT,
-                    utm_medium   TEXT,
-                    utm_campaign TEXT,
-                    utm_content  TEXT,
-                    utm_term     TEXT,
-                    referrer     TEXT,
-                    target_type  TEXT DEFAULT 'channel',
-                    target_id    TEXT,
-                    user_agent   TEXT,
-                    ip_address   TEXT,
-                    created_at   TEXT NOT NULL
-                );
-
-                -- UTM ПРИВЯЗКА К ДИАЛОГУ
+                    id SERIAL PRIMARY KEY, click_id TEXT NOT NULL UNIQUE,
+                    fbclid TEXT, fbp TEXT, utm_source TEXT, utm_medium TEXT,
+                    utm_campaign TEXT, utm_content TEXT, utm_term TEXT,
+                    referrer TEXT, target_type TEXT DEFAULT 'channel',
+                    target_id TEXT, user_agent TEXT, ip_address TEXT, created_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS utm_tracking (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    conversation_id INTEGER,
-                    join_id         INTEGER,
-                    click_id        TEXT,
-                    fbclid          TEXT,
-                    fbp             TEXT,
-                    utm_source      TEXT,
-                    utm_medium      TEXT,
-                    utm_campaign    TEXT,
-                    utm_content     TEXT,
-                    utm_term        TEXT,
-                    referrer        TEXT,
-                    created_at      TEXT NOT NULL
-                );
-
-                -- ЧАТЫ СОТРУДНИКОВ
+                    id SERIAL PRIMARY KEY, conversation_id INTEGER, join_id INTEGER,
+                    click_id TEXT, fbclid TEXT, fbp TEXT, utm_source TEXT, utm_medium TEXT,
+                    utm_campaign TEXT, utm_content TEXT, utm_term TEXT, referrer TEXT, created_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS conversations (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    tg_chat_id      TEXT NOT NULL UNIQUE,
-                    visitor_name    TEXT NOT NULL DEFAULT 'Неизвестный',
-                    username        TEXT,
-                    status          TEXT DEFAULT 'open',
-                    unread_count    INTEGER DEFAULT 0,
-                    last_message    TEXT,
-                    last_message_at TEXT,
-                    fb_event_sent   TEXT,
-                    created_at      TEXT NOT NULL
-                );
+                    id SERIAL PRIMARY KEY, tg_chat_id TEXT NOT NULL UNIQUE,
+                    visitor_name TEXT NOT NULL DEFAULT 'Неизвестный', username TEXT,
+                    status TEXT DEFAULT 'open', unread_count INTEGER DEFAULT 0,
+                    last_message TEXT, last_message_at TEXT, fb_event_sent TEXT,
+                    utm_source TEXT, utm_campaign TEXT, fbclid TEXT, created_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS messages (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    conversation_id INTEGER NOT NULL,
-                    tg_chat_id      TEXT NOT NULL,
-                    sender_type     TEXT NOT NULL,
-                    content         TEXT,
-                    tg_message_id   INTEGER,
-                    read_by_manager INTEGER DEFAULT 0,
-                    created_at      TEXT NOT NULL,
-                    FOREIGN KEY (conversation_id) REFERENCES conversations(id)
-                );
-
-                -- СОТРУДНИКИ
+                    id SERIAL PRIMARY KEY, conversation_id INTEGER NOT NULL,
+                    tg_chat_id TEXT NOT NULL, sender_type TEXT NOT NULL,
+                    content TEXT, media_url TEXT, media_type TEXT,
+                    tg_message_id INTEGER, read_by_manager INTEGER DEFAULT 0, created_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS staff (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    conversation_id INTEGER,
-                    tg_chat_id      TEXT UNIQUE,
-                    name            TEXT,
-                    username        TEXT,
-                    phone           TEXT,
-                    email           TEXT,
-                    position        TEXT,
-                    status          TEXT DEFAULT 'new',
-                    notes           TEXT,
-                    tags            TEXT DEFAULT '',
-                    fb_event_sent   TEXT,
-                    created_at      TEXT NOT NULL
-                );
-
-                -- ЛЕНДИНГ
-                CREATE TABLE IF NOT EXISTS landing_links (
-                    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title    TEXT NOT NULL,
-                    tg_link  TEXT NOT NULL,
-                    emoji    TEXT DEFAULT '📢',
-                    position INTEGER DEFAULT 0
-                );
-
-                -- MESSAGE FLOW
-                CREATE TABLE IF NOT EXISTS message_flows (
-                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                    channel_id TEXT NOT NULL,
-                    bot_type   TEXT NOT NULL DEFAULT 'tracker',
-                    step       INTEGER NOT NULL DEFAULT 0,
-                    delay_min  INTEGER NOT NULL DEFAULT 0,
-                    message    TEXT NOT NULL,
-                    active     INTEGER NOT NULL DEFAULT 1
-                );
-                CREATE TABLE IF NOT EXISTS flow_log (
-                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id    INTEGER NOT NULL,
-                    channel_id TEXT NOT NULL,
-                    step       INTEGER NOT NULL,
-                    sent_at    TEXT NOT NULL
-                );
-
+                    id SERIAL PRIMARY KEY, conversation_id INTEGER, tg_chat_id TEXT UNIQUE,
+                    name TEXT, username TEXT, phone TEXT, email TEXT, position TEXT,
+                    status TEXT DEFAULT 'new', notes TEXT, tags TEXT DEFAULT '',
+                    fb_event_sent TEXT, created_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS landings (
+                    id SERIAL PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'client',
+                    slug TEXT NOT NULL UNIQUE, content TEXT NOT NULL DEFAULT '{}',
+                    active INTEGER DEFAULT 1, created_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS landing_contacts (
+                    id SERIAL PRIMARY KEY, landing_id INTEGER NOT NULL,
+                    type TEXT NOT NULL, label TEXT NOT NULL, url TEXT NOT NULL, position INTEGER DEFAULT 0);
                 CREATE TABLE IF NOT EXISTS wa_conversations (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    wa_chat_id      TEXT NOT NULL UNIQUE,
-                    wa_number       TEXT NOT NULL,
-                    visitor_name    TEXT NOT NULL DEFAULT 'Неизвестный',
-                    status          TEXT DEFAULT 'open',
-                    unread_count    INTEGER DEFAULT 0,
-                    last_message    TEXT,
-                    last_message_at TEXT,
-                    fb_event_sent   TEXT,
-                    created_at      TEXT NOT NULL
-                );
+                    id SERIAL PRIMARY KEY, wa_chat_id TEXT NOT NULL UNIQUE,
+                    wa_number TEXT NOT NULL, visitor_name TEXT NOT NULL DEFAULT 'Неизвестный',
+                    status TEXT DEFAULT 'open', unread_count INTEGER DEFAULT 0,
+                    last_message TEXT, last_message_at TEXT, fb_event_sent TEXT,
+                    utm_source TEXT, utm_campaign TEXT, fbclid TEXT, created_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS wa_messages (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    conversation_id INTEGER NOT NULL,
-                    wa_chat_id      TEXT NOT NULL,
-                    sender_type     TEXT NOT NULL,
-                    content         TEXT,
-                    read_by_manager INTEGER DEFAULT 0,
-                    created_at      TEXT NOT NULL,
-                    FOREIGN KEY (conversation_id) REFERENCES wa_conversations(id)
-                );
-            """)
-            # Создаём дефолтного admin если нет пользователей
-            count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-            if count == 0:
-                import hashlib
-                pwd = hashlib.sha256("admin123".encode()).hexdigest()
-                conn.execute("INSERT INTO users (username,password,role,created_at) VALUES (?,?,?,?)",
-                             ("admin", pwd, "admin", datetime.utcnow().isoformat()))
+                    id SERIAL PRIMARY KEY, conversation_id INTEGER NOT NULL,
+                    wa_chat_id TEXT NOT NULL, sender_type TEXT NOT NULL,
+                    content TEXT, media_url TEXT, media_type TEXT,
+                    read_by_manager INTEGER DEFAULT 0, created_at TEXT NOT NULL);
+                """)
+            conn.commit()
+        # Default admin
+        try:
+            with self._conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) as c FROM users")
+                    if cur.fetchone()["c"] == 0:
+                        pwd = hashlib.sha256("admin123".encode()).hexdigest()
+                        cur.execute("INSERT INTO users (username,password,role,created_at) VALUES (%s,%s,%s,%s)",
+                                    ("admin", pwd, "admin", datetime.utcnow().isoformat()))
+                conn.commit()
+        except Exception as e:
+            log.error(f"Admin init error: {e}")
 
     # ── Settings ──────────────────────────────────────────────────────────────
-
-    def get_setting(self, key: str, default: str = "") -> str:
+    def get_setting(self, key, default=""):
         with self._conn() as conn:
-            row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
-            return row["value"] if row else default
+            with conn.cursor() as cur:
+                cur.execute("SELECT value FROM settings WHERE key=%s", (key,))
+                r = cur.fetchone(); return r["value"] if r else default
 
-    def set_setting(self, key: str, value: str):
+    def set_setting(self, key, value):
         with self._conn() as conn:
-            conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)", (key, value))
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO settings (key,value) VALUES (%s,%s) ON CONFLICT (key) DO UPDATE SET value=%s", (key,value,value))
+            conn.commit()
 
-    # ── Users / Roles ─────────────────────────────────────────────────────────
-
-    def get_user(self, username: str) -> dict | None:
-        with self._conn() as conn:
-            row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
-            return dict(row) if row else None
-
+    # ── Users ─────────────────────────────────────────────────────────────────
     def get_users(self):
         with self._conn() as conn:
-            return [dict(r) for r in conn.execute("SELECT id,username,role,created_at FROM users ORDER BY created_at").fetchall()]
+            with conn.cursor() as cur:
+                cur.execute("SELECT id,username,role,created_at FROM users ORDER BY created_at")
+                return [dict(r) for r in cur.fetchall()]
 
-    def create_user(self, username: str, password: str, role: str = "manager"):
-        import hashlib
+    def create_user(self, username, password, role="manager"):
         pwd = hashlib.sha256(password.encode()).hexdigest()
         with self._conn() as conn:
-            conn.execute("INSERT INTO users (username,password,role,created_at) VALUES (?,?,?,?)",
-                         (username, pwd, role, datetime.utcnow().isoformat()))
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO users (username,password,role,created_at) VALUES (%s,%s,%s,%s)",
+                            (username, pwd, role, datetime.utcnow().isoformat()))
+            conn.commit()
 
-    def delete_user(self, user_id: int):
+    def delete_user(self, user_id):
         with self._conn() as conn:
-            conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM users WHERE id=%s", (user_id,))
+            conn.commit()
 
-    def verify_user(self, username: str, password: str) -> dict | None:
-        import hashlib
+    def verify_user(self, username, password):
         pwd = hashlib.sha256(password.encode()).hexdigest()
         with self._conn() as conn:
-            row = conn.execute("SELECT * FROM users WHERE username=? AND password=?", (username, pwd)).fetchone()
-            return dict(row) if row else None
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM users WHERE username=%s AND password=%s", (username, pwd))
+                r = cur.fetchone(); return dict(r) if r else None
 
     # ── Channels ──────────────────────────────────────────────────────────────
-
-    def add_channel(self, name: str, channel_id: str):
+    def add_channel(self, name, channel_id):
         with self._conn() as conn:
-            conn.execute("INSERT OR IGNORE INTO channels (name,channel_id,created_at) VALUES (?,?,?)",
-                         (name, channel_id, datetime.utcnow().isoformat()))
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO channels (name,channel_id,created_at) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
+                            (name, channel_id, datetime.utcnow().isoformat()))
+            conn.commit()
 
     def get_channels(self):
         with self._conn() as conn:
-            rows = conn.execute("""
-                SELECT c.*, COUNT(j.id) as total_joins
-                FROM channels c LEFT JOIN joins j ON j.channel_id=c.channel_id
-                GROUP BY c.id ORDER BY c.created_at DESC""").fetchall()
-            return [dict(r) for r in rows]
+            with conn.cursor() as cur:
+                cur.execute("""SELECT c.*, COUNT(j.id) as total_joins FROM channels c
+                    LEFT JOIN joins j ON j.channel_id=c.channel_id
+                    GROUP BY c.id ORDER BY c.created_at DESC""")
+                return [dict(r) for r in cur.fetchall()]
 
-    def delete_channel(self, channel_id: str):
+    def delete_channel(self, channel_id):
         with self._conn() as conn:
-            conn.execute("DELETE FROM channels WHERE channel_id=?", (channel_id,))
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM channels WHERE channel_id=%s", (channel_id,))
+            conn.commit()
 
     def get_channel_ids(self):
         with self._conn() as conn:
-            return [r["channel_id"] for r in conn.execute("SELECT channel_id FROM channels").fetchall()]
+            with conn.cursor() as cur:
+                cur.execute("SELECT channel_id FROM channels")
+                return [r["channel_id"] for r in cur.fetchall()]
 
     # ── Campaigns ─────────────────────────────────────────────────────────────
-
-    def save_campaign(self, name: str, channel_id: str, invite_link: str):
+    def save_campaign(self, name, channel_id, invite_link, landing_id=None):
         with self._conn() as conn:
-            conn.execute("INSERT OR IGNORE INTO campaigns (name,channel_id,invite_link,created_at) VALUES (?,?,?,?)",
-                         (name, channel_id, invite_link, datetime.utcnow().isoformat()))
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO campaigns (name,channel_id,invite_link,landing_id,created_at) VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING",
+                            (name, channel_id, invite_link, landing_id, datetime.utcnow().isoformat()))
+            conn.commit()
 
-    def get_campaign_by_link(self, invite_link: str | None):
+    def get_campaign_by_link(self, invite_link):
         if not invite_link: return None
         with self._conn() as conn:
-            row = conn.execute("SELECT * FROM campaigns WHERE invite_link=?", (invite_link,)).fetchone()
-            return dict(row) if row else None
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM campaigns WHERE invite_link=%s", (invite_link,))
+                r = cur.fetchone(); return dict(r) if r else None
 
-    def get_campaigns(self, channel_id: str | None = None):
+    def get_campaigns(self, channel_id=None):
         with self._conn() as conn:
-            if channel_id:
-                rows = conn.execute("""
-                    SELECT c.*, COUNT(j.id) AS joins FROM campaigns c
-                    LEFT JOIN joins j ON j.campaign_name=c.name AND j.channel_id=c.channel_id
-                    WHERE c.channel_id=? GROUP BY c.id ORDER BY c.created_at DESC""", (channel_id,)).fetchall()
-            else:
-                rows = conn.execute("""
-                    SELECT c.*, COUNT(j.id) AS joins FROM campaigns c
-                    LEFT JOIN joins j ON j.campaign_name=c.name AND j.channel_id=c.channel_id
-                    GROUP BY c.id ORDER BY c.created_at DESC""").fetchall()
-            return [dict(r) for r in rows]
+            with conn.cursor() as cur:
+                if channel_id:
+                    cur.execute("""SELECT c.*, COUNT(j.id) AS joins FROM campaigns c
+                        LEFT JOIN joins j ON j.campaign_name=c.name AND j.channel_id=c.channel_id
+                        WHERE c.channel_id=%s GROUP BY c.id ORDER BY c.created_at DESC""", (channel_id,))
+                else:
+                    cur.execute("""SELECT c.*, COUNT(j.id) AS joins FROM campaigns c
+                        LEFT JOIN joins j ON j.campaign_name=c.name AND j.channel_id=c.channel_id
+                        GROUP BY c.id ORDER BY c.created_at DESC""")
+                return [dict(r) for r in cur.fetchall()]
 
     # ── Joins ─────────────────────────────────────────────────────────────────
-
-    def log_join(self, user_id: int, channel_id: str, invite_link: str | None,
-                 campaign_name: str, click_id: str | None = None) -> int:
+    def log_join(self, user_id, channel_id, invite_link, campaign_name, click_id=None):
         with self._conn() as conn:
-            cur = conn.execute(
-                "INSERT INTO joins (user_id,channel_id,invite_link,campaign_name,click_id,joined_at) VALUES (?,?,?,?,?,?)",
-                (user_id, channel_id, invite_link, campaign_name, click_id, datetime.utcnow().isoformat()))
-            return cur.lastrowid
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO joins (user_id,channel_id,invite_link,campaign_name,click_id,joined_at) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+                            (user_id,channel_id,invite_link,campaign_name,click_id,datetime.utcnow().isoformat()))
+                r = cur.fetchone()
+            conn.commit(); return r["id"]
 
-    def get_recent_joins(self, limit: int = 50):
+    def get_recent_joins(self, limit=50):
         with self._conn() as conn:
-            return [dict(r) for r in conn.execute(
-                "SELECT j.*, c.name as channel_name FROM joins j LEFT JOIN channels c ON c.channel_id=j.channel_id ORDER BY j.joined_at DESC LIMIT ?", (limit,)).fetchall()]
+            with conn.cursor() as cur:
+                cur.execute("""SELECT j.*, c.name as channel_name FROM joins j
+                    LEFT JOIN channels c ON c.channel_id=j.channel_id
+                    ORDER BY j.joined_at DESC LIMIT %s""", (limit,))
+                return [dict(r) for r in cur.fetchall()]
 
-    # ── Click Tracking ────────────────────────────────────────────────────────
-
-    def save_click(self, fbclid: str = None, fbp: str = None, utm_source: str = None,
-                   utm_medium: str = None, utm_campaign: str = None, utm_content: str = None,
-                   utm_term: str = None, referrer: str = None, target_type: str = "channel",
-                   target_id: str = None, user_agent: str = None, ip_address: str = None) -> str:
+    # ── Click Tracking ─────────────────────────────────────────────────────────
+    def save_click(self, fbclid=None, fbp=None, utm_source=None, utm_medium=None,
+                   utm_campaign=None, utm_content=None, utm_term=None,
+                   referrer=None, target_type="channel", target_id=None,
+                   user_agent=None, ip_address=None):
         click_id = secrets.token_urlsafe(12)
         with self._conn() as conn:
-            conn.execute("""INSERT INTO click_tracking
-                (click_id,fbclid,fbp,utm_source,utm_medium,utm_campaign,utm_content,utm_term,
-                 referrer,target_type,target_id,user_agent,ip_address,created_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (click_id, fbclid, fbp, utm_source, utm_medium, utm_campaign, utm_content,
-                 utm_term, referrer, target_type, target_id, user_agent, ip_address,
-                 datetime.utcnow().isoformat()))
+            with conn.cursor() as cur:
+                cur.execute("""INSERT INTO click_tracking
+                    (click_id,fbclid,fbp,utm_source,utm_medium,utm_campaign,utm_content,utm_term,
+                     referrer,target_type,target_id,user_agent,ip_address,created_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (click_id,fbclid,fbp,utm_source,utm_medium,utm_campaign,utm_content,
+                     utm_term,referrer,target_type,target_id,user_agent,ip_address,
+                     datetime.utcnow().isoformat()))
+            conn.commit()
         return click_id
 
-    def get_click(self, click_id: str) -> dict | None:
+    def get_click(self, click_id):
+        if not click_id: return None
         with self._conn() as conn:
-            row = conn.execute("SELECT * FROM click_tracking WHERE click_id=?", (click_id,)).fetchone()
-            return dict(row) if row else None
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM click_tracking WHERE click_id=%s", (click_id,))
+                r = cur.fetchone(); return dict(r) if r else None
 
-    def save_utm(self, click_data: dict, conversation_id: int = None, join_id: int = None):
+    def save_utm(self, click_data, conversation_id=None, join_id=None):
         with self._conn() as conn:
-            conn.execute("""INSERT INTO utm_tracking
-                (conversation_id,join_id,click_id,fbclid,fbp,utm_source,utm_medium,
-                 utm_campaign,utm_content,utm_term,referrer,created_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (conversation_id, join_id, click_data.get("click_id"), click_data.get("fbclid"),
-                 click_data.get("fbp"), click_data.get("utm_source"), click_data.get("utm_medium"),
-                 click_data.get("utm_campaign"), click_data.get("utm_content"),
-                 click_data.get("utm_term"), click_data.get("referrer"),
-                 datetime.utcnow().isoformat()))
+            with conn.cursor() as cur:
+                cur.execute("""INSERT INTO utm_tracking
+                    (conversation_id,join_id,click_id,fbclid,fbp,utm_source,utm_medium,
+                     utm_campaign,utm_content,utm_term,referrer,created_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (conversation_id,join_id,click_data.get("click_id"),click_data.get("fbclid"),
+                     click_data.get("fbp"),click_data.get("utm_source"),click_data.get("utm_medium"),
+                     click_data.get("utm_campaign"),click_data.get("utm_content"),
+                     click_data.get("utm_term"),click_data.get("referrer"),
+                     datetime.utcnow().isoformat()))
+            conn.commit()
 
-    def get_utm_by_conv(self, conversation_id: int) -> dict | None:
+    def get_utm_by_conv(self, conversation_id):
         with self._conn() as conn:
-            row = conn.execute("SELECT * FROM utm_tracking WHERE conversation_id=? ORDER BY id DESC LIMIT 1",
-                               (conversation_id,)).fetchone()
-            return dict(row) if row else None
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM utm_tracking WHERE conversation_id=%s ORDER BY id DESC LIMIT 1", (conversation_id,))
+                r = cur.fetchone(); return dict(r) if r else None
 
-    def get_click_stats(self, days: int = 30):
+    # ── Conversations (TG) ────────────────────────────────────────────────────
+    def get_or_create_conversation(self, tg_chat_id, visitor_name, username,
+                                   utm_source=None, utm_campaign=None, fbclid=None):
         with self._conn() as conn:
-            rows = conn.execute("""
-                SELECT DATE(created_at) as day, COUNT(*) as clicks,
-                       SUM(CASE WHEN fbclid IS NOT NULL THEN 1 ELSE 0 END) as with_fbclid
-                FROM click_tracking WHERE created_at >= DATE('now', ?)
-                GROUP BY day ORDER BY day""", (f"-{days} days",)).fetchall()
-            return [dict(r) for r in rows]
-
-    # ── Conversations ─────────────────────────────────────────────────────────
-
-    def get_or_create_conversation(self, tg_chat_id: str, visitor_name: str, username: str | None) -> dict:
-        with self._conn() as conn:
-            row = conn.execute("SELECT * FROM conversations WHERE tg_chat_id=?", (tg_chat_id,)).fetchone()
-            if row: return dict(row)
-            conn.execute("INSERT INTO conversations (tg_chat_id,visitor_name,username,created_at) VALUES (?,?,?,?)",
-                         (tg_chat_id, visitor_name, username, datetime.utcnow().isoformat()))
-            return dict(conn.execute("SELECT * FROM conversations WHERE tg_chat_id=?", (tg_chat_id,)).fetchone())
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM conversations WHERE tg_chat_id=%s", (tg_chat_id,))
+                r = cur.fetchone()
+                if r: return dict(r)
+                cur.execute("""INSERT INTO conversations
+                    (tg_chat_id,visitor_name,username,utm_source,utm_campaign,fbclid,created_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+                    (tg_chat_id,visitor_name,username,utm_source,utm_campaign,fbclid,
+                     datetime.utcnow().isoformat()))
+                r = cur.fetchone()
+            conn.commit(); return dict(r)
 
     def get_conversations(self):
         with self._conn() as conn:
-            return [dict(r) for r in conn.execute(
-                "SELECT * FROM conversations ORDER BY COALESCE(last_message_at,created_at) DESC").fetchall()]
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM conversations ORDER BY COALESCE(last_message_at,created_at) DESC")
+                return [dict(r) for r in cur.fetchall()]
 
-    def get_conversation(self, conv_id: int):
+    def get_conversation(self, conv_id):
         with self._conn() as conn:
-            row = conn.execute("SELECT * FROM conversations WHERE id=?", (conv_id,)).fetchone()
-            return dict(row) if row else None
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM conversations WHERE id=%s", (conv_id,))
+                r = cur.fetchone(); return dict(r) if r else None
 
-    def update_conversation_last_message(self, tg_chat_id: str, text: str, increment_unread: bool = True):
+    def update_conversation_last_message(self, tg_chat_id, text, increment_unread=True):
         with self._conn() as conn:
-            if increment_unread:
-                conn.execute("UPDATE conversations SET last_message=?,last_message_at=?,unread_count=unread_count+1 WHERE tg_chat_id=?",
-                             (text[:100], datetime.utcnow().isoformat(), tg_chat_id))
-            else:
-                conn.execute("UPDATE conversations SET last_message=?,last_message_at=? WHERE tg_chat_id=?",
-                             (text[:100], datetime.utcnow().isoformat(), tg_chat_id))
+            with conn.cursor() as cur:
+                if increment_unread:
+                    cur.execute("UPDATE conversations SET last_message=%s,last_message_at=%s,unread_count=unread_count+1 WHERE tg_chat_id=%s",
+                                (text[:100],datetime.utcnow().isoformat(),tg_chat_id))
+                else:
+                    cur.execute("UPDATE conversations SET last_message=%s,last_message_at=%s WHERE tg_chat_id=%s",
+                                (text[:100],datetime.utcnow().isoformat(),tg_chat_id))
+            conn.commit()
 
-    def mark_conversation_read(self, conv_id: int):
+    def mark_conversation_read(self, conv_id):
         with self._conn() as conn:
-            conn.execute("UPDATE conversations SET unread_count=0 WHERE id=?", (conv_id,))
-            conn.execute("UPDATE messages SET read_by_manager=1 WHERE conversation_id=? AND sender_type='visitor'", (conv_id,))
+            with conn.cursor() as cur:
+                cur.execute("UPDATE conversations SET unread_count=0 WHERE id=%s", (conv_id,))
+                cur.execute("UPDATE messages SET read_by_manager=1 WHERE conversation_id=%s AND sender_type='visitor'", (conv_id,))
+            conn.commit()
 
-    def close_conversation(self, conv_id: int):
+    def close_conversation(self, conv_id):
         with self._conn() as conn:
-            conn.execute("UPDATE conversations SET status='closed' WHERE id=?", (conv_id,))
+            with conn.cursor() as cur:
+                cur.execute("UPDATE conversations SET status='closed' WHERE id=%s", (conv_id,))
+            conn.commit()
 
-    def reopen_conversation(self, conv_id: int):
+    def reopen_conversation(self, conv_id):
         with self._conn() as conn:
-            conn.execute("UPDATE conversations SET status='open' WHERE id=?", (conv_id,))
+            with conn.cursor() as cur:
+                cur.execute("UPDATE conversations SET status='open' WHERE id=%s", (conv_id,))
+            conn.commit()
 
-    def set_conv_fb_event(self, conv_id: int, event: str):
+    def set_conv_fb_event(self, conv_id, event):
         with self._conn() as conn:
-            conn.execute("UPDATE conversations SET fb_event_sent=? WHERE id=?", (event, conv_id))
+            with conn.cursor() as cur:
+                cur.execute("UPDATE conversations SET fb_event_sent=%s WHERE id=%s", (event, conv_id))
+            conn.commit()
 
-    # ── Messages ──────────────────────────────────────────────────────────────
-
-    def save_message(self, conversation_id: int, tg_chat_id: str, sender_type: str,
-                     content: str, tg_message_id: int | None = None):
+    # ── Messages (TG) ─────────────────────────────────────────────────────────
+    def save_message(self, conversation_id, tg_chat_id, sender_type, content,
+                     tg_message_id=None, media_url=None, media_type=None):
         with self._conn() as conn:
-            conn.execute("INSERT INTO messages (conversation_id,tg_chat_id,sender_type,content,tg_message_id,created_at) VALUES (?,?,?,?,?,?)",
-                         (conversation_id, tg_chat_id, sender_type, content, tg_message_id, datetime.utcnow().isoformat()))
+            with conn.cursor() as cur:
+                cur.execute("""INSERT INTO messages
+                    (conversation_id,tg_chat_id,sender_type,content,tg_message_id,media_url,media_type,created_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (conversation_id,tg_chat_id,sender_type,content,tg_message_id,
+                     media_url,media_type,datetime.utcnow().isoformat()))
+            conn.commit()
 
-    def get_messages(self, conversation_id: int, limit: int = 100):
+    def get_messages(self, conversation_id, limit=100):
         with self._conn() as conn:
-            return [dict(r) for r in conn.execute(
-                "SELECT * FROM messages WHERE conversation_id=? ORDER BY created_at ASC LIMIT ?",
-                (conversation_id, limit)).fetchall()]
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM messages WHERE conversation_id=%s ORDER BY created_at ASC LIMIT %s",
+                            (conversation_id, limit))
+                return [dict(r) for r in cur.fetchall()]
 
-    def get_new_messages(self, conversation_id: int, after_id: int):
+    def get_new_messages(self, conversation_id, after_id):
         with self._conn() as conn:
-            return [dict(r) for r in conn.execute(
-                "SELECT * FROM messages WHERE conversation_id=? AND id>? ORDER BY created_at ASC",
-                (conversation_id, after_id)).fetchall()]
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM messages WHERE conversation_id=%s AND id>%s ORDER BY created_at ASC",
+                            (conversation_id, after_id))
+                return [dict(r) for r in cur.fetchall()]
 
     # ── Staff ─────────────────────────────────────────────────────────────────
-
-    def get_or_create_staff(self, tg_chat_id: str, name: str, username: str | None, conv_id: int):
+    def get_or_create_staff(self, tg_chat_id, name, username, conv_id):
         with self._conn() as conn:
-            row = conn.execute("SELECT * FROM staff WHERE tg_chat_id=?", (tg_chat_id,)).fetchone()
-            if row: return dict(row)
-            conn.execute("INSERT INTO staff (conversation_id,tg_chat_id,name,username,created_at) VALUES (?,?,?,?,?)",
-                         (conv_id, tg_chat_id, name, username, datetime.utcnow().isoformat()))
-            return dict(conn.execute("SELECT * FROM staff WHERE tg_chat_id=?", (tg_chat_id,)).fetchone())
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM staff WHERE tg_chat_id=%s", (tg_chat_id,))
+                r = cur.fetchone()
+                if r: return dict(r)
+                cur.execute("INSERT INTO staff (conversation_id,tg_chat_id,name,username,created_at) VALUES (%s,%s,%s,%s,%s) RETURNING *",
+                            (conv_id,tg_chat_id,name,username,datetime.utcnow().isoformat()))
+                r = cur.fetchone()
+            conn.commit(); return dict(r)
 
-    def get_staff(self, status: str | None = None):
+    def get_staff(self, status=None):
         with self._conn() as conn:
-            if status:
-                rows = conn.execute("SELECT * FROM staff WHERE status=? ORDER BY created_at DESC", (status,)).fetchall()
-            else:
-                rows = conn.execute("SELECT * FROM staff ORDER BY created_at DESC").fetchall()
-            return [dict(r) for r in rows]
+            with conn.cursor() as cur:
+                if status:
+                    cur.execute("SELECT * FROM staff WHERE status=%s ORDER BY created_at DESC", (status,))
+                else:
+                    cur.execute("SELECT * FROM staff ORDER BY created_at DESC")
+                return [dict(r) for r in cur.fetchall()]
 
-    def update_staff(self, staff_id: int, name: str, phone: str, email: str,
-                     position: str, status: str, notes: str, tags: str):
+    def update_staff(self, staff_id, name, phone, email, position, status, notes, tags):
         with self._conn() as conn:
-            conn.execute("UPDATE staff SET name=?,phone=?,email=?,position=?,status=?,notes=?,tags=? WHERE id=?",
-                         (name, phone, email, position, status, notes, tags, staff_id))
+            with conn.cursor() as cur:
+                cur.execute("UPDATE staff SET name=%s,phone=%s,email=%s,position=%s,status=%s,notes=%s,tags=%s WHERE id=%s",
+                            (name,phone,email,position,status,notes,tags,staff_id))
+            conn.commit()
 
-    def update_staff_status(self, staff_id: int, status: str):
+    def get_staff_by_conv(self, conv_id):
         with self._conn() as conn:
-            conn.execute("UPDATE staff SET status=? WHERE id=?", (status, staff_id))
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM staff WHERE conversation_id=%s", (conv_id,))
+                r = cur.fetchone(); return dict(r) if r else None
 
-    def get_staff_by_conv(self, conv_id: int):
+    def set_staff_fb_event(self, staff_id, event):
         with self._conn() as conn:
-            row = conn.execute("SELECT * FROM staff WHERE conversation_id=?", (conv_id,)).fetchone()
-            return dict(row) if row else None
-
-    def set_staff_fb_event(self, staff_id: int, event: str):
-        with self._conn() as conn:
-            conn.execute("UPDATE staff SET fb_event_sent=? WHERE id=?", (event, staff_id))
+            with conn.cursor() as cur:
+                cur.execute("UPDATE staff SET fb_event_sent=%s WHERE id=%s", (event, staff_id))
+            conn.commit()
 
     def get_staff_funnel(self):
         with self._conn() as conn:
-            rows = conn.execute("""
-                SELECT status, COUNT(*) as cnt FROM staff GROUP BY status""").fetchall()
-            return {r["status"]: r["cnt"] for r in rows}
+            with conn.cursor() as cur:
+                cur.execute("SELECT status, COUNT(*) as cnt FROM staff GROUP BY status")
+                return {r["status"]: r["cnt"] for r in cur.fetchall()}
 
-    # ── Stats ─────────────────────────────────────────────────────────────────
-
-    def get_stats(self):
+    # ── Landings ──────────────────────────────────────────────────────────────
+    def get_landings(self, ltype=None):
         with self._conn() as conn:
-            total     = conn.execute("SELECT COUNT(*) AS c FROM joins").fetchone()["c"]
-            from_ads  = conn.execute("SELECT COUNT(*) AS c FROM joins WHERE campaign_name!='organic'").fetchone()["c"]
-            organic   = conn.execute("SELECT COUNT(*) AS c FROM joins WHERE campaign_name='organic'").fetchone()["c"]
-            channels  = conn.execute("SELECT COUNT(*) AS c FROM channels").fetchone()["c"]
-            campaigns = conn.execute("SELECT COUNT(*) AS c FROM campaigns").fetchone()["c"]
-            convs     = conn.execute("SELECT COUNT(*) AS c FROM conversations").fetchone()["c"]
-            unread    = conn.execute("SELECT COALESCE(SUM(unread_count),0) AS c FROM conversations").fetchone()["c"]
-            staff_cnt = conn.execute("SELECT COUNT(*) AS c FROM staff").fetchone()["c"]
-            clicks    = conn.execute("SELECT COUNT(*) AS c FROM click_tracking").fetchone()["c"]
-            return {"total": total, "from_ads": from_ads, "organic": organic,
-                    "channels": channels, "campaigns": campaigns,
-                    "conversations": convs, "unread": unread,
-                    "staff": staff_cnt, "clicks": clicks}
+            with conn.cursor() as cur:
+                if ltype:
+                    cur.execute("SELECT * FROM landings WHERE type=%s ORDER BY created_at DESC", (ltype,))
+                else:
+                    cur.execute("SELECT * FROM landings ORDER BY created_at DESC")
+                return [dict(r) for r in cur.fetchall()]
 
-    def get_joins_by_day(self, days: int = 30):
+    def get_landing(self, landing_id):
         with self._conn() as conn:
-            rows = conn.execute("""
-                SELECT DATE(joined_at) as day, COUNT(*) as cnt,
-                       SUM(CASE WHEN campaign_name!='organic' THEN 1 ELSE 0 END) as from_ads
-                FROM joins WHERE joined_at >= DATE('now', ?)
-                GROUP BY day ORDER BY day""", (f"-{days} days",)).fetchall()
-            return [dict(r) for r in rows]
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM landings WHERE id=%s", (landing_id,))
+                r = cur.fetchone(); return dict(r) if r else None
 
-    def get_campaign_stats(self):
+    def get_landing_by_slug(self, slug):
         with self._conn() as conn:
-            rows = conn.execute("""
-                SELECT campaign_name, COUNT(*) as joins,
-                       MIN(joined_at) as first_join, MAX(joined_at) as last_join
-                FROM joins WHERE campaign_name!='organic'
-                GROUP BY campaign_name ORDER BY joins DESC LIMIT 20""").fetchall()
-            return [dict(r) for r in rows]
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM landings WHERE slug=%s", (slug,))
+                r = cur.fetchone(); return dict(r) if r else None
 
-    def get_staff_by_day(self, days: int = 30):
+    def create_landing(self, name, ltype, slug, content):
         with self._conn() as conn:
-            rows = conn.execute("""
-                SELECT DATE(created_at) as day, COUNT(*) as cnt
-                FROM staff WHERE created_at >= DATE('now', ?)
-                GROUP BY day ORDER BY day""", (f"-{days} days",)).fetchall()
-            return [dict(r) for r in rows]
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO landings (name,type,slug,content,created_at) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+                            (name, ltype, slug, content, datetime.utcnow().isoformat()))
+                r = cur.fetchone()
+            conn.commit(); return r["id"]
 
-    # ── Landing ────────────────────────────────────────────────────────────────
-
-    def get_landing_links(self):
+    def update_landing_content(self, landing_id, content):
         with self._conn() as conn:
-            return [dict(r) for r in conn.execute("SELECT * FROM landing_links ORDER BY position ASC").fetchall()]
+            with conn.cursor() as cur:
+                cur.execute("UPDATE landings SET content=%s WHERE id=%s", (content, landing_id))
+            conn.commit()
 
-    def add_landing_link(self, title: str, tg_link: str, emoji: str = "📢"):
+    def delete_landing(self, landing_id):
         with self._conn() as conn:
-            pos = conn.execute("SELECT COALESCE(MAX(position),0)+1 FROM landing_links").fetchone()[0]
-            conn.execute("INSERT INTO landing_links (title,tg_link,emoji,position) VALUES (?,?,?,?)",
-                         (title, tg_link, emoji, pos))
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM landing_contacts WHERE landing_id=%s", (landing_id,))
+                cur.execute("DELETE FROM landings WHERE id=%s", (landing_id,))
+            conn.commit()
 
-    def delete_landing_link(self, link_id: int):
+    def get_landing_contacts(self, landing_id):
         with self._conn() as conn:
-            conn.execute("DELETE FROM landing_links WHERE id=?", (link_id,))
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM landing_contacts WHERE landing_id=%s ORDER BY position", (landing_id,))
+                return [dict(r) for r in cur.fetchall()]
 
-    # ── Message Flow ───────────────────────────────────────────────────────────
-
-    def get_flows(self, channel_id: str | None = None, bot_type: str | None = None):
+    def add_landing_contact(self, landing_id, ctype, label, url):
         with self._conn() as conn:
-            q = "SELECT * FROM message_flows WHERE 1=1"
-            params = []
-            if channel_id: q += " AND channel_id=?"; params.append(channel_id)
-            if bot_type:   q += " AND bot_type=?";   params.append(bot_type)
-            return [dict(r) for r in conn.execute(q + " ORDER BY step ASC", params).fetchall()]
+            with conn.cursor() as cur:
+                cur.execute("SELECT COALESCE(MAX(position),0)+1 as p FROM landing_contacts WHERE landing_id=%s", (landing_id,))
+                pos = cur.fetchone()["p"]
+                cur.execute("INSERT INTO landing_contacts (landing_id,type,label,url,position) VALUES (%s,%s,%s,%s,%s)",
+                            (landing_id,ctype,label,url,pos))
+            conn.commit()
 
-    def add_flow_step(self, channel_id: str, bot_type: str, step: int, delay_min: int, message: str):
+    def delete_landing_contact(self, contact_id):
         with self._conn() as conn:
-            conn.execute("INSERT INTO message_flows (channel_id,bot_type,step,delay_min,message) VALUES (?,?,?,?,?)",
-                         (channel_id, bot_type, step, delay_min, message))
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM landing_contacts WHERE id=%s", (contact_id,))
+            conn.commit()
 
-    def delete_flow_step(self, flow_id: int):
+    # ── WA Conversations ──────────────────────────────────────────────────────
+    def get_or_create_wa_conversation(self, wa_chat_id, wa_number, visitor_name,
+                                       utm_source=None, utm_campaign=None, fbclid=None):
         with self._conn() as conn:
-            conn.execute("DELETE FROM message_flows WHERE id=?", (flow_id,))
-
-    def log_flow_sent(self, user_id: int, channel_id: str, step: int):
-        with self._conn() as conn:
-            conn.execute("INSERT INTO flow_log (user_id,channel_id,step,sent_at) VALUES (?,?,?,?)",
-                         (user_id, channel_id, step, datetime.utcnow().isoformat()))
-
-    def was_flow_sent(self, user_id: int, channel_id: str, step: int) -> bool:
-        with self._conn() as conn:
-            return bool(conn.execute(
-                "SELECT id FROM flow_log WHERE user_id=? AND channel_id=? AND step=?",
-                (user_id, channel_id, step)).fetchone())
-
-    # ── WhatsApp Conversations ─────────────────────────────────────────────────
-
-    def get_or_create_wa_conversation(self, wa_chat_id: str, wa_number: str, visitor_name: str) -> dict:
-        with self._conn() as conn:
-            row = conn.execute("SELECT * FROM wa_conversations WHERE wa_chat_id=?", (wa_chat_id,)).fetchone()
-            if row: return dict(row)
-            conn.execute("INSERT INTO wa_conversations (wa_chat_id,wa_number,visitor_name,created_at) VALUES (?,?,?,?)",
-                         (wa_chat_id, wa_number, visitor_name, datetime.utcnow().isoformat()))
-            return dict(conn.execute("SELECT * FROM wa_conversations WHERE wa_chat_id=?", (wa_chat_id,)).fetchone())
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM wa_conversations WHERE wa_chat_id=%s", (wa_chat_id,))
+                r = cur.fetchone()
+                if r: return dict(r)
+                cur.execute("""INSERT INTO wa_conversations
+                    (wa_chat_id,wa_number,visitor_name,utm_source,utm_campaign,fbclid,created_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+                    (wa_chat_id,wa_number,visitor_name,utm_source,utm_campaign,fbclid,
+                     datetime.utcnow().isoformat()))
+                r = cur.fetchone()
+            conn.commit(); return dict(r)
 
     def get_wa_conversations(self):
         with self._conn() as conn:
-            return [dict(r) for r in conn.execute(
-                "SELECT * FROM wa_conversations ORDER BY COALESCE(last_message_at,created_at) DESC").fetchall()]
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM wa_conversations ORDER BY COALESCE(last_message_at,created_at) DESC")
+                return [dict(r) for r in cur.fetchall()]
 
-    def get_wa_conversation(self, conv_id: int):
+    def get_wa_conversation(self, conv_id):
         with self._conn() as conn:
-            row = conn.execute("SELECT * FROM wa_conversations WHERE id=?", (conv_id,)).fetchone()
-            return dict(row) if row else None
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM wa_conversations WHERE id=%s", (conv_id,))
+                r = cur.fetchone(); return dict(r) if r else None
 
-    def save_wa_message(self, conv_id: int, wa_chat_id: str, sender_type: str, content: str):
+    def save_wa_message(self, conv_id, wa_chat_id, sender_type, content,
+                        media_url=None, media_type=None):
         with self._conn() as conn:
-            conn.execute("INSERT INTO wa_messages (conversation_id,wa_chat_id,sender_type,content,created_at) VALUES (?,?,?,?,?)",
-                         (conv_id, wa_chat_id, sender_type, content, datetime.utcnow().isoformat()))
+            with conn.cursor() as cur:
+                cur.execute("""INSERT INTO wa_messages
+                    (conversation_id,wa_chat_id,sender_type,content,media_url,media_type,created_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                    (conv_id,wa_chat_id,sender_type,content,media_url,media_type,
+                     datetime.utcnow().isoformat()))
+            conn.commit()
 
-    def get_wa_messages(self, conv_id: int, limit: int = 100):
+    def get_wa_messages(self, conv_id, limit=100):
         with self._conn() as conn:
-            return [dict(r) for r in conn.execute(
-                "SELECT * FROM wa_messages WHERE conversation_id=? ORDER BY created_at ASC LIMIT ?",
-                (conv_id, limit)).fetchall()]
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM wa_messages WHERE conversation_id=%s ORDER BY created_at ASC LIMIT %s",
+                            (conv_id, limit))
+                return [dict(r) for r in cur.fetchall()]
 
-    def get_new_wa_messages(self, conv_id: int, after_id: int):
+    def get_new_wa_messages(self, conv_id, after_id):
         with self._conn() as conn:
-            return [dict(r) for r in conn.execute(
-                "SELECT * FROM wa_messages WHERE conversation_id=? AND id>? ORDER BY created_at ASC",
-                (conv_id, after_id)).fetchall()]
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM wa_messages WHERE conversation_id=%s AND id>%s ORDER BY created_at ASC",
+                            (conv_id, after_id))
+                return [dict(r) for r in cur.fetchall()]
 
-    def update_wa_last_message(self, wa_chat_id: str, text: str, increment_unread: bool = True):
+    def update_wa_last_message(self, wa_chat_id, text, increment_unread=True):
         with self._conn() as conn:
-            if increment_unread:
-                conn.execute("UPDATE wa_conversations SET last_message=?,last_message_at=?,unread_count=unread_count+1 WHERE wa_chat_id=?",
-                             (text[:100], datetime.utcnow().isoformat(), wa_chat_id))
-            else:
-                conn.execute("UPDATE wa_conversations SET last_message=?,last_message_at=? WHERE wa_chat_id=?",
-                             (text[:100], datetime.utcnow().isoformat(), wa_chat_id))
+            with conn.cursor() as cur:
+                if increment_unread:
+                    cur.execute("UPDATE wa_conversations SET last_message=%s,last_message_at=%s,unread_count=unread_count+1 WHERE wa_chat_id=%s",
+                                (text[:100],datetime.utcnow().isoformat(),wa_chat_id))
+                else:
+                    cur.execute("UPDATE wa_conversations SET last_message=%s,last_message_at=%s WHERE wa_chat_id=%s",
+                                (text[:100],datetime.utcnow().isoformat(),wa_chat_id))
+            conn.commit()
 
-    def mark_wa_read(self, conv_id: int):
+    def mark_wa_read(self, conv_id):
         with self._conn() as conn:
-            conn.execute("UPDATE wa_conversations SET unread_count=0 WHERE id=?", (conv_id,))
-            conn.execute("UPDATE wa_messages SET read_by_manager=1 WHERE conversation_id=? AND sender_type='visitor'", (conv_id,))
+            with conn.cursor() as cur:
+                cur.execute("UPDATE wa_conversations SET unread_count=0 WHERE id=%s", (conv_id,))
+                cur.execute("UPDATE wa_messages SET read_by_manager=1 WHERE conversation_id=%s AND sender_type='visitor'", (conv_id,))
+            conn.commit()
 
-    def close_wa_conversation(self, conv_id: int):
+    def close_wa_conversation(self, conv_id):
         with self._conn() as conn:
-            conn.execute("UPDATE wa_conversations SET status='closed' WHERE id=?", (conv_id,))
+            with conn.cursor() as cur:
+                cur.execute("UPDATE wa_conversations SET status='closed' WHERE id=%s", (conv_id,))
+            conn.commit()
 
-    def reopen_wa_conversation(self, conv_id: int):
+    def reopen_wa_conversation(self, conv_id):
         with self._conn() as conn:
-            conn.execute("UPDATE wa_conversations SET status='open' WHERE id=?", (conv_id,))
+            with conn.cursor() as cur:
+                cur.execute("UPDATE wa_conversations SET status='open' WHERE id=%s", (conv_id,))
+            conn.commit()
 
-    def set_wa_fb_event(self, conv_id: int, event: str):
+    def set_wa_fb_event(self, conv_id, event):
         with self._conn() as conn:
-            conn.execute("UPDATE wa_conversations SET fb_event_sent=? WHERE id=?", (event, conv_id))
+            with conn.cursor() as cur:
+                cur.execute("UPDATE wa_conversations SET fb_event_sent=%s WHERE id=%s", (event, conv_id))
+            conn.commit()
 
     def get_wa_stats(self):
         with self._conn() as conn:
-            total  = conn.execute("SELECT COUNT(*) AS c FROM wa_conversations").fetchone()["c"]
-            unread = conn.execute("SELECT COALESCE(SUM(unread_count),0) AS c FROM wa_conversations").fetchone()["c"]
-            return {"total": total, "unread": unread}
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) as c FROM wa_conversations"); total = cur.fetchone()["c"]
+                cur.execute("SELECT COALESCE(SUM(unread_count),0) as c FROM wa_conversations"); unread = cur.fetchone()["c"]
+                return {"total": total, "unread": int(unread)}
+
+    # ── Stats ─────────────────────────────────────────────────────────────────
+    def get_stats(self):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                def cnt(q, p=None):
+                    cur.execute(q, p); return cur.fetchone()["c"]
+                return {
+                    "total":       cnt("SELECT COUNT(*) as c FROM joins"),
+                    "from_ads":    cnt("SELECT COUNT(*) as c FROM joins WHERE campaign_name!='organic'"),
+                    "organic":     cnt("SELECT COUNT(*) as c FROM joins WHERE campaign_name='organic'"),
+                    "channels":    cnt("SELECT COUNT(*) as c FROM channels"),
+                    "campaigns":   cnt("SELECT COUNT(*) as c FROM campaigns"),
+                    "conversations": cnt("SELECT COUNT(*) as c FROM conversations"),
+                    "unread":      cnt("SELECT COALESCE(SUM(unread_count),0) as c FROM conversations"),
+                    "staff":       cnt("SELECT COUNT(*) as c FROM staff"),
+                    "clicks":      cnt("SELECT COUNT(*) as c FROM click_tracking"),
+                    "wa_unread":   cnt("SELECT COALESCE(SUM(unread_count),0) as c FROM wa_conversations"),
+                }
+
+    def get_joins_by_day(self, days=30):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT DATE(joined_at::timestamp) as day, COUNT(*) as cnt,
+                    SUM(CASE WHEN campaign_name!='organic' THEN 1 ELSE 0 END) as from_ads
+                    FROM joins WHERE joined_at::timestamp >= NOW() - INTERVAL '30 days'
+                    GROUP BY day ORDER BY day""")
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_campaign_stats(self):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT campaign_name, COUNT(*) as joins,
+                    MIN(joined_at) as first_join, MAX(joined_at) as last_join
+                    FROM joins WHERE campaign_name!='organic'
+                    GROUP BY campaign_name ORDER BY joins DESC LIMIT 20""")
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_staff_by_day(self, days=30):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT DATE(created_at::timestamp) as day, COUNT(*) as cnt
+                    FROM staff WHERE created_at::timestamp >= NOW() - INTERVAL '30 days'
+                    GROUP BY day ORDER BY day""")
+                return [dict(r) for r in cur.fetchall()]

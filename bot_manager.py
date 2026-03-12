@@ -9,6 +9,26 @@ import httpx
 
 log = logging.getLogger(__name__)
 
+# ─── Debug log (circular buffer последних 100 событий) ───────────────────────
+import collections as _col, datetime as _dt
+
+_debug_log = _col.deque(maxlen=100)
+
+def _dbg(level: str, msg: str):
+    """Добавляет запись в debug-буфер и стандартный лог."""
+    entry = {"ts": _dt.datetime.utcnow().strftime("%H:%M:%S"), "level": level, "msg": msg}
+    _debug_log.append(entry)
+    if level == "ERROR":
+        log.error(msg)
+    elif level == "WARN":
+        log.warning(msg)
+    else:
+        log.info(msg)
+
+def get_debug_log():
+    """Возвращает копию debug-буфера (для /api/debug)."""
+    return list(_debug_log)
+
 # ─── Глобальные переменные ────────────────────────────────────────────────────
 _db         = None
 _meta_capi  = None
@@ -57,6 +77,7 @@ def init(db, meta_capi):
     global _db, _meta_capi
     _db = db
     _meta_capi = meta_capi
+    _dbg("INFO", f"[INIT] bot_manager.init() called, db={'OK' if db else 'NONE'}")
 
 
 def get_tracker_bot():
@@ -120,7 +141,14 @@ def _register_tracker_handlers(dp, bot):
             tg_id = str(msg.from_user.id)
             name  = (msg.from_user.full_name or tg_id)[:100]
             uname = msg.from_user.username
+            _dbg("INFO", f"[TRACKER] msg from {tg_id} (@{uname}): text={repr((msg.text or '')[:60])}")
+
+            if _db is None:
+                _dbg("ERROR", f"[TRACKER] _db is None! init() was not called")
+                return
+
             conv  = _db.get_or_create_conversation(tg_id, name, uname)
+            _dbg("INFO", f"[TRACKER] conv_id={conv.get('id')} for tg_id={tg_id}")
 
             text       = msg.text or msg.caption or ""
             media_url  = None
@@ -128,10 +156,11 @@ def _register_tracker_handlers(dp, bot):
 
             # Фото
             if msg.photo:
-                best = msg.photo[-1]  # наибольшее разрешение
+                best = msg.photo[-1]
                 media_url = await _tg_download_to_cloudinary(bot, best.file_id, "image")
                 media_type = "photo"
                 text = text or "📷 Фото"
+                _dbg("INFO", f"[TRACKER] photo → cloudinary={media_url}")
             # Видео
             elif msg.video:
                 media_url = await _tg_download_to_cloudinary(bot, msg.video.file_id, "video")
@@ -157,8 +186,9 @@ def _register_tracker_handlers(dp, bot):
             _db.save_message(conv["id"], tg_id, "visitor", text,
                              media_url=media_url, media_type=media_type)
             _db.update_conversation_last_message(tg_id, text, increment_unread=True)
+            _dbg("INFO", f"[TRACKER] saved msg to conv_id={conv.get('id')}, text={repr(text[:40])}")
         except Exception as e:
-            log.error(f"tracker on_message error: {e}")
+            _dbg("ERROR", f"[TRACKER] on_message EXCEPTION: {e}")
 
 
 def _register_staff_handlers(dp, bot):
@@ -260,18 +290,18 @@ async def start_tracker_bot(token: str | None):
         # Снимаем webhook если был установлен — иначе polling не работает
         wh = await _tracker_bot.get_webhook_info()
         if wh.url:
-            log.info(f"Tracker bot: removing webhook {wh.url}")
+            _dbg("WARN", f"[TRACKER] removing webhook {wh.url}")
             await _tracker_bot.delete_webhook(drop_pending_updates=True)
         _tracker_dp  = Dispatcher()
         _register_tracker_handlers(_tracker_dp, _tracker_bot)
         info = await _tracker_bot.get_me()
-        log.info(f"Tracker bot @{info.username} (id={info.id}) starting polling...")
+        _dbg("INFO", f"[TRACKER] bot @{info.username} (id={info.id}) starting polling...")
         if not _db.get_setting("bot1_name"):
             _db.set_setting("bot1_name", f"@{info.username}")
         _tracker_task = asyncio.create_task(_run_bot(_tracker_dp, _tracker_bot))
-        log.info(f"Tracker bot @{info.username} polling task created ✅")
+        _dbg("INFO", f"[TRACKER] polling task created ✅")
     except Exception as e:
-        log.error(f"start_tracker_bot FAILED: {e}", exc_info=True)
+        _dbg("ERROR", f"[TRACKER] start_tracker_bot FAILED: {e}")
         _tracker_bot = None
 
 

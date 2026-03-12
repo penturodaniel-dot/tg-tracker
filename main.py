@@ -550,10 +550,25 @@ function _notifyCheck(convs, type) {
   return totalUnread;
 }
 
-// Update browser tab title with unread count
+// Update browser tab title
 function _updateTabTitle(total) {
   const base = document.title.replace(/^[(][0-9]+[)] */, '');
   document.title = total > 0 ? '(' + total + ') ' + base : base;
+}
+
+// Update sidebar nav badges (TG + WA) without page reload
+function _updateSidebarBadges(tgUnread, waUnread) {
+  function setBadge(selector, count) {
+    const link = document.querySelector(selector);
+    if (!link) return;
+    let b = link.querySelector('.badge-count');
+    if (count > 0) {
+      if (!b) { b = document.createElement('span'); b.className = 'badge-count'; link.querySelector('.nav-item').appendChild(b); }
+      b.textContent = count;
+    } else if (b) { b.remove(); }
+  }
+  setBadge('a[href="/chat"]', tgUnread);
+  setBadge('a[href="/wa/chat"]', waUnread);
 }
 
 // Global poll — runs on ALL pages every 5s
@@ -566,6 +581,7 @@ async function _globalNotifyPoll() {
     const t1 = _notifyCheck(tg.conversations || [], 'tg');
     const t2 = _notifyCheck(wa.conversations || [], 'wa');
     _updateTabTitle(t1 + t2);
+    _updateSidebarBadges(t1, t2);
     _notifyFirst = false;
   } catch(e) {}
 }
@@ -655,8 +671,8 @@ def nav_html(active: str, request: Request) -> str:
       {item("🌐", "Лендинг HR", "staff/landing", "orange")}
       {admin_section}
       <div class="sidebar-footer">
-        <div class="bot-status"><div class="dot {'dot-green' if b1 else 'dot-red'}"></div><span>{b1_name}</span></div>
-        <div class="bot-status"><div class="dot {'dot-green' if b2 else 'dot-red'}"></div><span>{b2_name}</span></div>
+        <div class="bot-status"><div class="dot {'dot-green' if b1 else 'dot-red'}"></div><span title="{b1_name}">{b1_name[:18]+('…' if len(b1_name)>18 else '')}</span></div>
+        <div class="bot-status"><div class="dot {'dot-green' if b2 else 'dot-red'}"></div><span title="{b2_name}">{b2_name[:18]+('…' if len(b2_name)>18 else '')}</span></div>
         <a href="/{'wa/chat' if wa_status=='ready' else 'settings'}" style="text-decoration:none">
           <div class="bot-status" style="border-color:{'rgba(37,211,102,.3)' if wa_status=='ready' else 'rgba(239,68,68,.2)'};cursor:pointer">
             <div class="dot" style="background:{'#25d366;box-shadow:0 0 6px rgba(37,211,102,.6)' if wa_status=='ready' else '#ef4444'}"></div>
@@ -1478,18 +1494,25 @@ async def settings_page(request: Request, msg: str = "", err: str = ""):
         </div>
       </div></div>'''
 
-    def bot_card(title, color, info, field, route):
-        status = f'<span style="color:#34d399">● Активен — <a href="{info.get("link","")}" target="_blank" style="color:#60a5fa">@{info.get("username","")}</a></span>' if info.get("active") else '<span style="color:#ef4444">● Не запущен</span>'
+    b1_display = db.get_setting("bot1_name", "Бот трекер")
+    b2_display = db.get_setting("bot2_name", "Бот сотрудники")
+
+    def bot_card(title, color, info, field, name_field, name_val, route):
+        uname = info.get("username","") if info else ""
+        link  = f'<a href="https://t.me/{uname}" target="_blank" style="color:#60a5fa">@{uname}</a>' if uname else ""
+        status = f'<span style="color:#34d399">● Активен {link}</span>' if info is not None else '<span style="color:#ef4444">● Не запущен</span>'
         border = "#3b82f6" if color == "blue" else "#f97316"
         btn = "btn" if color == "blue" else "btn-orange"
         return f"""<div class="section" style="border-left:3px solid {border}">
           <div class="section-head"><h3>{title}</h3><span style="font-size:.82rem">{status}</span></div>
           <div class="section-body">
-            <form method="post" action="/{route}"><div class="form-row">
+            <form method="post" action="/{route}"><div class="grid-2" style="margin-bottom:12px">
               <div class="field-group"><div class="field-label">Новый токен бота</div>
               <input type="text" name="{field}" placeholder="Вставь токен от @BotFather — оставь пустым чтобы не менять"/></div>
-              <div style="display:flex;align-items:flex-end"><button class="{btn}">🔄 Сменить</button></div>
-            </div></form>
+              <div class="field-group"><div class="field-label">Название в сайдбаре</div>
+              <input type="text" name="{name_field}" value="{name_val}" placeholder="Например: Бот трекер"/></div>
+            </div>
+            <button class="{btn}">🔄 Обновить</button></form>
           </div></div>"""
 
     content = f"""<div class="page-wrap">
@@ -1498,8 +1521,8 @@ async def settings_page(request: Request, msg: str = "", err: str = ""):
     {wa_section}
 
     <div class="section-head" style="padding:0;margin-bottom:12px"><h3 style="font-size:.78rem;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:.08em">🤖 Управление ботами</h3></div>
-    {bot_card("🔵 Бот 1 — Трекер (Клиенты)", "blue", b1_info, "bot1_token", "settings/bot1")}
-    {bot_card("🟠 Бот 2 — Сотрудники", "orange", b2_info, "bot2_token", "settings/bot2")}
+    {bot_card("🔵 Бот 1 — Трекер (Клиенты)", "blue", b1_info, "bot1_token", "bot1_name", b1_display, "settings/bot1")}
+    {bot_card("🟠 Бот 2 — Сотрудники", "orange", b2_info, "bot2_token", "bot2_name", b2_display, "settings/bot2")}
 
     <div class="section">
       <div class="section-head"><h3>📡 Meta Pixel & CAPI</h3></div>
@@ -1561,26 +1584,24 @@ async def settings_page(request: Request, msg: str = "", err: str = ""):
 
 
 @app.post("/settings/bot1")
-async def settings_bot1(request: Request, bot1_token: str = Form("")):
+async def settings_bot1(request: Request, bot1_token: str = Form(""), bot1_name: str = Form("")):
     user, err = require_auth(request, role="admin")
     if err: return err
+    if bot1_name.strip(): db.set_setting("bot1_name", bot1_name.strip())
     if bot1_token.strip():
         db.set_setting("bot1_token", bot1_token.strip())
         await bot_manager.start_tracker_bot(bot1_token.strip())
-        info = await bot_manager.get_bot_info(bot_manager.get_tracker_bot())
-        if info.get("username"): db.set_setting("bot1_name", f"@{info['username']}")
     return RedirectResponse("/settings?msg=Бот+1+обновлён", 303)
 
 
 @app.post("/settings/bot2")
-async def settings_bot2(request: Request, bot2_token: str = Form("")):
+async def settings_bot2(request: Request, bot2_token: str = Form(""), bot2_name: str = Form("")):
     user, err = require_auth(request, role="admin")
     if err: return err
+    if bot2_name.strip(): db.set_setting("bot2_name", bot2_name.strip())
     if bot2_token.strip():
         db.set_setting("bot2_token", bot2_token.strip())
         await bot_manager.start_staff_bot(bot2_token.strip())
-        info = await bot_manager.get_bot_info(bot_manager.get_staff_bot())
-        if info.get("username"): db.set_setting("bot2_name", f"@{info['username']}")
     return RedirectResponse("/settings?msg=Бот+2+обновлён", 303)
 
 

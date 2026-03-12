@@ -187,6 +187,13 @@ class Database:
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS landing_id INTEGER DEFAULT NULL",
                     "ALTER TABLE campaigns ALTER COLUMN channel_id DROP NOT NULL",
                     "ALTER TABLE campaigns ALTER COLUMN invite_link DROP NOT NULL",
+                    # wa_conversations — старая таблица могла создаться без этих колонок
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_source TEXT",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_campaign TEXT",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbclid TEXT",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fb_event_sent TEXT",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'open'",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS unread_count INTEGER DEFAULT 0",
                 ]
                 for m in migrations:
                     try:

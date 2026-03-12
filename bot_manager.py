@@ -102,13 +102,12 @@ async def start_tracker_bot(token: str):
     try:
         _tracker_bot = Bot(token=token)
         _tracker_dp  = _build_tracker_dp()
-        # drop_pending_updates=True — сбрасывает накопившиеся обновления при рестарте
-        # Без этого старые обновления могут конфликтовать
         _tracker_task = asyncio.create_task(
             _tracker_dp.start_polling(
                 _tracker_bot,
                 allowed_updates=["chat_member"],
                 drop_pending_updates=True,
+                handle_signals=False,
             )
         )
         info = await _tracker_bot.get_me()
@@ -236,6 +235,7 @@ async def start_staff_bot(token: str):
                 _staff_bot,
                 allowed_updates=["message"],
                 drop_pending_updates=True,
+                handle_signals=False,
             )
         )
         info = await _staff_bot.get_me()

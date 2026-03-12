@@ -2102,6 +2102,25 @@ async def api_stats(request: Request):
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
     return JSONResponse(db.get_stats())
 
+
+@app.get("/api/wa_convs")
+async def api_wa_convs(request: Request):
+    """Список WA диалогов для авто-обновления"""
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    convs = db.get_wa_conversations()
+    return JSONResponse({"convs": [
+        {
+            "id": c["id"],
+            "visitor_name": c["visitor_name"],
+            "wa_number": c["wa_number"],
+            "last_message": c.get("last_message") or "",
+            "last_message_at": (c.get("last_message_at") or c["created_at"])[:16].replace("T"," "),
+            "unread_count": c.get("unread_count", 0),
+            "status": c.get("status", "open"),
+        } for c in convs
+    ]})
+
 # ══════════════════════════════════════════════════════════════════════════════
 # WHATSAPP
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2255,7 +2274,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T"," ")
         ucount = f'<span class="unread-num" style="background:#25d366">{c["unread_count"]}</span>' if c["unread_count"] > 0 else ""
         dot = "🟢" if c["status"] == "open" else "⚫"
-        conv_items += f"""<a href="/wa/chat?conv_id={c['id']}"><div class="{cls}">
+        conv_items += f"""<a href="/wa/chat?conv_id={c['id']}"><div class="{cls}" data-conv-id="{c['id']}">
           <div class="conv-name"><span>{dot} {c['visitor_name']}</span>{ucount}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
           <div class="conv-time">💚 +{c['wa_number']} · {t}</div></div></a>"""
@@ -2289,6 +2308,8 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
     <script>
     const msgsEl=document.getElementById('wa-msgs');
     if(msgsEl) msgsEl.scrollTop=msgsEl.scrollHeight;
+    const ACTIVE_CONV_ID = {conv_id or 0};
+
     async function sendWaMsg(){{
       const ta=document.getElementById('wa-reply');
       const text=ta.value.trim(); if(!text) return; ta.value='';
@@ -2297,7 +2318,10 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
       loadNewWaMsgs();
     }}
     function handleWaKey(e){{if(e.key==='Enter'&&!e.shiftKey){{e.preventDefault();sendWaMsg();}}}}
-    {"setInterval(loadNewWaMsgs,3000);" if active_conv else "setInterval(()=>{{}},5000);"}
+
+    // Обновление сообщений в открытом чате
+    {"setInterval(loadNewWaMsgs, 3000);" if active_conv else ""}
+
     async function loadNewWaMsgs(){{
       const msgs=document.querySelectorAll('#wa-msgs .msg[data-id]');
       const lastId=msgs.length?msgs[msgs.length-1].dataset.id:0;
@@ -2309,6 +2333,52 @@ async def wa_chat_page(request: Request, conv_id: int = 0):
           d.innerHTML='<div class="msg-bubble">'+esc(m.content)+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
           c.appendChild(d);}});c.scrollTop=c.scrollHeight;}}
     }}
+
+    // Авто-обновление списка диалогов каждые 4 сек
+    let _knownConvIds = new Set([{','.join(str(c['id']) for c in (db.get_wa_conversations() if True else []))}]);
+    setInterval(async function(){{
+      try {{
+        const res = await fetch('/api/wa_convs');
+        const data = await res.json();
+        if(!data.convs) return;
+        const list = document.getElementById('conv-items');
+        if(!list) return;
+
+        // Если появился новый диалог — перерисовываем список
+        const newIds = new Set(data.convs.map(c=>c.id));
+        const hasNew = [...newIds].some(id=>!_knownConvIds.has(id));
+
+        // Обновляем счётчики непрочитанных всегда
+        data.convs.forEach(c=>{{
+          const item = list.querySelector('[data-conv-id="'+c.id+'"]');
+          if(item){{
+            const badge = item.querySelector('.unread-badge');
+            if(c.unread_count>0){{
+              if(badge) badge.textContent=c.unread_count;
+              else {{const b=document.createElement('span');b.className='unread-num unread-badge';b.style.background='#25d366';b.textContent=c.unread_count;item.querySelector('.conv-name')?.appendChild(b);}}
+            }} else if(badge) badge.remove();
+            const prev=item.querySelector('.conv-preview');
+            if(prev) prev.textContent=c.last_message||'Нет сообщений';
+          }}
+        }});
+
+        if(hasNew){{
+          _knownConvIds = newIds;
+          // Перерисовываем весь список
+          list.innerHTML = data.convs.map(c=>{{
+            const active = c.id===ACTIVE_CONV_ID ? ' active' : '';
+            const dot = c.status==='open' ? '🟢' : '⚫';
+            const badge = c.unread_count>0 ? '<span class="unread-num unread-badge" style="background:#25d366">'+c.unread_count+'</span>' : '';
+            return '<a href="/wa/chat?conv_id='+c.id+'"><div class="conv-item'+active+'" data-conv-id="'+c.id+'">'
+              +'<div class="conv-name"><span>'+dot+' '+esc(c.visitor_name)+'</span>'+badge+'</div>'
+              +'<div class="conv-preview">'+esc(c.last_message||'Нет сообщений')+'</div>'
+              +'<div class="conv-time">💚 +'+c.wa_number+' · '+c.last_message_at+'</div>'
+              +'</div></a>';
+          }}).join('') || '<div class="empty" style="padding:36px 14px">Нет WA диалогов.</div>';
+        }}
+      }} catch(e){{}}
+    }}, 4000);
+
     function esc(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>');}}
     function filterConvs(q){{document.querySelectorAll('.conv-item').forEach(el=>{{
       const n=el.querySelector('.conv-name')?.textContent?.toLowerCase()||'';

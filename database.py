@@ -194,6 +194,16 @@ class Database:
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fb_event_sent TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'open'",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS unread_count INTEGER DEFAULT 0",
+                    # conversations (TG) — старая таблица могла создаться без этих колонок
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS utm_source TEXT",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS utm_campaign TEXT",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS fbclid TEXT",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS fb_event_sent TEXT",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'open'",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS unread_count INTEGER DEFAULT 0",
+                    # wa_messages — колонки для медиа
+                    "ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS media_url TEXT",
+                    "ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS media_type TEXT",
                 ]
                 for m in migrations:
                     try:

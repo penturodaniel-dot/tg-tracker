@@ -16,7 +16,8 @@ _debug_log = _col.deque(maxlen=100)
 
 def _dbg(level: str, msg: str):
     """Добавляет запись в debug-буфер и стандартный лог."""
-    entry = {"ts": _dt.datetime.utcnow().strftime("%H:%M:%S"), "level": level, "msg": msg}
+    import os as _os
+    entry = {"ts": _dt.datetime.utcnow().strftime("%H:%M:%S"), "level": level, "msg": msg, "pid": _os.getpid()}
     _debug_log.append(entry)
     if level == "ERROR":
         log.error(msg)
@@ -269,13 +270,13 @@ def _register_staff_handlers(dp, bot):
 
 async def _run_bot(dp, bot):
     try:
-        log.info(f"Bot polling started for {bot}")
+        _dbg("INFO", f"[POLLING] started for {bot}")
         await dp.start_polling(bot, handle_signals=False)
-        log.info("Bot polling stopped normally")
+        _dbg("INFO", "[POLLING] stopped normally")
     except asyncio.CancelledError:
-        log.info("Bot polling cancelled")
+        _dbg("INFO", "[POLLING] cancelled")
     except Exception as e:
-        log.error(f"Bot polling CRASHED: {e}", exc_info=True)
+        _dbg("ERROR", f"[POLLING] CRASHED: {e}")
 
 
 async def start_tracker_bot(token: str | None):

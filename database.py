@@ -770,14 +770,213 @@ class Database:
                     "wa_unread":   cnt("SELECT COALESCE(SUM(unread_count),0) as c FROM wa_conversations"),
                 }
 
-    def get_joins_by_day(self, days=30):
+    # ══════════════════════════════════════════════════════════════════════════
+    # КЛИЕНТЫ — аналитика подписок
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def get_joins_by_day(self, days=30, date_from=None, date_to=None):
+        where, params = self._date_filter("joined_at", days, date_from, date_to)
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("""SELECT DATE(joined_at::timestamp) as day, COUNT(*) as cnt,
-                    SUM(CASE WHEN campaign_name!='organic' THEN 1 ELSE 0 END) as from_ads
-                    FROM joins WHERE joined_at::timestamp >= NOW() - INTERVAL '30 days'
-                    GROUP BY day ORDER BY day""")
+                cur.execute(f"""SELECT DATE(joined_at::timestamp) as day,
+                    COUNT(*) as cnt,
+                    SUM(CASE WHEN campaign_name!='organic' THEN 1 ELSE 0 END) as from_ads,
+                    SUM(CASE WHEN campaign_name='organic' THEN 1 ELSE 0 END) as organic
+                    FROM joins {where} GROUP BY day ORDER BY day""", params)
                 return [dict(r) for r in cur.fetchall()]
+
+    def get_joins_summary(self, date_from=None, date_to=None, days=30):
+        where, params = self._date_filter("joined_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN campaign_name!='organic' THEN 1 ELSE 0 END) as from_ads,
+                    SUM(CASE WHEN campaign_name='organic' THEN 1 ELSE 0 END) as organic,
+                    SUM(CASE WHEN click_id IS NOT NULL THEN 1 ELSE 0 END) as tracked,
+                    COUNT(DISTINCT channel_id) as channels_active,
+                    COUNT(DISTINCT campaign_name) as campaigns_active
+                    FROM joins {where}""", params)
+                return dict(cur.fetchone())
+
+    def get_joins_by_channel(self, date_from=None, date_to=None, days=30):
+        where, params = self._date_filter("j.joined_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT
+                    COALESCE(ch.name, j.channel_id, 'Неизвестно') as channel_name,
+                    j.channel_id,
+                    COUNT(*) as joins,
+                    SUM(CASE WHEN j.campaign_name!='organic' THEN 1 ELSE 0 END) as from_ads,
+                    MIN(j.joined_at) as first_join,
+                    MAX(j.joined_at) as last_join
+                    FROM joins j
+                    LEFT JOIN channels ch ON ch.channel_id = j.channel_id
+                    {where} GROUP BY j.channel_id, ch.name ORDER BY joins DESC""", params)
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_joins_by_campaign(self, date_from=None, date_to=None, days=30):
+        where, params = self._date_filter("joined_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT
+                    campaign_name,
+                    COUNT(*) as joins,
+                    SUM(CASE WHEN click_id IS NOT NULL THEN 1 ELSE 0 END) as tracked,
+                    MIN(joined_at) as first_join,
+                    MAX(joined_at) as last_join
+                    FROM joins {where}
+                    GROUP BY campaign_name ORDER BY joins DESC LIMIT 30""", params)
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_clicks_by_day(self, date_from=None, date_to=None, days=30):
+        where, params = self._date_filter("created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT DATE(created_at::timestamp) as day,
+                    COUNT(*) as clicks,
+                    SUM(CASE WHEN fbclid IS NOT NULL THEN 1 ELSE 0 END) as from_fb
+                    FROM click_tracking {where} GROUP BY day ORDER BY day""", params)
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_clicks_summary(self, date_from=None, date_to=None, days=30):
+        where, params = self._date_filter("created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT COUNT(*) as total,
+                    SUM(CASE WHEN fbclid IS NOT NULL THEN 1 ELSE 0 END) as from_fb,
+                    SUM(CASE WHEN fbp IS NOT NULL THEN 1 ELSE 0 END) as has_fbp,
+                    COUNT(DISTINCT utm_campaign) as campaigns
+                    FROM click_tracking {where}""", params)
+                return dict(cur.fetchone())
+
+    def get_utm_sources(self, date_from=None, date_to=None, days=30):
+        where, params = self._date_filter("created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT
+                    COALESCE(utm_source,'(direct)') as source,
+                    COALESCE(utm_medium,'(none)') as medium,
+                    COUNT(*) as clicks
+                    FROM click_tracking {where}
+                    GROUP BY utm_source, utm_medium ORDER BY clicks DESC LIMIT 20""", params)
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_recent_joins_detailed(self, limit=50, date_from=None, date_to=None, days=30):
+        where, params = self._date_filter("j.joined_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT j.*,
+                    COALESCE(ch.name, j.channel_id) as channel_name,
+                    ct.utm_source, ct.utm_medium, ct.utm_campaign as utm_campaign_tag,
+                    ct.fbclid, ct.fbp
+                    FROM joins j
+                    LEFT JOIN channels ch ON ch.channel_id = j.channel_id
+                    LEFT JOIN click_tracking ct ON ct.click_id = j.click_id
+                    {where} ORDER BY j.joined_at DESC LIMIT %s""", params + [limit])
+                return [dict(r) for r in cur.fetchall()]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # СОТРУДНИКИ — аналитика
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def get_staff_summary(self, date_from=None, date_to=None, days=30):
+        where, params = self._date_filter("created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT COUNT(*) as total,
+                    SUM(CASE WHEN status='new' THEN 1 ELSE 0 END) as s_new,
+                    SUM(CASE WHEN status='review' THEN 1 ELSE 0 END) as s_review,
+                    SUM(CASE WHEN status='interview' THEN 1 ELSE 0 END) as s_interview,
+                    SUM(CASE WHEN status='hired' THEN 1 ELSE 0 END) as s_hired,
+                    SUM(CASE WHEN status='rejected' THEN 1 ELSE 0 END) as s_rejected
+                    FROM staff {where}""", params)
+                return dict(cur.fetchone())
+
+    def get_staff_by_day(self, date_from=None, date_to=None, days=30):
+        where, params = self._date_filter("created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT DATE(created_at::timestamp) as day,
+                    COUNT(*) as cnt,
+                    SUM(CASE WHEN status='hired' THEN 1 ELSE 0 END) as hired
+                    FROM staff {where} GROUP BY day ORDER BY day""", params)
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_messages_by_day(self, date_from=None, date_to=None, days=30):
+        """Сообщения TG чата по дням"""
+        where, params = self._date_filter("created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT DATE(created_at::timestamp) as day,
+                    COUNT(*) as total,
+                    SUM(CASE WHEN sender_type='visitor' THEN 1 ELSE 0 END) as incoming,
+                    SUM(CASE WHEN sender_type='manager' THEN 1 ELSE 0 END) as outgoing
+                    FROM messages {where} GROUP BY day ORDER BY day""", params)
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_messages_summary(self, date_from=None, date_to=None, days=30):
+        where, params = self._date_filter("created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT COUNT(*) as total,
+                    SUM(CASE WHEN sender_type='visitor' THEN 1 ELSE 0 END) as incoming,
+                    SUM(CASE WHEN sender_type='manager' THEN 1 ELSE 0 END) as outgoing,
+                    COUNT(DISTINCT conversation_id) as active_convos
+                    FROM messages {where}""", params)
+                return dict(cur.fetchone())
+
+    def get_wa_messages_by_day(self, date_from=None, date_to=None, days=30):
+        where, params = self._date_filter("created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT DATE(created_at::timestamp) as day,
+                    COUNT(*) as total,
+                    SUM(CASE WHEN sender_type='visitor' THEN 1 ELSE 0 END) as incoming,
+                    SUM(CASE WHEN sender_type='manager' THEN 1 ELSE 0 END) as outgoing
+                    FROM wa_messages {where} GROUP BY day ORDER BY day""", params)
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_staff_funnel(self, date_from=None, date_to=None):
+        """Воронка + конверсия"""
+        if date_from and date_to:
+            where = "WHERE created_at::timestamp BETWEEN %s AND %s"
+            params = [date_from, date_to + " 23:59:59"]
+        else:
+            where, params = "", []
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SELECT status, COUNT(*) as cnt FROM staff {where} GROUP BY status", params)
+                d = {r["status"]: r["cnt"] for r in cur.fetchall()}
+        total = sum(d.values()) or 1
+        d["conversion_hired"] = round(d.get("hired", 0) / total * 100, 1)
+        d["conversion_rejected"] = round(d.get("rejected", 0) / total * 100, 1)
+        return d
+
+    def get_staff_response_stats(self, date_from=None, date_to=None, days=30):
+        """Активность по каждому разговору — сколько сообщений, последнее"""
+        where, params = self._date_filter("s.created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT s.name, s.status, s.created_at,
+                    COALESCE(s.tg_chat_id, 'WA') as channel,
+                    COUNT(m.id) as msg_count,
+                    MAX(m.created_at) as last_message_at
+                    FROM staff s
+                    LEFT JOIN messages m ON m.tg_chat_id = s.tg_chat_id
+                    {where}
+                    GROUP BY s.id, s.name, s.status, s.created_at, s.tg_chat_id
+                    ORDER BY s.created_at DESC LIMIT 50""", params)
+                return [dict(r) for r in cur.fetchall()]
+
+    # ── Вспомогательный метод фильтра дат ─────────────────────────────────────
+    def _date_filter(self, field: str, days: int = 30, date_from=None, date_to=None):
+        if date_from and date_to:
+            return f"WHERE {field}::timestamp BETWEEN %s AND %s", [date_from, date_to + " 23:59:59"]
+        elif date_from:
+            return f"WHERE {field}::timestamp >= %s", [date_from]
+        else:
+            return f"WHERE {field}::timestamp >= NOW() - INTERVAL '{days} days'", []
 
     def get_campaign_stats(self):
         with self._conn() as conn:
@@ -788,10 +987,10 @@ class Database:
                     GROUP BY campaign_name ORDER BY joins DESC LIMIT 20""")
                 return [dict(r) for r in cur.fetchall()]
 
-    def get_staff_by_day(self, days=30):
+    def get_click_stats(self, days=30):
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("""SELECT DATE(created_at::timestamp) as day, COUNT(*) as cnt
-                    FROM staff WHERE created_at::timestamp >= NOW() - INTERVAL '30 days'
+                cur.execute("""SELECT DATE(created_at::timestamp) as day, COUNT(*) as clicks
+                    FROM click_tracking WHERE created_at::timestamp >= NOW() - INTERVAL '30 days'
                     GROUP BY day ORDER BY day""")
                 return [dict(r) for r in cur.fetchall()]

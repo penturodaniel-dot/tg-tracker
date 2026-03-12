@@ -253,18 +253,19 @@ def nav_html(active: str, request: Request) -> str:
         </div>
       </div>
       {item("📊", "Обзор", "overview", "blue")}
-      {item("📈", "Статистика", "analytics", "blue")}
       <div class="nav-divider"></div>
       <div class="nav-section">👥 Клиенты</div>
       {item("📡", "Каналы", "channels", "blue")}
       {item("🔗", "Кампании", "campaigns", "blue")}
       {item("🎨", "Шаблоны", "landings", "blue")}
+      {item("📈", "Статистика", "analytics_clients", "blue", url="/analytics/clients")}
       <div class="nav-divider"></div>
       <div class="nav-section">👔 Сотрудники</div>
       {item("💬", "TG Чаты", "chat", "orange", badge_count=unread)}
       {item("💚", "WA Чаты", "wa_chat", "orange", badge_count=wa_unread, url="/wa/chat")}
       {item("🗂", "База", "staff", "orange")}
       {item("🌐", "Лендинги HR", "landings_staff", "orange")}
+      {item("📊", "Статистика", "analytics_staff", "orange", url="/analytics/staff")}
       {admin_section}
       <div class="sidebar-footer">
         <div class="bot-status"><div class="dot {'dot-green' if b1 else 'dot-red'}"></div><span>{b1_name}</span></div>
@@ -517,69 +518,347 @@ async def overview(request: Request):
 # ANALYTICS
 # ══════════════════════════════════════════════════════════════════════════════
 
-@app.get("/analytics", response_class=HTMLResponse)
-async def analytics(request: Request):
+@app.get("/analytics/clients", response_class=HTMLResponse)
+async def analytics_clients(request: Request,
+    date_from: str = "", date_to: str = "", period: str = "30"):
     user, err = require_auth(request)
     if err: return err
 
-    joins_by_day  = db.get_joins_by_day(30)
-    staff_by_day  = db.get_staff_by_day(30)
-    campaign_stats = db.get_campaign_stats()
-    click_stats   = db.get_click_stats(30)
-    funnel        = db.get_staff_funnel()
+    days = int(period) if period.isdigit() else 30
+    df   = date_from or None
+    dt   = date_to   or None
 
-    # Строим chart HTML
-    def bar_chart(data, key, color, label):
-        if not data: return '<div class="empty">Нет данных</div>'
-        max_val = max((d[key] for d in data), default=1) or 1
+    joins_day   = db.get_joins_by_day(days=days, date_from=df, date_to=dt)
+    clicks_day  = db.get_clicks_by_day(days=days, date_from=df, date_to=dt)
+    summary     = db.get_joins_summary(days=days, date_from=df, date_to=dt)
+    cl_summary  = db.get_clicks_summary(days=days, date_from=df, date_to=dt)
+    by_channel  = db.get_joins_by_channel(days=days, date_from=df, date_to=dt)
+    by_campaign = db.get_joins_by_campaign(days=days, date_from=df, date_to=dt)
+    utm_src     = db.get_utm_sources(days=days, date_from=df, date_to=dt)
+    recent      = db.get_recent_joins_detailed(50, days=days, date_from=df, date_to=dt)
+
+    # Конверсия клики → подписки
+    cr = round(summary["total"] / cl_summary["total"] * 100, 1) if cl_summary["total"] else 0
+
+    def sparkline(data, key, color="#60a5fa"):
+        if not data: return '<div style="color:var(--text3);font-size:.8rem">Нет данных</div>'
+        mx = max((d[key] for d in data), default=1) or 1
         bars = ""
-        for d in data[-20:]:
-            h = max(4, int(d[key] / max_val * 140))
-            day = d["day"][-5:] if d.get("day") else ""
-            bars += f'<div class="chart-bar-wrap"><div class="chart-bar {color}" style="height:{h}px" title="{d[key]}"></div><div class="chart-label">{day}</div></div>'
-        return f'<div class="chart-wrap">{bars}</div><div style="font-size:.75rem;color:#475569;margin-top:8px">{label} (последние 30 дней)</div>'
+        for d in data:
+            h = max(3, int(d[key] / mx * 80))
+            tip = f"{d.get('day','')}: {d[key]}"
+            bars += f'<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:0">' \
+                    f'<div title="{tip}" style="width:100%;background:{color};border-radius:3px 3px 0 0;height:{h}px;min-height:3px;cursor:default"></div>' \
+                    f'<div style="font-size:.55rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:28px">{str(d.get("day",""))[-5:]}</div></div>'
+        return f'<div style="display:flex;align-items:flex-end;gap:2px;height:100px;padding:10px 0 0">{bars}</div>'
 
-    # Кампании таблица
-    camp_rows = "".join(f"""<tr>
-        <td><span class="badge">{c['campaign_name']}</span></td>
-        <td style="font-weight:700;color:#60a5fa">{c['joins']}</td>
-        <td>{c['first_join'][:10] if c.get('first_join') else '—'}</td>
-        <td>{c['last_join'][:10] if c.get('last_join') else '—'}</td>
-    </tr>""" for c in campaign_stats) or '<tr><td colspan="4"><div class="empty">Нет данных</div></td></tr>'
+    def kpi(val, label, sub="", color="var(--accent)"):
+        return f'''<div class="kpi-card">
+            <div class="kpi-val" style="color:{color}">{val}</div>
+            <div class="kpi-label">{label}</div>
+            {"<div class='kpi-sub'>"+sub+"</div>" if sub else ""}
+        </div>'''
 
-    fn_steps = [("new","🆕 Новых"),("review","👀 Смотрим"),("interview","🎙 Интервью"),("hired","✅ Принят"),("rejected","❌ Отказ")]
-    funnel_html = "".join(f"""<div class="funnel-step">
-        <div class="fn" style="color:{'#34d399' if s=='hired' else '#f87171' if s=='rejected' else '#60a5fa'}">{funnel.get(s,0)}</div>
-        <div class="fl">{l}</div></div>""" for s,l in fn_steps)
+    # Таблица каналов
+    ch_rows = ""
+    for c in by_channel:
+        pct = round(c["joins"] / summary["total"] * 100) if summary["total"] else 0
+        ch_rows += f"""<tr>
+            <td style="font-weight:600">{c['channel_name']}</td>
+            <td><div style="display:flex;align-items:center;gap:8px">
+                <div style="flex:1;background:var(--bg3);border-radius:4px;height:6px">
+                    <div style="width:{pct}%;background:var(--accent);border-radius:4px;height:6px"></div>
+                </div>
+                <span style="font-weight:700;color:var(--accent);min-width:28px">{c['joins']}</span>
+            </div></td>
+            <td style="color:#f97316">{c['from_ads']}</td>
+            <td style="color:var(--text3);font-size:.8rem">{c['last_join'][:10] if c.get('last_join') else '—'}</td>
+        </tr>"""
+    ch_rows = ch_rows or '<tr><td colspan="4"><div class="empty">Нет данных</div></td></tr>'
 
+    # Таблица кампаний
+    camp_rows = ""
+    for c in by_campaign:
+        camp_rows += f"""<tr>
+            <td><span class="badge">{c['campaign_name']}</span></td>
+            <td style="font-weight:700;color:var(--accent)">{c['joins']}</td>
+            <td style="color:var(--text3)">{c['tracked']}</td>
+            <td style="color:var(--text3);font-size:.8rem">{c['first_join'][:10] if c.get('first_join') else '—'}</td>
+            <td style="color:var(--text3);font-size:.8rem">{c['last_join'][:10] if c.get('last_join') else '—'}</td>
+        </tr>"""
+    camp_rows = camp_rows or '<tr><td colspan="5"><div class="empty">Нет данных</div></td></tr>'
+
+    # UTM источники
+    utm_rows = ""
+    for u in utm_src:
+        utm_rows += f"""<tr>
+            <td><span class="badge-gray">{u['source']}</span></td>
+            <td style="color:var(--text3)">{u['medium']}</td>
+            <td style="font-weight:600">{u['clicks']}</td>
+        </tr>"""
+    utm_rows = utm_rows or '<tr><td colspan="3"><div class="empty">Нет данных</div></td></tr>'
+
+    # Последние подписки
+    recent_rows = ""
+    for j in recent[:30]:
+        src_icon = "📘" if j.get("utm_source") in ("facebook","fb") else ("🔗" if j.get("utm_source") else "🌿")
+        recent_rows += f"""<tr>
+            <td style="color:var(--text3);font-size:.78rem">{str(j['joined_at'])[:16].replace('T',' ')}</td>
+            <td style="font-weight:600">{j.get('channel_name','—')}</td>
+            <td><span class="badge" style="font-size:.7rem">{j['campaign_name']}</span></td>
+            <td title="{j.get('utm_source','') or ''}">{src_icon} {j.get('utm_source') or 'organic'}</td>
+            <td>{"✅" if j.get('fbclid') else "—"}</td>
+        </tr>"""
+    recent_rows = recent_rows or '<tr><td colspan="5"><div class="empty">Нет подписок за период</div></td></tr>'
+
+    # Dual chart data (joins + clicks по дням)
+    chart_html = _dual_sparkline(joins_day, clicks_day)
+
+    sel_period = lambda v,l: f'<option value="{v}" {"selected" if period==v else ""}>{l}</option>'
     content = f"""<div class="page-wrap">
-    <div class="page-title">📈 Статистика</div>
-    <div class="page-sub">Графики и аналитика</div>
+    <div class="page-title">📈 Статистика Клиентов</div>
+    <div class="page-sub">Подписки, клики, кампании, конверсия</div>
 
-    <div class="section">
-      <div class="section-head"><h3>📡 Подписки по дням (Клиенты)</h3></div>
-      <div class="section-body">{bar_chart(joins_by_day, 'cnt', 'blue', 'Подписок в день')}</div>
+    <form method="get" action="/analytics/clients" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:24px">
+      <div class="field-group" style="max-width:150px">
+        <div class="field-label">Период</div>
+        <select name="period" onchange="this.form.submit()">
+          {sel_period("7","7 дней")}
+          {sel_period("14","14 дней")}
+          {sel_period("30","30 дней")}
+          {sel_period("60","60 дней")}
+          {sel_period("90","90 дней")}
+        </select>
+      </div>
+      <div class="field-group"><div class="field-label">С даты</div>
+        <input type="date" name="date_from" value="{date_from}"/></div>
+      <div class="field-group"><div class="field-label">По дату</div>
+        <input type="date" name="date_to" value="{date_to}"/></div>
+      <div style="display:flex;align-items:flex-end;gap:6px">
+        <button class="btn">Применить</button>
+        <a href="/analytics/clients" class="btn-gray">Сбросить</a>
+      </div>
+    </form>
+
+    <div class="kpi-grid">
+      {kpi(summary['total'], 'Подписок всего', f"{summary['from_ads']} из рекламы / {summary['organic']} organic")}
+      {kpi(cl_summary['total'], 'Кликов на /go', f"{cl_summary['from_fb']} из Facebook")}
+      {kpi(f"{cr}%", 'Конверсия', 'клики → подписки', "#34d399" if cr>10 else "#f97316")}
+      {kpi(cl_summary['has_fbp'], 'С fbp cookie', 'для FB CAPI matching')}
+      {kpi(summary['channels_active'], 'Активных каналов', '')}
+      {kpi(summary['campaigns_active'], 'Кампаний', '')}
     </div>
 
     <div class="section">
-      <div class="section-head"><h3>🎯 Клики /go по дням</h3></div>
-      <div class="section-body">{bar_chart(click_stats, 'clicks', 'blue', 'Кликов в день')}</div>
+      <div class="section-head"><h3>📊 Подписки и клики по дням</h3></div>
+      <div class="section-body">{chart_html}</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="section">
+        <div class="section-head"><h3>📡 По каналам</h3></div>
+        <table><thead><tr><th>Канал</th><th>Подписок</th><th>Реклама</th><th>Последняя</th></tr></thead>
+        <tbody>{ch_rows}</tbody></table>
+      </div>
+      <div class="section">
+        <div class="section-head"><h3>🔗 Источники трафика</h3></div>
+        <table><thead><tr><th>Источник</th><th>Medium</th><th>Кликов</th></tr></thead>
+        <tbody>{utm_rows}</tbody></table>
+      </div>
     </div>
 
     <div class="section">
-      <div class="section-head"><h3>👔 Новые сотрудники по дням</h3></div>
-      <div class="section-body">{bar_chart(staff_by_day, 'cnt', 'orange', 'Сотрудников в день')}</div>
-    </div>
-
-    <div style="font-size:.76rem;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:.08em;margin:18px 0 10px">Воронка сотрудников</div>
-    <div class="funnel">{funnel_html}</div>
-
-    <div class="section">
-      <div class="section-head"><h3>🔗 Кампании по подпискам</h3></div>
-      <table><thead><tr><th>Кампания</th><th>Подписчиков</th><th>Первая</th><th>Последняя</th></tr></thead>
+      <div class="section-head"><h3>🎯 По кампаниям</h3></div>
+      <table><thead><tr><th>Кампания</th><th>Подписок</th><th>Трекинг</th><th>Первая</th><th>Последняя</th></tr></thead>
       <tbody>{camp_rows}</tbody></table>
-    </div></div>"""
-    return HTMLResponse(base(content, "analytics", request))
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h3>⏱ Последние подписки</h3></div>
+      <table><thead><tr><th>Время</th><th>Канал</th><th>Кампания</th><th>Источник</th><th>fbclid</th></tr></thead>
+      <tbody>{recent_rows}</tbody></table>
+    </div>
+    </div>"""
+    return HTMLResponse(base(content + _analytics_css(), "analytics_clients", request))
+
+
+@app.get("/analytics/staff", response_class=HTMLResponse)
+async def analytics_staff(request: Request,
+    date_from: str = "", date_to: str = "", period: str = "30"):
+    user, err = require_auth(request)
+    if err: return err
+
+    days = int(period) if period.isdigit() else 30
+    df   = date_from or None
+    dt   = date_to   or None
+
+    summary    = db.get_staff_summary(days=days, date_from=df, date_to=dt)
+    by_day     = db.get_staff_by_day(days=days, date_from=df, date_to=dt)
+    msg_day    = db.get_messages_by_day(days=days, date_from=df, date_to=dt)
+    wa_day     = db.get_wa_messages_by_day(days=days, date_from=df, date_to=dt)
+    msg_sum    = db.get_messages_summary(days=days, date_from=df, date_to=dt)
+    funnel     = db.get_staff_funnel(date_from=df, date_to=dt)
+    resp_stats = db.get_staff_response_stats(days=days, date_from=df, date_to=dt)
+
+    def kpi(val, label, sub="", color="var(--accent)"):
+        return f'''<div class="kpi-card">
+            <div class="kpi-val" style="color:{color}">{val}</div>
+            <div class="kpi-label">{label}</div>
+            {"<div class='kpi-sub'>"+sub+"</div>" if sub else ""}
+        </div>'''
+
+    def sparkline(data, key, color="#f97316"):
+        if not data: return '<div style="color:var(--text3);font-size:.8rem">Нет данных</div>'
+        mx = max((d[key] for d in data), default=1) or 1
+        bars = ""
+        for d in data:
+            h = max(3, int(d[key] / mx * 80))
+            bars += f'<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:0">' \
+                    f'<div title="{d.get("day","")}: {d[key]}" style="width:100%;background:{color};border-radius:3px 3px 0 0;height:{h}px;min-height:3px;cursor:default"></div>' \
+                    f'<div style="font-size:.55rem;color:var(--text3);white-space:nowrap;overflow:hidden;max-width:28px">{str(d.get("day",""))[-5:]}</div></div>'
+        return f'<div style="display:flex;align-items:flex-end;gap:2px;height:100px;padding:10px 0 0">{bars}</div>'
+
+    # Воронка
+    fn_total  = summary["total"] or 1
+    fn_steps  = [
+        ("s_new",       "🆕 Новые",     "#60a5fa"),
+        ("s_review",    "👀 Смотрим",   "#a78bfa"),
+        ("s_interview", "🎙 Интервью",  "#f59e0b"),
+        ("s_hired",     "✅ Принят",    "#34d399"),
+        ("s_rejected",  "❌ Отказ",     "#f87171"),
+    ]
+    funnel_html = ""
+    for key, label, color in fn_steps:
+        val = summary.get(key, 0)
+        pct = round(val / fn_total * 100)
+        funnel_html += f"""<div class="funnel-item">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                <span style="font-size:.85rem;font-weight:600">{label}</span>
+                <span style="font-weight:700;color:{color}">{val} <span style="color:var(--text3);font-size:.75rem">({pct}%)</span></span>
+            </div>
+            <div style="background:var(--bg3);border-radius:6px;height:8px">
+                <div style="width:{pct}%;background:{color};border-radius:6px;height:8px;transition:width .3s"></div>
+            </div>
+        </div>"""
+
+    # Конверсия найм
+    conv_hire = funnel.get("conversion_hired", 0)
+
+    # Таблица активности сотрудников
+    staff_rows = ""
+    status_colors = {"new":"var(--accent)","review":"#a78bfa","interview":"#f59e0b","hired":"#34d399","rejected":"#f87171"}
+    for s in resp_stats:
+        sc = status_colors.get(s.get("status","new"), "var(--text3)")
+        last_msg = str(s.get("last_message_at",""))[:16].replace("T"," ") if s.get("last_message_at") else "—"
+        staff_rows += f"""<tr>
+            <td style="font-weight:600">{s.get('name') or '—'}</td>
+            <td><span style="color:{sc};font-weight:600;font-size:.8rem">{s.get('status','—')}</span></td>
+            <td style="color:var(--accent);font-weight:700">{s['msg_count']}</td>
+            <td style="color:var(--text3);font-size:.78rem">{last_msg}</td>
+            <td style="color:var(--text3);font-size:.78rem">{str(s.get('created_at',''))[:10]}</td>
+        </tr>"""
+    staff_rows = staff_rows or '<tr><td colspan="5"><div class="empty">Нет данных</div></td></tr>'
+
+    sel_period = lambda v,l: f'<option value="{v}" {"selected" if period==v else ""}>{l}</option>'
+    content = f"""<div class="page-wrap">
+    <div class="page-title">📊 Статистика Сотрудников</div>
+    <div class="page-sub">Лиды, воронка найма, активность переписки</div>
+
+    <form method="get" action="/analytics/staff" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:24px">
+      <div class="field-group" style="max-width:150px">
+        <div class="field-label">Период</div>
+        <select name="period" onchange="this.form.submit()">
+          {sel_period("7","7 дней")}
+          {sel_period("14","14 дней")}
+          {sel_period("30","30 дней")}
+          {sel_period("60","60 дней")}
+          {sel_period("90","90 дней")}
+        </select>
+      </div>
+      <div class="field-group"><div class="field-label">С даты</div>
+        <input type="date" name="date_from" value="{date_from}"/></div>
+      <div class="field-group"><div class="field-label">По дату</div>
+        <input type="date" name="date_to" value="{date_to}"/></div>
+      <div style="display:flex;align-items:flex-end;gap:6px">
+        <button class="btn">Применить</button>
+        <a href="/analytics/staff" class="btn-gray">Сбросить</a>
+      </div>
+    </form>
+
+    <div class="kpi-grid">
+      {kpi(summary['total'], 'Новых лидов', f"за период")}
+      {kpi(summary['s_hired'], 'Принято', f'{conv_hire}% конверсия', '#34d399')}
+      {kpi(summary['s_interview'], 'На интервью', '', '#f59e0b')}
+      {kpi(summary['s_rejected'], 'Отказов', '', '#f87171')}
+      {kpi(msg_sum['total'], 'Сообщений TG', f"{msg_sum['incoming']} вх / {msg_sum['outgoing']} исх")}
+      {kpi(msg_sum['active_convos'], 'Активных чатов', '')}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="section">
+        <div class="section-head"><h3>📈 Новые лиды по дням</h3></div>
+        <div class="section-body">{sparkline(by_day, 'cnt', '#f97316')}</div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h3>💬 Сообщения TG по дням</h3></div>
+        <div class="section-body">{sparkline(msg_day, 'total', '#60a5fa')}</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h3>🎯 Воронка найма</h3></div>
+      <div class="section-body"><div style="display:flex;flex-direction:column;gap:12px;max-width:500px">{funnel_html}</div></div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h3>👥 Активность по сотрудникам</h3></div>
+      <table><thead><tr><th>Имя</th><th>Статус</th><th>Сообщений</th><th>Последнее сообщение</th><th>Добавлен</th></tr></thead>
+      <tbody>{staff_rows}</tbody></table>
+    </div>
+    </div>"""
+    return HTMLResponse(base(content + _analytics_css(), "analytics_staff", request))
+
+
+def _dual_sparkline(joins_day, clicks_day):
+    """График подписок + кликов на одной шкале"""
+    if not joins_day and not clicks_day:
+        return '<div class="empty">Нет данных за период</div>'
+    # Объединяем дни
+    days_set = sorted(set(
+        [d["day"] for d in joins_day] + [d["day"] for d in clicks_day]
+    ))
+    j_map = {d["day"]: d["cnt"] for d in joins_day}
+    c_map = {d["day"]: d["clicks"] for d in clicks_day}
+    mx = max([j_map.get(d,0) for d in days_set] + [c_map.get(d,0) for d in days_set] + [1])
+    bars = ""
+    for day in days_set[-40:]:
+        jh = max(2, int(j_map.get(day,0) / mx * 90))
+        ch = max(2, int(c_map.get(day,0) / mx * 90))
+        label = str(day)[-5:]
+        bars += f'''<div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;min-width:0">
+            <div style="width:100%;display:flex;align-items:flex-end;gap:1px;height:92px">
+                <div title="{day} подписок: {j_map.get(day,0)}" style="flex:1;background:#60a5fa;border-radius:2px 2px 0 0;height:{jh}px"></div>
+                <div title="{day} кликов: {c_map.get(day,0)}" style="flex:1;background:rgba(249,115,22,.5);border-radius:2px 2px 0 0;height:{ch}px"></div>
+            </div>
+            <div style="font-size:.52rem;color:var(--text3);max-width:28px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{label}</div>
+        </div>'''
+    legend = '''<div style="display:flex;gap:16px;margin-top:10px;font-size:.78rem;color:var(--text3)">
+        <span><span style="display:inline-block;width:10px;height:10px;background:#60a5fa;border-radius:2px;margin-right:4px"></span>Подписки</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:rgba(249,115,22,.5);border-radius:2px;margin-right:4px"></span>Клики</span>
+    </div>'''
+    return f'<div style="display:flex;align-items:flex-end;gap:2px;height:110px">{bars}</div>{legend}'
+
+
+def _analytics_css():
+    return """<style>
+    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+    .kpi-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center}
+    .kpi-val{font-size:1.8rem;font-weight:800;line-height:1.1;margin-bottom:4px}
+    .kpi-label{font-size:.78rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
+    .kpi-sub{font-size:.72rem;color:var(--text3);margin-top:4px}
+    .funnel-item{margin-bottom:8px}
+    @media(max-width:640px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+    </style>"""
 
 
 # ══════════════════════════════════════════════════════════════════════════════

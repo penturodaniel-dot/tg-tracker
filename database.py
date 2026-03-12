@@ -207,6 +207,9 @@ class Database:
                     # messages (TG) — колонки для медиа
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_url TEXT",
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type TEXT",
+                    # staff — поддержка карточек из WA чатов
+                    "ALTER TABLE staff ADD COLUMN IF NOT EXISTS wa_conv_id INTEGER DEFAULT NULL",
+                    "ALTER TABLE staff ALTER COLUMN tg_chat_id DROP NOT NULL",
                 ]
                 for m in migrations:
                     try:
@@ -610,6 +613,30 @@ class Database:
                 cur.execute("SELECT * FROM staff WHERE conversation_id=%s", (conv_id,))
                 r = cur.fetchone(); return dict(r) if r else None
 
+    def get_staff_by_id(self, staff_id):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM staff WHERE id=%s", (staff_id,))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def get_staff_by_wa_conv(self, wa_conv_id):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM staff WHERE wa_conv_id=%s", (wa_conv_id,))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def get_or_create_wa_staff(self, wa_conv_id, name, wa_number):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM staff WHERE wa_conv_id=%s", (wa_conv_id,))
+                r = cur.fetchone()
+                if r: return dict(r)
+                cur.execute("""INSERT INTO staff (wa_conv_id, name, username, created_at)
+                    VALUES (%s,%s,%s,%s) RETURNING *""",
+                    (wa_conv_id, name, wa_number, datetime.utcnow().isoformat()))
+                r = cur.fetchone()
+            conn.commit(); return dict(r)
+
     def set_staff_fb_event(self, staff_id, event):
         with self._conn() as conn:
             with conn.cursor() as cur:
@@ -789,9 +816,15 @@ class Database:
     def get_wa_stats(self):
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) as c FROM wa_conversations"); total = cur.fetchone()["c"]
-                cur.execute("SELECT COALESCE(SUM(unread_count),0) as c FROM wa_conversations"); unread = cur.fetchone()["c"]
-                return {"total": total, "unread": int(unread)}
+                def cnt(q): cur.execute(q); return cur.fetchone()["c"]
+                return {
+                    "total_convs": cnt("SELECT COUNT(*) as c FROM wa_conversations"),
+                    "open_convs":  cnt("SELECT COUNT(*) as c FROM wa_conversations WHERE status='open'"),
+                    "unread":      cnt("SELECT COALESCE(SUM(unread_count),0) as c FROM wa_conversations"),
+                    "total_msgs":  cnt("SELECT COUNT(*) as c FROM wa_messages"),
+                    "incoming":    cnt("SELECT COUNT(*) as c FROM wa_messages WHERE sender_type='visitor'"),
+                    "outgoing":    cnt("SELECT COUNT(*) as c FROM wa_messages WHERE sender_type='manager'"),
+                }
 
     # ── Stats ─────────────────────────────────────────────────────────────────
     def get_stats(self):

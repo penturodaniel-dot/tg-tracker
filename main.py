@@ -703,6 +703,7 @@ async def analytics_staff(request: Request,
     msg_day    = db.get_messages_by_day(days=days, date_from=df, date_to=dt)
     wa_day     = db.get_wa_messages_by_day(days=days, date_from=df, date_to=dt)
     msg_sum    = db.get_messages_summary(days=days, date_from=df, date_to=dt)
+    wa_stats   = db.get_wa_stats()
     funnel     = db.get_staff_funnel(date_from=df, date_to=dt)
     resp_stats = db.get_staff_response_stats(days=days, date_from=df, date_to=dt)
 
@@ -797,7 +798,9 @@ async def analytics_staff(request: Request,
       {kpi(summary['s_interview'], 'На интервью', '', '#f59e0b')}
       {kpi(summary['s_rejected'], 'Отказов', '', '#f87171')}
       {kpi(msg_sum['total'], 'Сообщений TG', f"{msg_sum['incoming']} вх / {msg_sum['outgoing']} исх")}
-      {kpi(msg_sum['active_convos'], 'Активных чатов', '')}
+      {kpi(msg_sum['active_convos'], 'Активных TG чатов', '')}
+      {kpi(wa_stats.get('total_convs', 0), 'WA чатов всего', f"{wa_stats.get('open_convs',0)} открытых", '#25d366')}
+      {kpi(wa_stats.get('total_msgs', 0), 'Сообщений WA', f"{wa_stats.get('incoming',0)} вх / {wa_stats.get('outgoing',0)} исх", '#25d366')}
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
@@ -808,6 +811,10 @@ async def analytics_staff(request: Request,
       <div class="section">
         <div class="section-head"><h3>💬 Сообщения TG по дням</h3></div>
         <div class="section-body">{sparkline(msg_day, 'total', '#60a5fa')}</div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h3>💚 Сообщения WA по дням</h3></div>
+        <div class="section-body">{sparkline(wa_day, 'total', '#25d366')}</div>
       </div>
     </div>
 
@@ -935,7 +942,8 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
 
             delete_btn = f'<button class="btn-gray btn-sm" style="color:#ef4444;border-color:#7f1d1d" onclick="deleteConv({conv_id})">🗑</button>'
 
-            staff_link = f'<a href="/staff?edit={staff["id"]}" style="color:var(--orange);font-size:.74rem">Карточка →</a>' if staff else ""
+            staff_link = f'<a href="/staff?edit={staff["id"]}" style="color:var(--orange);font-size:.74rem;text-decoration:none">Карточка →</a>' if staff else \
+                         f'<a href="/staff/create_from_conv?conv_id={conv_id}" style="color:var(--text3);font-size:.74rem;text-decoration:none">+ Создать карточку</a>'
 
             header_html = f"""<div class="chat-header">
               <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
@@ -1195,14 +1203,18 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
 
     edit_form = ""
     if edit:
-        with db._conn() as conn:
-            s = conn.execute("SELECT * FROM staff WHERE id=?", (edit,)).fetchone()
+        s = db.get_staff_by_id(edit)
         if s:
-            s = dict(s)
             status_opts = "".join(f'<option value="{k}" {"selected" if s.get("status")==k else ""}>{icon} {label}</option>'
                                   for k, (icon, label, _) in STAFF_STATUSES.items())
+            # Ссылка на чат (TG или WA)
+            chat_link = ""
+            if s.get("conversation_id"):
+                chat_link = f'<a href="/chat?conv_id={s["conversation_id"]}" class="btn-gray btn-sm" style="text-decoration:none">💬 TG чат</a>'
+            elif s.get("wa_conv_id"):
+                chat_link = f'<a href="/wa/chat?conv_id={s["wa_conv_id"]}" class="btn-gray btn-sm" style="text-decoration:none;background:#052e16;border-color:#166534;color:#86efac">💚 WA чат</a>'
             edit_form = f"""<div class="section" style="margin-bottom:18px;border-left:3px solid #f97316">
-              <div class="section-head"><h3>✏️ {s['name']}</h3></div>
+              <div class="section-head"><h3>✏️ {s.get('name','Карточка')}</h3>{chat_link}</div>
               <div class="section-body">
                 <form method="post" action="/staff/update">
                   <input type="hidden" name="staff_id" value="{s['id']}"/>
@@ -1264,6 +1276,49 @@ async def staff_update(request: Request, staff_id: int = Form(...), name: str = 
     if err: return err
     db.update_staff(staff_id, name, phone, email, position, status, notes, tags)
     return RedirectResponse(f"/staff?msg=Сохранено", 303)
+
+
+@app.get("/staff/create_from_conv")
+async def staff_create_from_conv(request: Request, conv_id: int = 0):
+    user, err = require_auth(request)
+    if err: return err
+    if not conv_id:
+        return RedirectResponse("/chat", 303)
+    conv = db.get_conversation(conv_id)
+    if not conv:
+        return RedirectResponse("/chat", 303)
+    # Создаём или находим карточку
+    existing = db.get_staff_by_conv(conv_id)
+    if existing:
+        return RedirectResponse(f"/staff?edit={existing['id']}", 303)
+    # Создаём новую карточку
+    staff = db.get_or_create_staff(
+        tg_chat_id=conv.get("tg_chat_id"),
+        name=conv.get("visitor_name","Новый"),
+        username=conv.get("username",""),
+        conv_id=conv_id
+    )
+    return RedirectResponse(f"/staff?edit={staff['id']}", 303)
+
+
+@app.get("/staff/create_from_wa")
+async def staff_create_from_wa(request: Request, conv_id: int = 0):
+    user, err = require_auth(request)
+    if err: return err
+    if not conv_id:
+        return RedirectResponse("/wa/chat", 303)
+    conv = db.get_wa_conversation(conv_id)
+    if not conv:
+        return RedirectResponse("/wa/chat", 303)
+    existing = db.get_staff_by_wa_conv(conv_id)
+    if existing:
+        return RedirectResponse(f"/staff?edit={existing['id']}", 303)
+    staff = db.get_or_create_wa_staff(
+        wa_conv_id=conv_id,
+        name=conv.get("visitor_name","Новый"),
+        wa_number=conv.get("wa_number","")
+    )
+    return RedirectResponse(f"/staff?edit={staff['id']}", 303)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1380,9 +1435,6 @@ async def settings_page(request: Request, msg: str = ""):
         <a href="/wa/setup" class="btn" style="background:#059669;display:inline-flex;align-items:center;gap:8px;text-decoration:none">
           📱 Открыть подключение WhatsApp / QR-код
         </a>
-        <div style="font-size:.78rem;color:var(--text3);margin-top:8px">
-          Здесь сканируешь QR для подключения номера. После деплоя нужно переподключать если статус ⚫.
-        </div>
       </div>
     </div>
 
@@ -1400,43 +1452,22 @@ async def settings_page(request: Request, msg: str = ""):
     </div>
 
     <div class="section">
-      <div class="section-head"><h3>🔔 Уведомления менеджеру</h3></div>
+      <div class="section-head"><h3>🔔 Уведомления</h3></div>
       <div class="section-body">
         <form method="post" action="/settings/notify">
           <div class="grid-2" style="margin-bottom:12px">
-            <div class="field-group"><div class="field-label">Telegram Chat ID менеджера</div>
-              <input type="text" name="notify_chat_id" value="{notify_chat}" placeholder="Например: 123456789"/>
-              <span style="font-size:.75rem;color:#475569">Напишите /start @userinfobot чтобы узнать свой ID</span>
+            <div class="field-group">
+              <div class="field-label">Chat ID или ID канала для уведомлений</div>
+              <input type="text" name="notify_chat_id" value="{notify_chat}" placeholder="Например: -1001234567890"/>
+              <span style="font-size:.75rem;color:#475569;margin-top:4px;display:block">
+                Личный чат: напиши <b>/start</b> боту @userinfobot и скопируй id.<br>
+                Канал/группа: добавь бота как администратора → скопируй ID канала (начинается с -100).
+              </span>
             </div>
-            <div class="field-group"><div class="field-label">URL приложения (для кнопки в уведомлении)</div>
+            <div class="field-group">
+              <div class="field-label">URL приложения (для кнопки "Открыть чат")</div>
               <input type="text" name="app_url" value="{app_url}" placeholder="https://web-production-xxx.up.railway.app"/>
             </div>
-          </div>
-          <button class="btn">💾 Сохранить</button>
-        </form>
-      </div>
-    </div>
-
-    <div class="section" style="border-left:3px solid #f97316">
-      <div class="section-head"><h3>👔 Бот сотрудников — тексты</h3></div>
-      <div class="section-body">
-        <form method="post" action="/settings/staff_welcome">
-          <div class="field-group" style="margin-bottom:12px">
-            <div class="field-label">Приветственное сообщение (/start)</div>
-            <textarea name="staff_welcome">{staff_welcome}</textarea>
-          </div>
-          <button class="btn-orange">💾 Сохранить</button>
-        </form>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-head"><h3>🌐 Лендинг</h3></div>
-      <div class="section-body">
-        <form method="post" action="/settings/landing">
-          <div class="grid-2" style="margin-bottom:12px">
-            <div class="field-group"><div class="field-label">Заголовок</div><input type="text" name="landing_title" value="{land_title}"/></div>
-            <div class="field-group"><div class="field-label">Подзаголовок</div><input type="text" name="landing_subtitle" value="{land_sub}"/></div>
           </div>
           <button class="btn">💾 Сохранить</button>
         </form>
@@ -1493,7 +1524,7 @@ async def settings_staff_welcome(request: Request, staff_welcome: str = Form("")
     user, err = require_auth(request, role="admin")
     if err: return err
     if staff_welcome: db.set_setting("staff_welcome", staff_welcome)
-    return RedirectResponse("/settings?msg=Сохранено", 303)
+    return RedirectResponse("/landings_staff?msg=Текст+бота+сохранён", 303)
 
 
 @app.post("/settings/landing")
@@ -1751,7 +1782,27 @@ async def landings_client(request: Request, msg: str = ""):
 async def landings_staff_page(request: Request, msg: str = ""):
     user, err = require_auth(request)
     if err: return err
-    return HTMLResponse(base(_landings_page(ltype="staff", active="landings_staff", msg=msg, request=request), "landings_staff", request))
+    staff_welcome = db.get_setting("staff_welcome", "Привет! Напиши своё имя и должность 👋")
+    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+    welcome_block = f"""
+    <div class="section" style="border-left:3px solid #f97316">
+      <div class="section-head"><h3>👔 Текст бота сотрудников (/start)</h3></div>
+      <div class="section-body">
+        <form method="post" action="/settings/staff_welcome">
+          <div class="field-group" style="margin-bottom:12px">
+            <div class="field-label">Первое сообщение когда сотрудник пишет /start боту</div>
+            <textarea name="staff_welcome" rows="4" style="min-height:90px">{staff_welcome}</textarea>
+            <span style="font-size:.75rem;color:#475569;margin-top:4px;display:block">Это сообщение видит кандидат при первом контакте с ботом сотрудников</span>
+          </div>
+          <button class="btn-orange">💾 Сохранить текст</button>
+        </form>
+      </div>
+    </div>
+    {alert}"""
+    page_content = _landings_page(ltype="staff", active="landings_staff", msg="", request=request)
+    # Вставляем блок бота перед контентом страницы
+    page_content = welcome_block + page_content
+    return HTMLResponse(base(page_content, "landings_staff", request))
 
 
 def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
@@ -2384,7 +2435,12 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
                         f'<form method="post" action="/wa/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-green btn-sm">↺ Открыть</button></form>'
             delete_wa_btn = f'<button class="btn-gray btn-sm" style="color:#ef4444;border-color:#7f1d1d" onclick="deleteWaConv({conv_id})">🗑</button>'
 
-            # UTM теги для WA
+            # Карточка сотрудника для WA
+            wa_staff = db.get_staff_by_wa_conv(conv_id)
+            if wa_staff:
+                wa_card_link = f'<a href="/staff?edit={wa_staff["id"]}" style="color:#fbbf24;font-size:.74rem;text-decoration:none">Карточка →</a>'
+            else:
+                wa_card_link = f'<a href="/staff/create_from_wa?conv_id={conv_id}" style="color:var(--text3);font-size:.74rem;text-decoration:none">+ Создать карточку</a>'
             wa_utm_tags = ""
             utm_parts = []
             if active_conv.get("fbclid"):
@@ -2401,7 +2457,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
                 <div style="width:36px;height:36px;border-radius:50%;background:#052e16;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">💚</div>
                 <div style="flex:1">
                   <div style="font-weight:700;color:#fff">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.74rem">●</span></div>
-                  <div style="font-size:.79rem;color:#475569">+{active_conv['wa_number']}</div>
+                  <div style="font-size:.79rem;color:#475569">+{active_conv['wa_number']} · {wa_card_link}</div>
                   <div style="margin-top:6px">{fb_btn}</div>
                   {wa_utm_tags}
                 </div>

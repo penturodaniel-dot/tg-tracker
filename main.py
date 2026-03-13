@@ -2867,13 +2867,8 @@ def _tpl_massage_job(name: str, contacts: list, pixel_js: str, year: int) -> str
     WA_LG  = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5Z"/></svg>'
 
     def _make_nav(cs):
-        h = ""
-        for c in cs:
-            if c["type"] == "telegram":
-                h += f'<a class="btn-tg call-button" href="{c["url"]}" target="_blank" rel="noopener" style="padding:8px 14px;font-size:.8rem">{TG_NAV} {c["label"]}</a>'
-            elif c["type"] == "whatsapp":
-                h += f'<a class="btn-tg call-button" href="{c["url"]}" target="_blank" rel="noopener" style="padding:8px 14px;font-size:.8rem;background:linear-gradient(135deg,#25D366,#1da851)">{WA_NAV} {c["label"]}</a>'
-        return h
+        # Кнопки в шапке убраны по дизайну
+        return ""
 
     def _make_pri(cs):
         h = ""
@@ -2884,7 +2879,7 @@ def _tpl_massage_job(name: str, contacts: list, pixel_js: str, year: int) -> str
                 h += f'<a class="btn-tg call-button" href="{c["url"]}" target="_blank" rel="noopener" style="background:linear-gradient(135deg,#25D366,#1da851)">{WA_LG} <span>{c["label"]}</span></a> '
             else:
                 h += f'<a class="btn-tg call-button" href="{c["url"]}" target="_blank" rel="noopener"><span>{c["label"]}</span></a> '
-        return f'<div style="display:flex;flex-wrap:wrap;gap:10px">{h or ""}</div>'
+        return f'<div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center">{h or ""}</div>'
 
     def _make_inv(cs):
         h = ""
@@ -2904,9 +2899,23 @@ def _tpl_massage_job(name: str, contacts: list, pixel_js: str, year: int) -> str
             h += f'<a href="{c["url"]}" target="_blank" class="fci call-button" rel="noopener"><span>{ico}</span><span>{c["label"]}</span></a>'
         return h
 
+    # CSS overrides: крупный заголовок, центрированный герой, скрыть ncta
+    _hero_overrides = """
+<style>
+.ncta{display:none!important}
+.hgrid{grid-template-columns:1fr!important;text-align:center;max-width:860px;margin:0 auto}
+.hleft{display:flex;flex-direction:column;align-items:center}
+.hleft h1{font-size:clamp(3rem,7vw+.5rem,5.5rem)!important;font-weight:900;line-height:1.05;margin-bottom:20px}
+.htag span{font-size:1.3rem}
+.hsub{max-width:560px;font-size:1.15rem;text-align:center}
+.hright{display:none!important}
+.hbadge{left:50%;transform:translateX(-50%);bottom:-20px}
+</style>
+"""
+
     return _HA_HTML.format(
         name=name,
-        pixel_js=pixel_js,
+        pixel_js=pixel_js + _hero_overrides,
         css=_HA_CSS,
         js=_HA_JS,
         LOGO=_HA_LOGO,

@@ -2412,17 +2412,13 @@ async def go_staff_redirect(request: Request, ref: str = ""):
     target_url = click.get("target_url", "")
     target_type = click.get("target_type", "wa")
 
-    # Добавляем ref код в ссылку чтобы связать чат с UTM
+    # Добавляем ref код только для TG (через ?start=), для WA - редиректим напрямую
     destination = target_url
-    if target_type == "whatsapp" or "wa.me" in target_url:
-        # wa.me/79991234567 → wa.me/79991234567?text=ref:XXX
-        sep = "&" if "?" in target_url else "?"
-        ref_text = __import__("urllib.parse", fromlist=["quote"]).quote(f"ref:{ref}")
-        destination = f"{target_url}{sep}text={ref_text}"
-    elif target_type == "telegram" or "t.me" in target_url:
+    if target_type == "telegram" or "t.me" in target_url:
         # t.me/username → t.me/username?start=ref_XXX
         sep = "&" if "?" in target_url else "?"
         destination = f"{target_url}{sep}start=ref_{ref}"
+    # Для WA — просто редиректим без ref в тексте (трекинг по времени в webhook)
 
     log.info(f"[/go-staff] ref={ref} type={target_type} utm={click.get('utm_campaign')} fbclid={'✓' if click.get('fbclid') else '—'}")
 
@@ -3104,26 +3100,36 @@ async def wa_webhook(request: Request):
                 return JSONResponse({"ok": True})
 
             conv = db.get_or_create_wa_conversation(wa_chat_id, wa_number, sender_name)
+            is_new_conv = not conv.get("utm_source") and not conv.get("fbclid")
 
-            # ── Проверяем ref: код в сообщении (UTM трекинг с HR лендинга) ──
+            # ── Трекинг UTM: сначала ref: код (TG-стиль), потом временное окно ──
             import re as _re
             ref_match = _re.search(r'\bref:([A-Za-z0-9_\-]{8,20})\b', text)
             if ref_match:
+                # Явный ref код в тексте (на случай если пользователь скопировал)
                 ref_id = ref_match.group(1)
                 click_data = db.get_staff_click(ref_id)
                 if click_data and not click_data.get("used"):
-                    db.apply_utm_to_wa_conv(
-                        conv["id"],
-                        fbclid=click_data.get("fbclid"),
-                        fbp=click_data.get("fbp"),
+                    db.apply_utm_to_wa_conv(conv["id"],
+                        fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),
                         utm_source=click_data.get("utm_source"),
                         utm_medium=click_data.get("utm_medium"),
-                        utm_campaign=click_data.get("utm_campaign"),
-                    )
+                        utm_campaign=click_data.get("utm_campaign"))
                     db.mark_staff_click_used(ref_id)
-                    # Обновляем локальный conv для уведомления
                     conv = db.get_wa_conversation(conv["id"]) or conv
-                    log.info(f"[WA webhook] UTM applied from ref:{ref_id} utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
+                    log.info(f"[WA webhook] UTM by ref:{ref_id} utm={click_data.get('utm_campaign')}")
+            elif is_new_conv:
+                # Трекинг по временному окну — ищем последний клик за 30 минут
+                click_data = db.get_staff_click_recent_any(minutes=30)
+                if click_data:
+                    db.apply_utm_to_wa_conv(conv["id"],
+                        fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),
+                        utm_source=click_data.get("utm_source"),
+                        utm_medium=click_data.get("utm_medium"),
+                        utm_campaign=click_data.get("utm_campaign"))
+                    db.mark_staff_click_used(click_data["ref_id"])
+                    conv = db.get_wa_conversation(conv["id"]) or conv
+                    log.info(f"[WA webhook] UTM by time-window utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
 
             db.save_wa_message(conv["id"], wa_chat_id, "visitor", text,
                                media_url=media_url, media_type=media_type)
@@ -3586,7 +3592,7 @@ async def wa_fetch_profile(request: Request, conv_id: int = Form(...)):
     conv = db.get_wa_conversation(conv_id)
     if not conv: return JSONResponse({"ok": False, "error": "not found"})
     try:
-        result = await wa_api("post", "/contact_info", {"wa_chat_id": conv["wa_chat_id"]})
+        result = await wa_api("post", "/contact_info", json={"wa_chat_id": conv["wa_chat_id"]})
         if result.get("ok"):
             db.update_wa_conv_profile(
                 conv_id,

@@ -546,6 +546,30 @@ class Database:
                 cur.execute("SELECT * FROM staff_clicks WHERE ref_id=%s", (ref_id,))
                 r = cur.fetchone(); return dict(r) if r else None
 
+    def get_staff_click_recent(self, landing_slug: str, minutes: int = 30):
+        """Ищет последний неиспользованный клик по лендингу за последние N минут"""
+        from datetime import timedelta
+        cutoff = (datetime.utcnow() - timedelta(minutes=minutes)).isoformat()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT * FROM staff_clicks
+                    WHERE landing_slug=%s AND used=0 AND created_at>=%s
+                    ORDER BY created_at DESC LIMIT 1""",
+                    (landing_slug, cutoff))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def get_staff_click_recent_any(self, minutes: int = 30):
+        """Ищет любой последний неиспользованный клик за последние N минут"""
+        from datetime import timedelta
+        cutoff = (datetime.utcnow() - timedelta(minutes=minutes)).isoformat()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT * FROM staff_clicks
+                    WHERE used=0 AND created_at>=%s
+                    ORDER BY created_at DESC LIMIT 1""",
+                    (cutoff,))
+                r = cur.fetchone(); return dict(r) if r else None
+
     def mark_staff_click_used(self, ref_id):
         with self._conn() as conn:
             with conn.cursor() as cur:

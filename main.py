@@ -82,7 +82,7 @@ def require_auth(request: Request, role: str = None, tab: str = None):
         perms = user.get("permissions", "") or ""
         allowed = [p.strip() for p in perms.split(",") if p.strip()]
         if allowed and tab not in allowed:
-            return None, HTMLResponse(f'<html><body style="background:#0a0d14;color:#e2e8f0;font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px"><div style="font-size:2rem">🚫</div><div style="font-size:1.1rem;font-weight:600">Нет доступа к этому разделу</div><a href="/" style="color:#f97316;font-size:.9rem">← Назад</a></body></html>', 403)
+            return None, HTMLResponse(f'<html><body style="background:var(--bg);color:var(--text);font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px"><div style="font-size:2rem">🚫</div><div style="font-size:1.1rem;font-weight:600">Нет доступа к этому разделу</div><a href="/" style="color:var(--orange);font-size:.9rem">← Назад</a></body></html>', 403)
     return user, None
 
 
@@ -91,132 +91,201 @@ def require_auth(request: Request, role: str = None, tab: str = None):
 # ══════════════════════════════════════════════════════════════════════════════
 
 CSS = """<style>
+/* ═══════════════════════════════════════════════════
+   DARK PRO — design system
+   palette: bg #080c14 · surface #0e1320 · card #111827
+            border #1c2438 · text #e2e8f0 · muted #4b5675
+            orange #f97316 · blue #3b82f6 · green #22c55e
+   ═══════════════════════════════════════════════════ */
+:root{
+  --bg:     #080c14;
+  --bg2:    #0e1320;
+  --bg3:    #111827;
+  --border: #1c2438;
+  --border2:#242d42;
+  --text:   #e2e8f0;
+  --text2:  #94a3b8;
+  --text3:  #4b5675;
+  --orange: #f97316;
+  --orange2:#ea580c;
+  --blue:   #3b82f6;
+  --blue2:  #2563eb;
+  --green:  #22c55e;
+  --red:    #f87171;
+  --radius: 10px;
+  --radius-sm:6px;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:#0a0d14;color:#e2e8f0;min-height:100vh}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
-.sidebar{position:fixed;top:0;left:0;width:230px;height:100vh;background:#0b0e17;border-right:1px solid #1a2030;display:flex;flex-direction:column;z-index:10;overflow-y:auto}
-.logo{padding:20px;font-size:1.1rem;font-weight:800;color:#fff;border-bottom:1px solid #1a2030;letter-spacing:-.01em;display:flex;align-items:center;justify-content:space-between}
-.logo span{color:#3b82f6}
-.logo-user{font-size:.72rem;color:#475569;font-weight:400}
-.nav-section{padding:14px 14px 5px;font-size:.67rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#334155}
-.nav-divider{height:1px;background:#1a2030;margin:6px 14px}
-.nav-item{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;font-size:.86rem;color:#64748b;border-radius:8px;margin:1px 8px;transition:all .15s;cursor:pointer}
-.nav-item:hover{background:#151d2e;color:#e2e8f0}
-.nav-item.active{background:#1a2535;color:#fff;font-weight:600}
-.nav-item.active.blue{border-left:3px solid #3b82f6;padding-left:11px}
-.nav-item.active.orange{border-left:3px solid #f97316;padding-left:11px}
-.nav-label{display:flex;align-items:center;gap:9px}
-.badge-count{background:#ef4444;color:#fff;border-radius:20px;padding:1px 7px;font-size:.7rem;font-weight:700;min-width:20px;text-align:center}
-.sidebar-footer{margin-top:auto;padding:12px;border-top:1px solid #1a2030}
-.bot-status{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#0f1420;border-radius:7px;margin-bottom:5px;font-size:.76rem;color:#64748b}
-.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.dot-green{background:#34d399}.dot-red{background:#ef4444}
-.main{margin-left:230px}
-/* CHAT */
-.chat-layout{display:grid;grid-template-columns:300px 1fr;height:100vh}
-.conv-list{background:#0b0e17;border-right:1px solid #1a2030;overflow-y:auto;display:flex;flex-direction:column}
-.conv-search{padding:12px;border-bottom:1px solid #1a2030}
-.conv-search input{width:100%;background:#0a0d14;border:1px solid #1a2030;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:.84rem;outline:none}
-.conv-item{padding:12px 14px;border-bottom:1px solid #0a0d14;cursor:pointer;transition:background .12s}
-.conv-item:hover{background:#111827}
-.conv-item.active{background:#1a2030;border-right:2px solid #f97316}
-.conv-name{font-weight:600;font-size:.87rem;color:#fff;display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
-.conv-preview{font-size:.77rem;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.conv-time{font-size:.69rem;color:#334155;margin-top:2px}
-.unread-num{background:#f97316;color:#fff;border-radius:20px;padding:1px 7px;font-size:.69rem;font-weight:700}
-.chat-window{display:flex;flex-direction:column;height:100vh}
-.chat-header{padding:14px 18px;border-bottom:1px solid #1a2030;background:#0b0e17;display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0}
-.chat-messages{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:10px}
-.msg{max-width:68%;word-break:break-word}
-.msg.visitor{align-self:flex-start}.msg.manager{align-self:flex-end}
-.msg-bubble{padding:10px 14px;border-radius:14px;font-size:.87rem;line-height:1.55}
-.msg.visitor .msg-bubble{background:#1e2535;color:#e2e8f0;border-bottom-left-radius:4px}
-.msg.manager .msg-bubble{background:#ea580c;color:#fff;border-bottom-right-radius:4px}
-.msg-time{font-size:.69rem;color:#475569;margin-top:3px}
-.msg.visitor .msg-time{text-align:left}.msg.manager .msg-time{text-align:right}
-.msg-img{max-width:220px;max-height:220px;border-radius:10px;display:block;cursor:pointer;margin:2px 0}
-.chat-input{padding:14px 18px;border-top:1px solid #1a2030;background:#0b0e17;flex-shrink:0}
-.chat-input-row{display:flex;gap:8px;align-items:flex-end}
-.chat-input textarea{flex:1;background:#0a0d14;border:1px solid #1a2030;border-radius:10px;padding:10px 13px;color:#e2e8f0;font-size:.87rem;outline:none;resize:none;max-height:120px;font-family:system-ui}
-.chat-input textarea:focus{border-color:#f97316}
-.send-btn-orange{background:#ea580c;color:#fff;border:none;border-radius:10px;padding:10px 18px;cursor:pointer;font-size:.87rem;font-weight:600;height:42px;flex-shrink:0}
-.send-btn-orange:hover{background:#c2410c}
-.no-conv{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#334155;gap:12px}
-/* GENERAL */
-.page-wrap{padding:28px;max-width:1100px}
-.page-title{font-size:1.3rem;font-weight:700;color:#fff;margin-bottom:3px}
-.page-sub{font-size:.82rem;color:#475569;margin-bottom:22px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:11px;margin-bottom:22px}
-.card{background:#111827;border:1px solid #1a2030;border-radius:12px;padding:16px}
-.card .val{font-size:1.7rem;font-weight:700;color:#60a5fa}
-.card .val.orange{color:#fb923c}.card .val.green{color:#34d399}.card .val.red{color:#f87171}
-.card .lbl{font-size:.74rem;color:#475569;margin-top:3px}
-.section{background:#111827;border:1px solid #1a2030;border-radius:12px;margin-bottom:16px;overflow:hidden}
-.section-head{padding:13px 18px;border-bottom:1px solid #1a2030;display:flex;justify-content:space-between;align-items:center}
-.section-head h3{font-size:.9rem;font-weight:600;color:#e2e8f0}
-.section-body{padding:16px}
+
+/* ── SIDEBAR ─────────────────────────────────────── */
+.sidebar{position:fixed;top:0;left:0;width:224px;height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:10;overflow-y:auto}
+.logo{padding:18px 16px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.logo-brand{font-size:.97rem;font-weight:700;color:var(--text);letter-spacing:-.01em}
+.logo-user{font-size:.72rem;color:var(--text3);margin-top:2px;font-weight:400}
+.logo-right{display:flex;align-items:center;gap:6px}
+.theme-toggle{cursor:pointer;font-size:1rem;padding:4px;border-radius:6px;transition:background .15s;color:var(--text3)}
+.theme-toggle:hover{background:var(--border)}
+.nav-section{padding:16px 16px 5px;font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)}
+.nav-divider{height:1px;background:var(--border);margin:6px 0}
+.nav-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;font-size:.82rem;color:var(--text3);border-radius:var(--radius-sm);margin:1px 8px;transition:all .12s;cursor:pointer}
+.nav-item:hover{background:var(--bg3);color:var(--text2)}
+.nav-item.active{background:var(--bg3);color:var(--text);font-weight:600}
+.nav-item.active.blue{border-left:2px solid var(--blue);padding-left:10px;margin-left:6px}
+.nav-item.active.orange{border-left:2px solid var(--orange);padding-left:10px;margin-left:6px}
+.nav-label{display:flex;align-items:center;gap:8px}
+.badge-count{background:var(--red);color:#fff;border-radius:99px;padding:0 6px;font-size:.67rem;font-weight:700;min-width:18px;height:16px;display:inline-flex;align-items:center;justify-content:center}
+.sidebar-footer{margin-top:auto;padding:12px 10px;border-top:1px solid var(--border)}
+.bot-status{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;margin-bottom:3px;font-size:.73rem;color:var(--text3)}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dot-green{background:var(--green)}.dot-red{background:var(--red)}.dot-yellow{background:#fbbf24}
+.main{margin-left:224px}
+
+/* ── PAGE HEADER ─────────────────────────────────── */
+.page-wrap{padding:26px 28px;max-width:1140px}
+.page-title{font-size:1.25rem;font-weight:700;color:var(--text);margin-bottom:3px;letter-spacing:-.01em}
+.page-sub{font-size:.8rem;color:var(--text3);margin-bottom:22px}
+
+/* ── KPI CARDS ───────────────────────────────────── */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px}
+.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden}
+.card::after{content:"";position:absolute;top:0;left:0;right:0;height:2px;border-radius:var(--radius) var(--radius) 0 0}
+.card.c-orange::after{background:var(--orange)}
+.card.c-blue::after{background:var(--blue)}
+.card.c-green::after{background:var(--green)}
+.card.c-red::after{background:var(--red)}
+.card .val{font-size:1.75rem;font-weight:700;color:var(--text);margin-bottom:4px;line-height:1}
+.card .val.orange{color:var(--orange)}.card .val.green{color:var(--green)}.card .val.red{color:var(--red)}.card .val.blue{color:var(--blue)}
+.card .lbl{font-size:.73rem;color:var(--text3);font-weight:500}
+.card .sub{font-size:.69rem;color:var(--text3);margin-top:3px}
+
+/* ── SECTIONS ────────────────────────────────────── */
+.section{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;overflow:hidden}
+.section-head{padding:12px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.section-head h3{font-size:.88rem;font-weight:600;color:var(--text)}
+.section-body{padding:16px 18px}
+
+/* ── TABLE ───────────────────────────────────────── */
 table{width:100%;border-collapse:collapse}
-th{padding:9px 13px;text-align:left;font-size:.72rem;text-transform:uppercase;color:#475569;letter-spacing:.05em;border-bottom:1px solid #1a2030}
-td{padding:10px 13px;font-size:.83rem;border-bottom:1px solid #0f1420}
+th{padding:8px 13px;text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);border-bottom:1px solid var(--border);font-weight:600}
+td{padding:10px 13px;font-size:.82rem;border-bottom:1px solid var(--border);color:var(--text2)}
 tr:last-child td{border-bottom:none}
-.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:.73rem;background:#1e3a5f;color:#60a5fa}
+tr:hover td{background:rgba(255,255,255,.012)}
+
+/* ── BADGES ──────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:.71rem;font-weight:600;background:#1e3a5f;color:#60a5fa}
 .badge-orange{background:#431407;color:#fb923c}
 .badge-green{background:#052e16;color:#34d399}
-.badge-red{background:#2d0a0a;color:#f87171}
-.badge-gray{background:#1a2030;color:#64748b}
+.badge-red{background:#2d0a0a;color:var(--red)}
+.badge-gray{background:#1c2438;color:var(--text3)}
 .badge-yellow{background:#422006;color:#fbbf24}
+
+/* ── FORMS ───────────────────────────────────────── */
 form{display:contents}
 .form-row{display:flex;gap:10px;flex-wrap:wrap}
-input[type=text],input[type=number],input[type=email],input[type=password],select,textarea{background:#0a0d14;border:1px solid #1a2030;border-radius:8px;padding:9px 13px;color:#e2e8f0;font-size:.85rem;outline:none;width:100%;font-family:system-ui}
-input:focus,select:focus,textarea:focus{border-color:#3b82f6}
-textarea{resize:vertical;min-height:80px}
-.btn{display:inline-block;background:#3b82f6;color:#fff;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:.85rem;font-weight:600;white-space:nowrap}
-.btn:hover{background:#2563eb}
-.btn-orange{background:#ea580c;color:#fff;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:.85rem;font-weight:600}
-.btn-orange:hover{background:#c2410c}
-.btn-red{background:#dc2626;color:#fff;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:.85rem;font-weight:600}
+.field-group{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
+.field-label{font-size:.7rem;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+input[type=text],input[type=number],input[type=email],input[type=password],select,textarea{
+  background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius-sm);
+  padding:8px 12px;color:var(--text);font-size:.84rem;outline:none;width:100%;
+  font-family:inherit;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--orange)}
+select option{background:var(--bg3)}
+textarea{resize:vertical;min-height:80px;line-height:1.5}
+
+/* ── BUTTONS ─────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:6px;background:var(--blue);color:#fff;border:none;border-radius:var(--radius-sm);padding:8px 16px;cursor:pointer;font-size:.83rem;font-weight:600;white-space:nowrap;font-family:inherit;transition:background .15s}
+.btn:hover{background:var(--blue2)}
+.btn-orange{background:var(--orange);color:#fff;border:none;border-radius:var(--radius-sm);padding:8px 16px;cursor:pointer;font-size:.83rem;font-weight:600;font-family:inherit;transition:background .15s}
+.btn-orange:hover{background:var(--orange2)}
+.btn-red{background:#dc2626;color:#fff;border:none;border-radius:var(--radius-sm);padding:8px 16px;cursor:pointer;font-size:.83rem;font-weight:600;font-family:inherit}
 .btn-red:hover{background:#b91c1c}
-.btn-gray{background:#1e2535;color:#94a3b8;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:.85rem;font-weight:600}
-.btn-gray:hover{background:#2d3748;color:#fff}
-.btn-green{background:#059669;color:#fff;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:.85rem;font-weight:600}
-.btn-green:hover{background:#047857}
-.btn-sm{padding:5px 11px;font-size:.77rem;border-radius:6px}
-.link-box{background:#0a0d14;border:1px solid #1a2030;border-radius:6px;padding:8px 12px;font-family:monospace;font-size:.77rem;word-break:break-all;color:#a5f3fc}
-.alert-green{background:#052e16;border:1px solid #166534;border-radius:8px;padding:11px 15px;color:#86efac;margin-bottom:14px;font-size:.85rem}
-.alert-red{background:#2d0a0a;border:1px solid #7f1d1d;border-radius:8px;padding:11px 15px;color:#fca5a5;margin-bottom:14px;font-size:.85rem}
-.empty{text-align:center;padding:28px;color:#334155;font-size:.85rem}
-.tag{display:inline-block;background:#1a2030;border-radius:4px;padding:2px 7px;font-size:.72rem;color:#64748b;font-family:monospace}
-.del-btn{background:none;border:none;cursor:pointer;color:#ef4444;font-size:.83rem;padding:4px 8px;border-radius:4px}
+.btn-gray{background:var(--bg);border:1px solid var(--border2);color:var(--text2);border-radius:var(--radius-sm);padding:8px 16px;cursor:pointer;font-size:.83rem;font-weight:500;font-family:inherit;transition:all .12s}
+.btn-gray:hover{border-color:var(--text3);color:var(--text)}
+.btn-green{background:#15803d;color:#fff;border:none;border-radius:var(--radius-sm);padding:8px 16px;cursor:pointer;font-size:.83rem;font-weight:600;font-family:inherit}
+.btn-green:hover{background:#166534}
+.btn-sm{padding:4px 10px;font-size:.75rem;border-radius:5px}
+.del-btn{background:none;border:none;cursor:pointer;color:var(--red);font-size:.8rem;padding:4px 8px;border-radius:4px;transition:background .12s}
 .del-btn:hover{background:#2d0a0a}
-.field-group{display:flex;flex-direction:column;gap:5px;flex:1}
-.field-label{font-size:.74rem;color:#475569;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
-.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
-.avatar{width:36px;height:36px;border-radius:50%;background:#431407;display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0;font-weight:700;color:#fb923c}
-/* FUNNEL */
-.funnel{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:22px}
-.funnel-step{background:#111827;border:1px solid #1a2030;border-radius:10px;padding:14px;text-align:center}
-.funnel-step .fn{font-size:1.5rem;font-weight:700;margin-bottom:4px}
-.funnel-step .fl{font-size:.74rem;color:#475569}
-/* UTM BADGE */
+
+/* ── ALERTS ──────────────────────────────────────── */
+.alert-green{background:#052e16;border:1px solid #166534;border-left:3px solid var(--green);border-radius:var(--radius-sm);padding:10px 14px;color:#86efac;margin-bottom:14px;font-size:.83rem}
+.alert-red{background:#2d0a0a;border:1px solid #7f1d1d;border-left:3px solid var(--red);border-radius:var(--radius-sm);padding:10px 14px;color:#fca5a5;margin-bottom:14px;font-size:.83rem}
+.empty{text-align:center;padding:32px;color:var(--text3);font-size:.84rem}
+.link-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-family:'Courier New',monospace;font-size:.75rem;word-break:break-all;color:#67e8f9}
+.tag{display:inline-block;background:var(--border);border-radius:4px;padding:2px 7px;font-size:.7rem;color:var(--text3);font-family:monospace}
+
+/* ── CHAT ────────────────────────────────────────── */
+.chat-layout{display:grid;grid-template-columns:300px 1fr;height:100vh}
+.conv-list{background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.conv-search{padding:12px;border-bottom:1px solid var(--border)}
+.conv-search input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);font-size:.82rem;outline:none;font-family:inherit}
+.conv-search input:focus{border-color:var(--orange)}
+.conv-item{padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.conv-item:hover{background:var(--bg3)}
+.conv-item.active{background:var(--bg3);border-right:2px solid var(--orange)}
+.conv-name{font-weight:600;font-size:.84rem;color:var(--text);display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.conv-preview{font-size:.75rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-time{font-size:.68rem;color:var(--text3);margin-top:3px}
+.unread-num{background:var(--orange);color:#fff;border-radius:99px;padding:1px 7px;font-size:.67rem;font-weight:700}
+.chat-window{display:flex;flex-direction:column;height:100vh}
+.chat-header{padding:14px 18px;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;gap:10px}
+.chat-messages{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
+.msg{max-width:68%;word-break:break-word}
+.msg.visitor{align-self:flex-start}.msg.manager{align-self:flex-end}
+.msg-bubble{padding:9px 13px;border-radius:14px;font-size:.84rem;line-height:1.55}
+.msg.visitor .msg-bubble{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:3px}
+.msg.manager .msg-bubble{background:var(--orange2);color:#fff;border-bottom-right-radius:3px}
+.msg-time{font-size:.67rem;color:var(--text3);margin-top:4px;display:flex;align-items:center;gap:4px}
+.msg.visitor .msg-time{justify-content:flex-start}.msg.manager .msg-time{justify-content:flex-end}
+.msg-img{max-width:220px;max-height:220px;border-radius:8px;display:block;cursor:pointer;margin:3px 0}
+.chat-input{padding:12px 18px;border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0}
+.chat-input-row{display:flex;gap:8px;align-items:flex-end}
+.chat-input textarea{flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:9px 13px;color:var(--text);font-size:.84rem;outline:none;resize:none;max-height:120px;font-family:inherit;transition:border-color .15s}
+.chat-input textarea:focus{border-color:var(--orange)}
+.send-btn-orange{background:var(--orange);color:#fff;border:none;border-radius:var(--radius-sm);padding:10px 18px;cursor:pointer;font-size:.84rem;font-weight:600;height:42px;flex-shrink:0;font-family:inherit;transition:background .15s}
+.send-btn-orange:hover{background:var(--orange2)}
+.no-conv{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text3);gap:10px;font-size:.85rem}
+
+/* ── AVATAR ──────────────────────────────────────── */
+.avatar{width:38px;height:38px;border-radius:50%;background:#431407;display:flex;align-items:center;justify-content:center;font-size:.88rem;flex-shrink:0;font-weight:700;color:#fb923c}
+
+/* ── UTM TAGS ────────────────────────────────────── */
 .utm-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
-.utm-tag{background:#0f2040;border:1px solid #1e3a5f;border-radius:4px;padding:2px 8px;font-size:.72rem;color:#7dd3fc;font-family:monospace}
-/* CHART */
-.chart-wrap{height:160px;display:flex;align-items:flex-end;gap:3px;padding:8px 0}
+.utm-tag{background:#0c1e38;border:1px solid #1e3a5f;border-radius:4px;padding:2px 8px;font-size:.7rem;color:#7dd3fc;font-family:monospace}
+
+/* ── CHARTS ──────────────────────────────────────── */
+.chart-wrap{height:150px;display:flex;align-items:flex-end;gap:3px;padding:4px 0}
 .chart-bar-wrap{display:flex;flex-direction:column;align-items:center;flex:1;height:100%}
-.chart-bar{width:100%;border-radius:4px 4px 0 0;min-height:2px;transition:height .3s}
-.chart-bar.blue{background:linear-gradient(180deg,#6366f1,#4f46e5)}
-.chart-bar.orange{background:linear-gradient(180deg,#f97316,#ea580c)}
-.chart-bar.green{background:linear-gradient(180deg,#34d399,#10b981)}
-.chart-label{font-size:.58rem;color:var(--text3);margin-top:3px;transform:rotate(-45deg);transform-origin:top right;white-space:nowrap}
-/* ── TOAST ────────────────────────────────────────────────────────────────── */
-#toast-container{position:fixed;top:18px;right:18px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
-.toast{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;box-shadow:0 8px 32px rgba(0,0,0,.5);max-width:300px;pointer-events:auto;animation:toastIn .25s ease;cursor:pointer}
+.chart-bar{width:100%;border-radius:3px 3px 0 0;min-height:2px;transition:height .3s}
+.chart-bar.blue{background:#3b82f6}
+.chart-bar.orange{background:var(--orange)}
+.chart-bar.green{background:var(--green)}
+.chart-label{font-size:.56rem;color:var(--text3);margin-top:4px;transform:rotate(-40deg);transform-origin:top right;white-space:nowrap}
+
+/* ── FUNNEL ──────────────────────────────────────── */
+.funnel{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
+.funnel-step{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center}
+.funnel-step .fn{font-size:1.5rem;font-weight:700;margin-bottom:4px}
+.funnel-step .fl{font-size:.72rem;color:var(--text3)}
+
+/* ── STATUS TABS ─────────────────────────────────── */
+.status-tabs{display:flex;gap:4px;margin-bottom:10px}
+.status-tab{padding:5px 12px;border-radius:99px;font-size:.76rem;cursor:pointer;border:1px solid var(--border);color:var(--text3);background:transparent;font-family:inherit;transition:all .12s}
+.status-tab:hover{border-color:var(--border2);color:var(--text2)}
+.status-tab.active{background:var(--orange);color:#fff;border-color:var(--orange);font-weight:600}
+
+/* ── TOAST ───────────────────────────────────────── */
+#toast-container{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:12px 15px;max-width:290px;pointer-events:auto;animation:toastIn .2s ease;cursor:pointer}
 .toast.tg-toast{border-left:3px solid #38bdf8}
 .toast.wa-toast{border-left:3px solid #25d366}
-.toast-title{font-size:.81rem;font-weight:700;color:var(--text);margin-bottom:2px}
-.toast-body{font-size:.75rem;color:var(--text2)}
-@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+.toast-title{font-size:.8rem;font-weight:700;color:var(--text);margin-bottom:2px}
+.toast-body{font-size:.73rem;color:var(--text3)}
+@keyframes toastIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
 </style>"""
 
 
@@ -266,18 +335,18 @@ def nav_html(active: str, request: Request) -> str:
           <div class="logo-user">{user['username'] if user else ''}</div>
         </div>
         <div class="logo-right">
-          <div class="theme-toggle" onclick="toggleTheme()" title="Сменить тему" id="theme-btn">🌙</div>
+          <div class="theme-toggle" onclick="toggleTheme()" title="Тема" id="theme-btn">☀️</div>
         </div>
       </div>
       {item("📊", "Обзор", "overview", "blue")}
       <div class="nav-divider"></div>
-      <div class="nav-section">👥 Клиенты</div>
+      <div class="nav-section">Клиенты</div>
       {item("📡", "Каналы", "channels", "blue")}
       {item("🔗", "Кампании", "campaigns", "blue")}
       {item("🎨", "Шаблоны", "landings", "blue")}
       {item("📈", "Статистика", "analytics_clients", "blue", url="/analytics/clients")}
       <div class="nav-divider"></div>
-      <div class="nav-section">👔 Сотрудники</div>
+      <div class="nav-section">Сотрудники</div>
       {item("💬", "TG Чаты", "chat", "orange", badge_count=unread, badge_id="nav-tg-badge")}
       {item("💚", "WA Чаты", "wa_chat", "orange", badge_count=wa_unread, url="/wa/chat", badge_id="nav-wa-badge")}
       {item("🗂", "База", "staff", "orange")}
@@ -288,15 +357,13 @@ def nav_html(active: str, request: Request) -> str:
         <div class="bot-status"><div class="dot {'dot-green' if b1 else 'dot-red'}"></div><span>{b1_name}</span></div>
         <div class="bot-status"><div class="dot {'dot-green' if b2 else 'dot-red'}"></div><span>{b2_name}</span></div>
         <div class="bot-status"><div class="dot {wa_dot}"></div><span>WhatsApp {'✓' if wa_status == 'ready' else ('QR...' if wa_status == 'qr' else '✗')}</span></div>
-        <a href="/logout"><div style="padding:7px 9px;font-size:.74rem;color:var(--text3);cursor:pointer">⬅ Выйти</div></a>
+        <a href="/logout"><div style="padding:6px 8px;margin-top:4px;font-size:.73rem;color:var(--text3);cursor:pointer;border-radius:6px;transition:color .12s" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text3)'">⬅ Выйти</div></a>
       </div>
     </div>
     <div id="toast-container"></div>
     <script>
-    // Theme
     (function(){{
       const t = localStorage.getItem('theme') || 'dark';
-      if(t === 'light') document.body.classList.add('light');
       const btn = document.getElementById('theme-btn');
       if(btn) btn.textContent = t === 'light' ? '🌙' : '☀️';
     }})();
@@ -306,7 +373,6 @@ def nav_html(active: str, request: Request) -> str:
       const btn = document.getElementById('theme-btn');
       if(btn) btn.textContent = isLight ? '🌙' : '☀️';
     }}
-    // Toast notifications
     let audioCtx = null;
     function playPing(){{
       try{{
@@ -316,7 +382,7 @@ def nav_html(active: str, request: Request) -> str:
         o.connect(g); g.connect(audioCtx.destination);
         o.frequency.setValueAtTime(880, audioCtx.currentTime);
         o.frequency.setValueAtTime(1100, audioCtx.currentTime + 0.1);
-        g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        g.gain.setValueAtTime(0.25, audioCtx.currentTime);
         g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
         o.start(); o.stop(audioCtx.currentTime + 0.4);
       }}catch(e){{}}
@@ -329,9 +395,8 @@ def nav_html(active: str, request: Request) -> str:
       if(url) d.onclick = () => location.href = url;
       c.appendChild(d);
       playPing();
-      setTimeout(() => {{ d.style.animation = 'toastIn .25s ease reverse'; setTimeout(() => d.remove(), 250); }}, 5000);
+      setTimeout(() => {{ d.style.animation = 'toastIn .2s ease reverse'; setTimeout(() => d.remove(), 200); }}, 5000);
     }}
-    // Global unread polling (all pages)
     let _lastTgUnread = {unread}, _lastWaUnread = {wa_unread};
     function updateBadge(id, count){{
       const el = document.getElementById(id);
@@ -345,8 +410,8 @@ def nav_html(active: str, request: Request) -> str:
         const d = await r.json();
         updateBadge('nav-tg-badge', d.unread || 0);
         updateBadge('nav-wa-badge', d.wa_unread || 0);
-        if(d.unread > _lastTgUnread) showToast('💬 TG — новое сообщение', 'Перейти в TG чаты', 'tg-toast', '/chat');
-        if(d.wa_unread > _lastWaUnread) showToast('💚 WA — новое сообщение', 'Перейти в WA чаты', 'wa-toast', '/wa/chat');
+        if(d.unread > _lastTgUnread) showToast('💬 Новое сообщение', 'TG чаты', 'tg-toast', '/chat');
+        if(d.wa_unread > _lastWaUnread) showToast('💚 Новое сообщение', 'WhatsApp чаты', 'wa-toast', '/wa/chat');
         _lastTgUnread = d.unread || 0; _lastWaUnread = d.wa_unread || 0;
       }}catch(e){{}}
     }}
@@ -355,7 +420,14 @@ def nav_html(active: str, request: Request) -> str:
 
 
 def base(content: str, active: str, request: Request) -> str:
-    return f'<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>TGTracker</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">{CSS}</head><body>{nav_html(active, request)}<div class="main">{content}</div></body></html>'
+    return f'''<!DOCTYPE html><html lang="ru"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TGTracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+{CSS}
+</head><body>{nav_html(active, request)}<div class="main">{content}</div></body></html>'''
 
 
 STAFF_STATUSES = {
@@ -373,19 +445,31 @@ STAFF_STATUSES = {
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(error: str = ""):
-    alert = f'<div class="alert-red">{error}</div>' if error else ""
-    return HTMLResponse(f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Вход</title>{CSS}</head>
-    <body><div style="max-width:360px;margin:100px auto;padding:0 16px">
-    <div style="font-size:1.4rem;font-weight:800;color:#fff;margin-bottom:6px">📡 TG<span style="color:#3b82f6">Tracker</span></div>
-    <div style="color:#475569;font-size:.85rem;margin-bottom:24px">Войдите чтобы продолжить</div>
-    {alert}
-    <div class="section"><div class="section-body">
-    <form method="post" action="/login" style="display:flex;flex-direction:column;gap:12px">
-      <div class="field-group"><div class="field-label">Логин</div><input type="text" name="username" autofocus/></div>
-      <div class="field-group"><div class="field-label">Пароль</div><input type="password" name="password"/></div>
-      <button class="btn" style="width:100%">Войти</button>
+    alert = f'<div class="alert-red" style="margin-bottom:14px">{error}</div>' if error else ""
+    return HTMLResponse(f"""<!DOCTYPE html><html lang="ru"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TGTracker · Вход</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+{CSS}</head>
+<body style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg)">
+<div style="width:100%;max-width:360px;padding:0 20px">
+  <div style="text-align:center;margin-bottom:28px">
+    <div style="font-size:1.6rem;margin-bottom:8px">📡</div>
+    <div style="font-size:1.2rem;font-weight:700;color:var(--text);letter-spacing:-.01em">TGTracker</div>
+    <div style="font-size:.8rem;color:var(--text3);margin-top:4px">Войдите чтобы продолжить</div>
+  </div>
+  {alert}
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:24px">
+    <form method="post" action="/login" style="display:flex;flex-direction:column;gap:14px">
+      <div class="field-group"><div class="field-label">Логин</div><input type="text" name="username" autofocus autocomplete="username"/></div>
+      <div class="field-group"><div class="field-label">Пароль</div><input type="password" name="password" autocomplete="current-password"/></div>
+      <button class="btn-orange" style="width:100%;margin-top:4px;padding:10px">Войти →</button>
     </form>
-    </div></div></div></body></html>""")
+  </div>
+</div>
+</body></html>""")
 
 
 @app.post("/login")
@@ -509,24 +593,24 @@ async def overview(request: Request):
     <div class="page-title">📊 Обзор</div>
     <div class="page-sub">Общая статистика системы</div>
 
-    <div style="font-size:.76rem;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">👥 Клиенты</div>
-    <div class="cards" style="margin-bottom:18px">
-      <div class="card"><div class="val">{s['total']}</div><div class="lbl">Подписчиков</div></div>
-      <div class="card"><div class="val">{s['from_ads']}</div><div class="lbl">Из рекламы</div></div>
-      <div class="card"><div class="val">{s['organic']}</div><div class="lbl">Органика</div></div>
-      <div class="card"><div class="val">{s['clicks']}</div><div class="lbl">Кликов (/go)</div></div>
+    <div style="font-size:.68rem;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px">Клиенты</div>
+    <div class="cards" style="margin-bottom:20px">
+      <div class="card c-blue"><div class="val blue">{s['total']}</div><div class="lbl">Подписчиков</div></div>
+      <div class="card c-blue"><div class="val">{s['from_ads']}</div><div class="lbl">Из рекламы</div></div>
+      <div class="card c-blue"><div class="val">{s['organic']}</div><div class="lbl">Органика</div></div>
+      <div class="card c-blue"><div class="val">{s['clicks']}</div><div class="lbl">Кликов (/go)</div></div>
     </div>
 
-    <div style="font-size:.76rem;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">👔 Сотрудники — Воронка</div>
+    <div style="font-size:.68rem;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px">Сотрудники — Воронка</div>
     <div class="funnel">{funnel_html}</div>
-    <div class="cards" style="margin-bottom:18px">
-      <div class="card"><div class="val orange">{s['conversations']}</div><div class="lbl">Диалогов</div></div>
-      <div class="card"><div class="val orange" style="color:#ef4444">{s['unread']}</div><div class="lbl">Непрочитанных</div></div>
-      <div class="card"><div class="val orange">{s['staff']}</div><div class="lbl">Сотрудников</div></div>
+    <div class="cards" style="margin-bottom:20px">
+      <div class="card c-orange"><div class="val orange">{s['conversations']}</div><div class="lbl">Диалогов</div></div>
+      <div class="card c-red"><div class="val red">{s['unread']}</div><div class="lbl">Непрочитанных</div></div>
+      <div class="card c-orange"><div class="val orange">{s['staff']}</div><div class="lbl">Сотрудников</div></div>
     </div>
 
     <div class="section">
-      <div class="section-head"><h3>🕐 Последние подписки</h3><span class="tag">Pixel: {pixel}</span></div>
+      <div class="section-head"><h3>Последние подписки</h3><span class="tag">Pixel: {pixel}</span></div>
       <table><thead><tr><th>Время</th><th>Канал</th><th>Кампания</th><th>UTM</th></tr></thead>
       <tbody>{rows}</tbody></table>
     </div></div>"""
@@ -590,7 +674,7 @@ async def analytics_clients(request: Request,
                 </div>
                 <span style="font-weight:700;color:var(--accent);min-width:28px">{c['joins']}</span>
             </div></td>
-            <td style="color:#f97316">{c['from_ads']}</td>
+            <td style="color:var(--orange)">{c['from_ads']}</td>
             <td style="color:var(--text3);font-size:.8rem">{c['last_join'][:10] if c.get('last_join') else '—'}</td>
         </tr>"""
     ch_rows = ch_rows or '<tr><td colspan="4"><div class="empty">Нет данных</div></td></tr>'
@@ -967,7 +1051,7 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
                         if active_conv["status"] == "open"
                         else f'<form method="post" action="/chat/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-orange btn-sm">↺ Открыть</button></form>')
 
-            delete_btn = f'<button class="btn-gray btn-sm" style="color:#ef4444;border-color:#7f1d1d" onclick="deleteConv({conv_id})">🗑</button>'
+            delete_btn = f'<button class="btn-gray btn-sm" style="color:var(--red);border-color:#7f1d1d" onclick="deleteConv({conv_id})">🗑</button>'
 
             staff_link = f'<a href="/staff?edit={staff["id"]}" style="color:var(--orange);font-size:.74rem;text-decoration:none">Карточка →</a>' if staff else \
                          f'<a href="/staff/create_from_conv?conv_id={conv_id}" style="color:var(--text3);font-size:.74rem;text-decoration:none">+ Создать карточку</a>'
@@ -1090,7 +1174,7 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
       el.parentElement.style.display=n.includes(q.toLowerCase())?'':'none';}});}}
     </script>"""
 
-    return HTMLResponse(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>TG Чаты</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">{CSS}</head><body>{nav_html("chat",request)}<div class="main">{content}</div></body></html>')
+    return HTMLResponse(base(content, "chat", request))
 
 
 @app.post("/chat/send")
@@ -1272,7 +1356,7 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
         fb = '<span class="badge-green" style="font-size:.7rem">FB ✓</span>' if s.get("fb_event_sent") else ""
         rows += f"""<tr>
             <td><div style="font-weight:600;color:#fff">{s['name'] or '—'}</div>
-              <div style="font-size:.75rem;color:#475569">@{s['username'] or '—'}</div></td>
+              <div style="font-size:.75rem;color:var(--text3)">@{s['username'] or '—'}</div></td>
             <td>{s.get('position') or '—'}</td>
             <td><span class="{badge_cls}">{icon} {label}</span></td>
             <td>{s.get('phone') or '—'}</td>
@@ -1528,7 +1612,7 @@ async def settings_page(request: Request, msg: str = ""):
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
 
     def bot_card(title, color, info, field, route):
-        status = f'<span style="color:#34d399">● Активен — <a href="{info.get("link","")}" target="_blank" style="color:#60a5fa">@{info.get("username","")}</a></span>' if info.get("active") else '<span style="color:#ef4444">● Не запущен</span>'
+        status = f'<span style="color:#34d399">● Активен — <a href="{info.get("link","")}" target="_blank" style="color:#60a5fa">@{info.get("username","")}</a></span>' if info.get("active") else '<span style="color:var(--red)">● Не запущен</span>'
         border = "#3b82f6" if color == "blue" else "#f97316"
         btn = "btn" if color == "blue" else "btn-orange"
         return f"""<div class="section" style="border-left:3px solid {border}">
@@ -1545,7 +1629,7 @@ async def settings_page(request: Request, msg: str = ""):
     <div class="page-title">⚙️ Настройки</div><div class="page-sub">Управление ботами и системой</div>
     {alert}
 
-    <div class="section-head" style="padding:0;margin-bottom:12px"><h3 style="font-size:.78rem;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:.08em">🤖 Управление ботами</h3></div>
+    <div class="section-head" style="padding:0;margin-bottom:12px"><h3 style="font-size:.78rem;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.08em">🤖 Управление ботами</h3></div>
     {bot_card("🔵 Бот 1 — Трекер (Клиенты)", "blue", b1_info, "bot1_token", "settings/bot1")}
     {bot_card("🟠 Бот 2 — Сотрудники", "orange", b2_info, "bot2_token", "settings/bot2")}
 
@@ -1556,7 +1640,7 @@ async def settings_page(request: Request, msg: str = ""):
             if db.get_setting("wa_status") == "ready"
             else ('<span style="color:#fbbf24">● Ожидает QR...</span>'
                   if db.get_setting("wa_status") == "qr"
-                  else '<span style="color:#ef4444">● Не подключён</span>')
+                  else '<span style="color:var(--red)">● Не подключён</span>')
         }</span>
       </div>
       <div class="section-body">
@@ -1571,7 +1655,7 @@ async def settings_page(request: Request, msg: str = ""):
       <div class="section-body">
         <form method="post" action="/settings/pixel">
           <div style="margin-bottom:16px">
-            <div style="font-size:.78rem;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">👥 Клиенты (Subscribe — при подписке на канал)</div>
+            <div style="font-size:.78rem;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">👥 Клиенты (Subscribe — при подписке на канал)</div>
             <div class="grid-2">
               <div class="field-group"><div class="field-label">Pixel ID (Клиенты)</div>
                 <input type="text" name="pixel_id_clients" value="{pixel_clients}" placeholder="123456789012345"/></div>
@@ -1580,7 +1664,7 @@ async def settings_page(request: Request, msg: str = ""):
             </div>
           </div>
           <div style="margin-bottom:16px">
-            <div style="font-size:.78rem;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">👔 Сотрудники (Lead — вручную в чате)</div>
+            <div style="font-size:.78rem;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">👔 Сотрудники (Lead — вручную в чате)</div>
             <div class="grid-2">
               <div class="field-group"><div class="field-label">Pixel ID (Сотрудники)</div>
                 <input type="text" name="pixel_id_staff" value="{pixel_staff}" placeholder="987654321098765"/></div>
@@ -1601,7 +1685,7 @@ async def settings_page(request: Request, msg: str = ""):
             <div class="field-group">
               <div class="field-label">Chat ID или ID канала для уведомлений</div>
               <input type="text" name="notify_chat_id" value="{notify_chat}" placeholder="Например: -1001234567890"/>
-              <span style="font-size:.75rem;color:#475569;margin-top:4px;display:block">
+              <span style="font-size:.75rem;color:var(--text3);margin-top:4px;display:block">
                 Личный чат: напиши <b>/start</b> боту @userinfobot и скопируй id.<br>
                 Канал/группа: добавь бота как администратора → скопируй ID канала (начинается с -100).
               </span>
@@ -1941,7 +2025,7 @@ async def landings_staff_page(request: Request, msg: str = ""):
           <div class="field-group" style="margin-bottom:12px">
             <div class="field-label">Первое сообщение когда сотрудник пишет /start боту</div>
             <textarea name="staff_welcome" rows="4" style="min-height:90px">{staff_welcome}</textarea>
-            <span style="font-size:.75rem;color:#475569;margin-top:4px;display:block">Это сообщение видит кандидат при первом контакте с ботом сотрудников</span>
+            <span style="font-size:.75rem;color:var(--text3);margin-top:4px;display:block">Это сообщение видит кандидат при первом контакте с ботом сотрудников</span>
           </div>
           <button class="btn-orange">💾 Сохранить текст</button>
         </form>
@@ -2611,7 +2695,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             status_color = "#34d399" if active_conv["status"] == "open" else "#ef4444"
             close_btn = f'<form method="post" action="/wa/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>' if active_conv["status"] == "open" else \
                         f'<form method="post" action="/wa/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-green btn-sm">↺ Открыть</button></form>'
-            delete_wa_btn = f'<button class="btn-gray btn-sm" style="color:#ef4444;border-color:#7f1d1d" onclick="deleteWaConv({conv_id})">🗑</button>'
+            delete_wa_btn = f'<button class="btn-gray btn-sm" style="color:var(--red);border-color:#7f1d1d" onclick="deleteWaConv({conv_id})">🗑</button>'
 
             # Карточка сотрудника для WA
             wa_staff = db.get_staff_by_wa_conv(conv_id)
@@ -2624,9 +2708,9 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             if active_conv.get("fbclid"):
                 utm_parts.append('<span style="background:#1e3a5f;color:#60a5fa;padding:2px 8px;border-radius:5px;font-size:.72rem">🔵 Facebook</span>')
             elif active_conv.get("utm_source"):
-                utm_parts.append(f'<span style="background:#1a2030;color:#94a3b8;padding:2px 8px;border-radius:5px;font-size:.72rem">{active_conv["utm_source"]}</span>')
+                utm_parts.append(f'<span style="background:var(--border);color:var(--text2);padding:2px 8px;border-radius:5px;font-size:.72rem">{active_conv["utm_source"]}</span>')
             if active_conv.get("utm_campaign"):
-                utm_parts.append(f'<span style="background:#1a2030;color:#94a3b8;padding:2px 8px;border-radius:5px;font-size:.72rem">🎯 {active_conv["utm_campaign"][:25]}</span>')
+                utm_parts.append(f'<span style="background:var(--border);color:var(--text2);padding:2px 8px;border-radius:5px;font-size:.72rem">🎯 {active_conv["utm_campaign"][:25]}</span>')
             if utm_parts:
                 wa_utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">' + "".join(utm_parts) + '</div>'
 
@@ -2635,7 +2719,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
                 {wa_avatar}
                 <div style="flex:1">
                   <div style="font-weight:700;color:#fff">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.74rem">●</span></div>
-                  <div style="font-size:.79rem;color:#475569">+{active_conv['wa_number']} · {wa_card_link}</div>
+                  <div style="font-size:.79rem;color:var(--text3)">+{active_conv['wa_number']} · {wa_card_link}</div>
                   <div style="margin-top:6px">{fb_btn}</div>
                   {wa_utm_tags}
                 </div>
@@ -2843,7 +2927,7 @@ async def wa_setup_page(request: Request, msg: str = "", err: str = ""):
             qr_html = f"""<div style="text-align:center;padding:20px">
               <img src="{qr}" style="width:220px;height:220px;border-radius:12px;border:2px solid #25d366"/>
               <div style="color:#86efac;margin-top:12px;font-size:.88rem">Открой WhatsApp → Связанные устройства → Привязать устройство</div>
-              <div style="color:#475569;font-size:.78rem;margin-top:6px">Обновление через <span id="cd">20</span>с
+              <div style="color:var(--text3);font-size:.78rem;margin-top:6px">Обновление через <span id="cd">20</span>с
               <script>let t=20;setInterval(()=>{{const el=document.getElementById('cd');if(el)el.textContent=--t;if(t<=0)location.reload()}},1000)</script></div>
             </div>"""
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
@@ -2853,15 +2937,15 @@ async def wa_setup_page(request: Request, msg: str = "", err: str = ""):
         status_html = f'<div style="color:#34d399;font-size:1rem;font-weight:600">💚 Подключён · +{wa_number}</div>'
         action_btn  = f"""<div style="margin-top:16px"><form method="post" action="/wa/disconnect">
             <button class="btn-red">🔄 Сменить номер (отключить)</button></form>
-            <div style="font-size:.78rem;color:#475569;margin-top:6px">После отключения отсканируй QR новым номером</div></div>"""
+            <div style="font-size:.78rem;color:var(--text3);margin-top:6px">После отключения отсканируй QR новым номером</div></div>"""
     elif wa_status == "qr":
         status_html = '<div style="color:#fbbf24;font-size:1rem;font-weight:600">📱 Ожидает сканирования QR...</div>'
         action_btn  = ""
     else:
-        status_html = '<div style="color:#f87171;font-size:1rem;font-weight:600">⚠️ Не подключён</div>'
+        status_html = '<div style="color:var(--red);font-size:1rem;font-weight:600">⚠️ Не подключён</div>'
         action_btn  = """<div style="margin-top:16px"><form method="post" action="/wa/connect">
             <button class="btn-green">💚 Подключить WhatsApp</button></form>
-            <div style="font-size:.78rem;color:#475569;margin-top:6px">Появится QR-код для сканирования</div></div>"""
+            <div style="font-size:.78rem;color:var(--text3);margin-top:6px">Появится QR-код для сканирования</div></div>"""
     content = f"""<div class="page-wrap">
     <div class="page-title">💚 WhatsApp — Управление</div>
     <div class="page-sub">Подключение и смена номера</div>{alert}{err_alert}
@@ -2870,7 +2954,7 @@ async def wa_setup_page(request: Request, msg: str = "", err: str = ""):
       <div class="section-body">{WA_BTN_CSS}{status_html}{qr_html}{action_btn}</div>
     </div>
     <div class="section"><div class="section-head"><h3>ℹ️ Как это работает</h3></div>
-      <div class="section-body" style="font-size:.85rem;color:#64748b;line-height:2">
+      <div class="section-body" style="font-size:.85rem;color:var(--text3);line-height:2">
         <div>1. Нажми "Подключить WhatsApp" — появится QR-код</div>
         <div>2. Открой WhatsApp → Связанные устройства → Привязать устройство</div>
         <div>3. Отсканируй QR — подключение займёт ~10 секунд</div>

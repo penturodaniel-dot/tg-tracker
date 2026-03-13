@@ -163,11 +163,26 @@ def _build_staff_dp() -> Dispatcher:
         # Проверяем UTM из start параметра
         start_param = message.text.split()[-1] if len(message.text.split()) > 1 else None
         if start_param and start_param.startswith("ref_"):
-            click_id = start_param[4:]
-            click_data = _db.get_click(click_id)
-            if click_data:
-                _db.save_utm(click_data, conversation_id=conv["id"])
-                log.info(f"[BOT2] UTM linked conv={conv['id']} click={click_id}")
+            ref_code = start_param[4:]
+            # Сначала проверяем staff_clicks (HR лендинг)
+            staff_click = _db.get_staff_click(ref_code)
+            if staff_click and not staff_click.get("used"):
+                _db.apply_utm_to_tg_conv(
+                    conv["id"],
+                    fbclid=staff_click.get("fbclid"),
+                    fbp=staff_click.get("fbp"),
+                    utm_source=staff_click.get("utm_source"),
+                    utm_medium=staff_click.get("utm_medium"),
+                    utm_campaign=staff_click.get("utm_campaign"),
+                )
+                _db.mark_staff_click_used(ref_code)
+                log.info(f"[BOT2] Staff UTM linked conv={conv['id']} ref={ref_code} utm={staff_click.get('utm_campaign')}")
+            else:
+                # Fallback: старые клиентские click_tracking
+                click_data = _db.get_click(ref_code)
+                if click_data:
+                    _db.save_utm(click_data, conversation_id=conv["id"])
+                    log.info(f"[BOT2] UTM linked conv={conv['id']} click={ref_code}")
 
         # Отправляем Lead в Meta CAPI если ещё не отправляли
         if not staff.get("fb_event_sent"):

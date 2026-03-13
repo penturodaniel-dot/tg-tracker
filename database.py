@@ -215,6 +215,28 @@ class Database:
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT DEFAULT ''",
                     # Раздельные пиксели клиенты/сотрудники
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT ''",
+                    # Staff clicks — UTM трекинг для HR лендингов
+                    """CREATE TABLE IF NOT EXISTS staff_clicks (
+                        id          SERIAL PRIMARY KEY,
+                        ref_id      TEXT NOT NULL UNIQUE,
+                        fbclid      TEXT,
+                        fbp         TEXT,
+                        utm_source  TEXT,
+                        utm_medium  TEXT,
+                        utm_campaign TEXT,
+                        utm_content TEXT,
+                        utm_term    TEXT,
+                        target_url  TEXT,
+                        target_type TEXT DEFAULT 'wa',
+                        landing_slug TEXT,
+                        used        INTEGER DEFAULT 0,
+                        created_at  TEXT NOT NULL
+                    )""",
+                    # fbp в conversations/wa_conversations для CAPI matching
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS fbp TEXT",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbp TEXT",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_medium TEXT",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS utm_medium TEXT",
                 ]
                 for m in migrations:
                     try:
@@ -500,6 +522,66 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM click_tracking WHERE click_id=%s", (click_id,))
                 r = cur.fetchone(); return dict(r) if r else None
+
+    # ── Staff Clicks (HR landing UTM tracking) ────────────────────────────────
+    def save_staff_click(self, ref_id, target_url, target_type="wa", landing_slug="",
+                         fbclid=None, fbp=None, utm_source=None, utm_medium=None,
+                         utm_campaign=None, utm_content=None, utm_term=None):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""INSERT INTO staff_clicks
+                    (ref_id,target_url,target_type,landing_slug,fbclid,fbp,
+                     utm_source,utm_medium,utm_campaign,utm_content,utm_term,created_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (ref_id) DO NOTHING""",
+                    (ref_id, target_url, target_type, landing_slug, fbclid, fbp,
+                     utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+                     datetime.utcnow().isoformat()))
+            conn.commit()
+
+    def get_staff_click(self, ref_id):
+        if not ref_id: return None
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM staff_clicks WHERE ref_id=%s", (ref_id,))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def mark_staff_click_used(self, ref_id):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE staff_clicks SET used=1 WHERE ref_id=%s", (ref_id,))
+            conn.commit()
+
+    def apply_utm_to_wa_conv(self, conv_id, fbclid=None, fbp=None, utm_source=None,
+                              utm_medium=None, utm_campaign=None):
+        """Применяет UTM к существующему WA диалогу (если ещё не заполнен)"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""UPDATE wa_conversations
+                    SET fbclid=COALESCE(NULLIF(fbclid,''), fbclid),
+                        fbp=COALESCE(NULLIF(fbp,''), fbp),
+                        utm_source=COALESCE(NULLIF(utm_source,''), utm_source),
+                        utm_medium=COALESCE(NULLIF(utm_medium,''), utm_medium),
+                        utm_campaign=COALESCE(NULLIF(utm_campaign,''), utm_campaign)
+                    WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
+                    (conv_id,))
+                # Реально обновляем безусловно если пустые
+                cur.execute("""UPDATE wa_conversations
+                    SET fbclid=%s, fbp=%s, utm_source=%s, utm_medium=%s, utm_campaign=%s
+                    WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
+                    (fbclid, fbp, utm_source, utm_medium, utm_campaign, conv_id))
+            conn.commit()
+
+    def apply_utm_to_tg_conv(self, conv_id, fbclid=None, fbp=None, utm_source=None,
+                              utm_medium=None, utm_campaign=None):
+        """Применяет UTM к существующему TG диалогу"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""UPDATE conversations
+                    SET fbclid=%s, fbp=%s, utm_source=%s, utm_medium=%s, utm_campaign=%s
+                    WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
+                    (fbclid, fbp, utm_source, utm_medium, utm_campaign, conv_id))
+            conn.commit()
 
     def save_utm(self, click_data, conversation_id=None, join_id=None):
         with self._conn() as conn:

@@ -1285,15 +1285,24 @@ async def chat_send_lead(request: Request, conv_id: int = Form(...)):
     # Пиксель сотрудников
     pixel_id   = db.get_setting("pixel_id_staff") or db.get_setting("pixel_id")
     meta_token = db.get_setting("meta_token_staff") or db.get_setting("meta_token")
+    # Берём utm из таблицы utm_tracking если есть, иначе из conversations
+    utm = db.get_utm_by_conv(conv_id)
+    fbclid   = (utm.get("fbclid") if utm else None) or conv.get("fbclid")
+    fbp      = (utm.get("fbp") if utm else None) or conv.get("fbp")
+    campaign = (utm.get("utm_campaign") if utm else None) or conv.get("utm_campaign") or "telegram"
+    utm_src  = (utm.get("utm_source") if utm else None) or conv.get("utm_source") or "telegram"
     sent = await meta_capi.send_lead_event(
         pixel_id, meta_token,
-        user_id=conv.get("tg_chat_id",""),
-        campaign=conv.get("utm_campaign","telegram")
+        user_id=conv.get("tg_chat_id", ""),
+        campaign=campaign,
+        fbclid=fbclid,
+        fbp=fbp,
+        utm_source=utm_src,
+        utm_campaign=campaign,
     )
     if sent and staff:
         db.set_staff_fb_event(staff["id"], "Lead")
     elif sent:
-        # Если нет staff записи — помечаем в conversations
         db.set_conv_fb_event(conv_id, "Lead")
     return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
 
@@ -2325,12 +2334,15 @@ async def public_landing(request: Request, slug: str,
     # Пиксели по направлениям
     pixel_clients = db.get_setting("pixel_id_clients") or db.get_setting("pixel_id", "")
     pixel_staff   = db.get_setting("pixel_id_staff", "")
+    app_url       = db.get_setting("app_url", "").rstrip("/")
+
+    # fbp из cookie
+    cookie_fbp = request.cookies.get("_fbp", "")
 
     # Ищем как Campaign slug
     campaign = db.get_campaign_by_slug(slug)
     if campaign:
         channels = db.get_campaign_channels(campaign["id"])
-        app_url  = db.get_setting("app_url", "").rstrip("/")
         pixel_id = pixel_clients  # Клиентские кампании
 
         # Строим /go ссылки для каждого канала
@@ -2353,8 +2365,79 @@ async def public_landing(request: Request, slug: str,
     # Staff Landing slug
     landing = db.get_landing_by_slug(slug)
     if not landing: return HTMLResponse("<h2>Not found</h2>", 404)
-    contacts = db.get_landing_contacts(landing["id"])
-    return HTMLResponse(_render_staff_landing(landing, contacts, pixel_id=pixel_staff))
+
+    # Строим /go-staff ссылки — с UTM трекингом
+    raw_contacts = db.get_landing_contacts(landing["id"])
+    utm_params = dict(
+        fbclid=fbclid, fbp=cookie_fbp,
+        utm_source=utm_source or "facebook",
+        utm_medium=utm_medium or "paid",
+        utm_campaign=utm_campaign or "",
+        utm_content=utm_content or "",
+        utm_term=utm_term or "",
+        landing_slug=slug,
+    )
+    tracked_contacts = []
+    for c in raw_contacts:
+        if c.get("url"):
+            import urllib.parse as _up
+            ref_id = __import__("secrets").token_urlsafe(10)
+            # Определяем тип контакта
+            c_type = c.get("type", "")
+            if not c_type:
+                if "wa.me" in c["url"] or "whatsapp" in c["url"].lower():
+                    c_type = "whatsapp"
+                elif "t.me" in c["url"] or "telegram" in c["url"].lower():
+                    c_type = "telegram"
+            # Сохраняем клик
+            db.save_staff_click(ref_id, c["url"], c_type, slug, **{k:v for k,v in utm_params.items() if k!='landing_slug'})
+            go_url = f"{app_url}/go-staff?ref={ref_id}"
+            tracked_contacts.append({**c, "url": go_url, "type": c_type})
+        else:
+            tracked_contacts.append(c)
+
+    return HTMLResponse(_render_staff_landing(landing, tracked_contacts, pixel_id=pixel_staff))
+
+
+@app.get("/go-staff")
+async def go_staff_redirect(request: Request, ref: str = ""):
+    """Редирект с HR лендинга — сохраняет UTM и добавляет ref код в WA/TG ссылку"""
+    if not ref:
+        return HTMLResponse("<h2>Invalid link</h2>", 400)
+
+    click = db.get_staff_click(ref)
+    if not click:
+        return HTMLResponse("<h2>Link expired</h2>", 404)
+
+    target_url = click.get("target_url", "")
+    target_type = click.get("target_type", "wa")
+
+    # Добавляем ref код в ссылку чтобы связать чат с UTM
+    destination = target_url
+    if target_type == "whatsapp" or "wa.me" in target_url:
+        # wa.me/79991234567 → wa.me/79991234567?text=ref:XXX
+        sep = "&" if "?" in target_url else "?"
+        ref_text = __import__("urllib.parse", fromlist=["quote"]).quote(f"ref:{ref}")
+        destination = f"{target_url}{sep}text={ref_text}"
+    elif target_type == "telegram" or "t.me" in target_url:
+        # t.me/username → t.me/username?start=ref_XXX
+        sep = "&" if "?" in target_url else "?"
+        destination = f"{target_url}{sep}start=ref_{ref}"
+
+    log.info(f"[/go-staff] ref={ref} type={target_type} utm={click.get('utm_campaign')} fbclid={'✓' if click.get('fbclid') else '—'}")
+
+    return HTMLResponse(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+    <meta http-equiv="refresh" content="0;url={destination}">
+    <script>
+      if (!document.cookie.includes('_fbp')) {{
+        var fbp = 'fb.1.' + Date.now() + '.' + Math.random().toString(36).substr(2,9);
+        document.cookie = '_fbp=' + fbp + ';max-age=7776000;path=/;SameSite=Lax';
+      }}
+      setTimeout(function(){{ window.location.href = '{destination}'; }}, 80);
+    </script>
+    </head><body style="background:#060a0f;color:#e8f0f8;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui">
+    <div style="text-align:center"><div style="font-size:2rem;margin-bottom:12px">📡</div>
+    <div>Перенаправляем...</div></div></body></html>""")
 
 
 def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = None) -> str:
@@ -3021,6 +3104,27 @@ async def wa_webhook(request: Request):
                 return JSONResponse({"ok": True})
 
             conv = db.get_or_create_wa_conversation(wa_chat_id, wa_number, sender_name)
+
+            # ── Проверяем ref: код в сообщении (UTM трекинг с HR лендинга) ──
+            import re as _re
+            ref_match = _re.search(r'\bref:([A-Za-z0-9_\-]{8,20})\b', text)
+            if ref_match:
+                ref_id = ref_match.group(1)
+                click_data = db.get_staff_click(ref_id)
+                if click_data and not click_data.get("used"):
+                    db.apply_utm_to_wa_conv(
+                        conv["id"],
+                        fbclid=click_data.get("fbclid"),
+                        fbp=click_data.get("fbp"),
+                        utm_source=click_data.get("utm_source"),
+                        utm_medium=click_data.get("utm_medium"),
+                        utm_campaign=click_data.get("utm_campaign"),
+                    )
+                    db.mark_staff_click_used(ref_id)
+                    # Обновляем локальный conv для уведомления
+                    conv = db.get_wa_conversation(conv["id"]) or conv
+                    log.info(f"[WA webhook] UTM applied from ref:{ref_id} utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
+
             db.save_wa_message(conv["id"], wa_chat_id, "visitor", text,
                                media_url=media_url, media_type=media_type)
             db.update_wa_last_message(wa_chat_id, text, increment_unread=True)
@@ -3513,7 +3617,19 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
     # Пиксель сотрудников
     pixel_id   = db.get_setting("pixel_id_staff") or db.get_setting("pixel_id")
     meta_token = db.get_setting("meta_token_staff") or db.get_setting("meta_token")
-    sent = await meta_capi.send_lead_event(pixel_id, meta_token, user_id=conv["wa_number"], campaign="whatsapp")
+    fbclid   = conv.get("fbclid")
+    fbp      = conv.get("fbp")
+    campaign = conv.get("utm_campaign") or "whatsapp"
+    utm_src  = conv.get("utm_source") or "whatsapp"
+    sent = await meta_capi.send_lead_event(
+        pixel_id, meta_token,
+        user_id=conv["wa_number"],
+        campaign=campaign,
+        fbclid=fbclid,
+        fbp=fbp,
+        utm_source=utm_src,
+        utm_campaign=campaign,
+    )
     if sent:
         db.set_wa_fb_event(conv_id, "Lead")
     return RedirectResponse(f"/wa/chat?conv_id={conv_id}", 303)

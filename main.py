@@ -2158,11 +2158,22 @@ async def landings_create(request: Request, name: str = Form(...), slug: str = F
     clean_slug = re.sub(r'[^a-z0-9-]', '-', slug.lower().strip())
     template = form.get("template", "dark_hr") if ltype == "staff" else "relaxation"
     content = json.dumps({"type": ltype, "template": template})
-    try:
-        db.create_landing(name.strip(), ltype, clean_slug, content)
-        return RedirectResponse(f"{redirect}?msg=Лендинг+создан", 303)
-    except Exception as e:
-        return RedirectResponse(f"{redirect}?msg=Ошибка:+{str(e)}", 303)
+    # Если slug занят — добавляем -2, -3, ...
+    final_slug = clean_slug
+    counter = 2
+    while True:
+        try:
+            db.create_landing(name.strip(), ltype, final_slug, content)
+            suffix = f" (slug: {final_slug})" if final_slug != clean_slug else ""
+            return RedirectResponse(f"{redirect}?msg=Лендинг+создан{suffix.replace(' ','+')}".replace('(','').replace(')','').replace(':',''), 303)
+        except Exception as e:
+            if "duplicate key" in str(e) or "unique" in str(e).lower():
+                final_slug = f"{clean_slug}-{counter}"
+                counter += 1
+                if counter > 20:
+                    return RedirectResponse(f"{redirect}?msg=Ошибка:+slug+{clean_slug}+уже+занят", 303)
+            else:
+                return RedirectResponse(f"{redirect}?msg=Ошибка:+{str(e)[:60]}", 303)
 
 
 @app.post("/landings/delete")

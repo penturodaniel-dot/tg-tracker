@@ -2041,36 +2041,110 @@ async def landings_staff_page(request: Request, msg: str = ""):
 def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
     landings = db.get_landings(ltype)
     if ltype == "staff":
-        title = "💼 Лендинги HR"
-        sub   = "Лендинги для рекрутинга. Кнопки контактов (TG/WA) настраиваются из админки."
+        title = "Лендинги HR"
+        sub   = "Лендинги для рекрутинга. Выбери шаблон, добавь кнопки контактов — и лендинг готов."
     else:
-        title = "🎨 Шаблоны лендингов"
+        title = "Шаблоны лендингов"
         sub   = "Создай несколько дизайнов. При создании кампании выбираешь какой шаблон использовать."
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+
+    # Превью шаблонов для staff
+    tpl_select = ""
+    if ltype == "staff":
+        tpl_select = """
+        <div class="field-group" style="margin-bottom:14px">
+          <div class="field-label">Шаблон дизайна</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px" id="tpl-grid">
+            <label style="cursor:pointer">
+              <input type="radio" name="template" value="dark_hr" checked style="display:none">
+              <div class="tpl-card" data-tpl="dark_hr" style="border:2px solid var(--orange);border-radius:8px;overflow:hidden;transition:all .15s">
+                <div style="height:70px;background:linear-gradient(135deg,#0b0d0f,#12161a);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+                  <div style="width:40px;height:5px;background:#32d27f;border-radius:3px"></div>
+                  <div style="width:60px;height:3px;background:#32d27f;opacity:.4;border-radius:3px"></div>
+                  <div style="display:flex;gap:4px;margin-top:4px">
+                    <div style="width:50px;height:14px;background:#26A5E4;border-radius:4px"></div>
+                    <div style="width:50px;height:14px;background:#25D366;border-radius:4px"></div>
+                  </div>
+                </div>
+                <div style="padding:6px 8px;background:var(--bg3)"><div style="font-size:.72rem;font-weight:600;color:var(--text)">Dark Spa</div><div style="font-size:.65rem;color:var(--text3)">Тёмный премиум</div></div>
+              </div>
+            </label>
+            <label style="cursor:pointer">
+              <input type="radio" name="template" value="light_clean" style="display:none">
+              <div class="tpl-card" data-tpl="light_clean" style="border:2px solid var(--border);border-radius:8px;overflow:hidden;transition:all .15s">
+                <div style="height:70px;background:linear-gradient(135deg,#f8f9fc,#e8edf5);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+                  <div style="width:40px;height:5px;background:#2563eb;border-radius:3px"></div>
+                  <div style="width:60px;height:3px;background:#2563eb;opacity:.3;border-radius:3px"></div>
+                  <div style="display:flex;gap:4px;margin-top:4px">
+                    <div style="width:50px;height:14px;background:#2563eb;border-radius:4px"></div>
+                    <div style="width:50px;height:14px;background:#25D366;border-radius:4px"></div>
+                  </div>
+                </div>
+                <div style="padding:6px 8px;background:var(--bg3)"><div style="font-size:.72rem;font-weight:600;color:var(--text)">Light Clean</div><div style="font-size:.65rem;color:var(--text3)">Светлый минимал</div></div>
+              </div>
+            </label>
+            <label style="cursor:pointer">
+              <input type="radio" name="template" value="bold_cta" style="display:none">
+              <div class="tpl-card" data-tpl="bold_cta" style="border:2px solid var(--border);border-radius:8px;overflow:hidden;transition:all .15s">
+                <div style="height:70px;background:linear-gradient(135deg,#1a0a2e,#2d1257);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+                  <div style="width:40px;height:5px;background:#a855f7;border-radius:3px"></div>
+                  <div style="width:60px;height:3px;background:#a855f7;opacity:.4;border-radius:3px"></div>
+                  <div style="display:flex;gap:4px;margin-top:4px">
+                    <div style="width:50px;height:14px;background:#a855f7;border-radius:4px"></div>
+                    <div style="width:50px;height:14px;background:#25D366;border-radius:4px"></div>
+                  </div>
+                </div>
+                <div style="padding:6px 8px;background:var(--bg3)"><div style="font-size:.72rem;font-weight:600;color:var(--text)">Bold Purple</div><div style="font-size:.65rem;color:var(--text3)">Яркий фиолетовый</div></div>
+              </div>
+            </label>
+          </div>
+        </div>
+        <script>
+        document.querySelectorAll('.tpl-card').forEach(function(card){
+          card.addEventListener('click',function(){
+            document.querySelectorAll('.tpl-card').forEach(function(c){c.style.borderColor='var(--border)'});
+            card.style.borderColor='var(--orange)';
+            var radio=document.querySelector('input[value="'+card.dataset.tpl+'"]');
+            if(radio) radio.checked=true;
+          });
+        });
+        </script>"""
+
     rows = ""
     for l in landings:
+        import json as _json
+        try:
+            lcontent = _json.loads(l.get("content","{}"))
+            tpl_name = {"dark_hr":"Dark Spa","light_clean":"Light Clean","bold_cta":"Bold Purple"}.get(lcontent.get("template","dark_hr"),"Dark Spa")
+        except:
+            tpl_name = "Dark Spa"
         slug_url = f"/l/{l['slug']}"
         rows += f"""<tr>
           <td><b>{l['name']}</b></td>
+          <td><span class="badge-gray" style="font-size:.68rem">{tpl_name}</span></td>
           <td><a href="{slug_url}" target="_blank" class="link-box" style="display:inline-block">{slug_url}</a></td>
           <td><span class="{'badge-green' if l['active'] else 'badge-gray'}">{'Активен' if l['active'] else 'Скрыт'}</span></td>
           <td>
             <a href="/landings/edit?id={l['id']}" class="btn-gray btn-sm">✏️ Редакт.</a>
             <form method="post" action="/landings/delete" style="display:inline"><input type="hidden" name="id" value="{l['id']}"/><button class="del-btn btn-sm">✕</button></form>
           </td></tr>"""
-    rows = rows or f'<tr><td colspan="4"><div class="empty">Нет шаблонов — создай первый</div></td></tr>'
+    rows = rows or f'<tr><td colspan="5"><div class="empty">Нет шаблонов — создай первый</div></td></tr>'
+
+    tpl_th = '<th>Шаблон</th>' if ltype == "staff" else ""
+
     return f"""<div class="page-wrap"><div class="page-title">{title}</div>
     <div class="page-sub">{sub}</div>{alert}
-    <div class="section"><div class="section-head"><h3>➕ Создать шаблон</h3></div><div class="section-body">
+    <div class="section"><div class="section-head"><h3>➕ Создать лендинг</h3></div><div class="section-body">
     <form method="post" action="/landings/create"><input type="hidden" name="ltype" value="{ltype}"/>
     <input type="hidden" name="redirect" value="/landings{'_staff' if ltype=='staff' else ''}"/>
+    {tpl_select}
     <div class="form-row">
-      <div class="field-group"><div class="field-label">Название шаблона</div><input type="text" name="name" placeholder="{'Лендинг HR v2' if ltype=='staff' else 'Массаж NYC — стиль 2'}" required/></div>
-      <div class="field-group" style="max-width:200px"><div class="field-label">URL slug {'(только для HR)' if ltype=='staff' else '(только для предпросмотра)'}</div><input type="text" name="slug" placeholder="{'hr-v2' if ltype=='staff' else 'nyc-v2'}" required/></div>
+      <div class="field-group"><div class="field-label">Название</div><input type="text" name="name" placeholder="{'HR — Массаж v2' if ltype=='staff' else 'NYC — стиль 2'}" required/></div>
+      <div class="field-group" style="max-width:200px"><div class="field-label">URL slug</div><input type="text" name="slug" placeholder="{'hr-massage-v2' if ltype=='staff' else 'nyc-v2'}" required/></div>
       <div style="display:flex;align-items:flex-end"><button class="btn">Создать</button></div>
     </div></form></div></div>
-    <div class="section"><div class="section-head"><h3>📋 Шаблоны ({len(landings)})</h3></div>
-    <table><thead><tr><th>Название</th><th>URL предпросмотра</th><th>Статус</th><th>Действия</th></tr></thead>
+    <div class="section"><div class="section-head"><h3>Шаблоны ({len(landings)})</h3></div>
+    <table><thead><tr><th>Название</th>{tpl_th}<th>URL</th><th>Статус</th><th>Действия</th></tr></thead>
     <tbody>{rows}</tbody></table></div></div>"""
 
 
@@ -2080,11 +2154,10 @@ async def landings_create(request: Request, name: str = Form(...), slug: str = F
     user, err = require_auth(request)
     if err: return err
     import re, json
+    form = await request.form()
     clean_slug = re.sub(r'[^a-z0-9-]', '-', slug.lower().strip())
-    if ltype == "staff":
-        content = json.dumps({"type": "staff"})
-    else:
-        content = json.dumps({"type": "client"})
+    template = form.get("template", "dark_hr") if ltype == "staff" else "relaxation"
+    content = json.dumps({"type": ltype, "template": template})
     try:
         db.create_landing(name.strip(), ltype, clean_slug, content)
         return RedirectResponse(f"{redirect}?msg=Лендинг+создан", 303)
@@ -2110,40 +2183,96 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
     app_url  = db.get_setting("app_url", "")
     alert    = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
 
+    import json as _json
+    try:
+        lcontent = _json.loads(landing.get("content","{}"))
+        cur_tpl = lcontent.get("template","dark_hr")
+    except:
+        cur_tpl = "dark_hr"
+
+    tpl_names = {"dark_hr":"Dark Spa","light_clean":"Light Clean","bold_cta":"Bold Purple"}
+
     contact_rows = ""
     for c in contacts:
-        type_icon = "📱" if c["type"] == "telegram" else "💚"
+        type_icon = "📱" if c["type"] == "telegram" else ("💚" if c["type"] == "whatsapp" else "🔗")
         contact_rows += f"""<tr>
           <td>{type_icon} <span class="badge">{c['type']}</span></td>
           <td>{c['label']}</td>
-          <td><a href="{c['url']}" target="_blank" style="color:var(--accent);font-size:.8rem">{c['url'][:40]}...</a></td>
+          <td><a href="{c['url']}" target="_blank" style="color:var(--blue);font-size:.8rem">{c['url'][:50]}{'...' if len(c['url'])>50 else ''}</a></td>
           <td><form method="post" action="/landings/contact/delete"><input type="hidden" name="contact_id" value="{c['id']}"/><input type="hidden" name="landing_id" value="{id}"/><button class="del-btn">✕</button></form></td></tr>"""
-    contact_rows = contact_rows or '<tr><td colspan="4"><div class="empty">Нет контактов</div></td></tr>'
+    contact_rows = contact_rows or '<tr><td colspan="4"><div class="empty">Нет контактов — добавь кнопки</div></td></tr>'
 
     public_url = f"{app_url}/l/{landing['slug']}"
     back = "/landings_staff" if landing["type"] == "staff" else "/landings"
+
+    # Блок смены шаблона (только для staff)
+    tpl_block = ""
+    if landing["type"] == "staff":
+        tpl_opts = "".join(
+            f'<option value="{k}" {"selected" if k==cur_tpl else ""}>{v}</option>'
+            for k,v in tpl_names.items()
+        )
+        tpl_block = f"""
+        <div class="section">
+          <div class="section-head"><h3>Шаблон дизайна</h3>
+            <span class="badge-gray" style="font-size:.7rem">Сейчас: {tpl_names.get(cur_tpl,'—')}</span>
+          </div>
+          <div class="section-body">
+            <form method="post" action="/landings/set_template" style="display:flex;gap:10px;align-items:flex-end">
+              <input type="hidden" name="landing_id" value="{id}"/>
+              <div class="field-group" style="max-width:220px">
+                <div class="field-label">Выбрать шаблон</div>
+                <select name="template">{tpl_opts}</select>
+              </div>
+              <button class="btn-orange">Применить</button>
+            </form>
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <a href="{public_url}" target="_blank" class="btn btn-sm">Предпросмотр →</a>
+            </div>
+          </div>
+        </div>"""
+
     content = f"""<div class="page-wrap">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
       <a href="{back}" class="btn-gray btn-sm">← Назад</a>
-      <div class="page-title">✏️ {landing['name']}</div>
+      <div class="page-title">{landing['name']}</div>
     </div>
     {alert}
-    <div class="section"><div class="section-head"><h3>🔗 Публичная ссылка</h3></div>
-    <div class="section-body"><div class="link-box">{public_url}</div>
-    <a href="{public_url}" target="_blank" class="btn btn-sm" style="margin-top:10px;display:inline-block">Открыть лендинг →</a></div></div>
-    <div class="section"><div class="section-head"><h3>➕ Добавить контакт / кнопку</h3><small style="color:var(--text3)">Эти кнопки появятся на лендинге</small></div>
+    <div class="section"><div class="section-head"><h3>Публичная ссылка</h3></div>
+    <div class="section-body">
+      <div class="link-box">{public_url}</div>
+      <a href="{public_url}" target="_blank" class="btn btn-sm" style="margin-top:10px;display:inline-flex">Открыть →</a>
+    </div></div>
+    {tpl_block}
+    <div class="section"><div class="section-head"><h3>Добавить кнопку</h3><small style="color:var(--text3)">Кнопки появятся на лендинге</small></div>
     <div class="section-body"><form method="post" action="/landings/contact/add"><input type="hidden" name="landing_id" value="{id}"/>
     <div class="form-row">
       <div class="field-group" style="max-width:160px"><div class="field-label">Тип</div>
       <select name="ctype"><option value="telegram">📱 Telegram</option><option value="whatsapp">💚 WhatsApp</option><option value="other">🔗 Другое</option></select></div>
-      <div class="field-group" style="max-width:180px"><div class="field-label">Текст кнопки</div><input type="text" name="label" placeholder="Написать в Telegram" required/></div>
-      <div class="field-group"><div class="field-label">URL</div><input type="text" name="url" placeholder="https://t.me/username или https://wa.me/1..." required/></div>
+      <div class="field-group" style="max-width:200px"><div class="field-label">Текст кнопки</div><input type="text" name="label" placeholder="Написать в Telegram" required/></div>
+      <div class="field-group"><div class="field-label">URL</div><input type="text" name="url" placeholder="https://t.me/username" required/></div>
       <div style="display:flex;align-items:flex-end"><button class="btn">Добавить</button></div>
     </div></form></div></div>
-    <div class="section"><div class="section-head"><h3>🔘 Кнопки контактов ({len(contacts)})</h3></div>
+    <div class="section"><div class="section-head"><h3>Кнопки контактов ({len(contacts)})</h3></div>
     <table><thead><tr><th>Тип</th><th>Текст</th><th>URL</th><th></th></tr></thead>
     <tbody>{contact_rows}</tbody></table></div></div>"""
     return HTMLResponse(base(content, landing["type"] + "_landing", request))
+
+
+@app.post("/landings/set_template")
+async def landings_set_template(request: Request, landing_id: int = Form(...), template: str = Form(...)):
+    user, err = require_auth(request)
+    if err: return err
+    import json as _json
+    landing = db.get_landing(landing_id)
+    if not landing: return RedirectResponse("/landings_staff", 303)
+    try:
+        lcontent = _json.loads(landing.get("content","{}"))
+    except:
+        lcontent = {}
+    lcontent["template"] = template
+    db.update_landing_content(landing_id, _json.dumps(lcontent))
+    return RedirectResponse(f"/landings/edit?id={landing_id}&msg=Шаблон+изменён", 303)
 
 
 @app.post("/landings/contact/add")
@@ -2319,18 +2448,21 @@ def _render_client_landing(landing, contacts, pixel_id: str = "") -> str:
     btn_html = ""
     for c in contacts:
         if c["type"] == "telegram":
-            btn_html += f'<a class="lnd-btn lnd-tg" href="{c["url"]}" target="_blank"><svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>{c["label"]}</a>'
+            btn_html += f'<a class="lnd-btn lnd-tg call-button" href="{c["url"]}" target="_blank"><svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>{c["label"]}</a>'
         elif c["type"] == "whatsapp":
-            btn_html += f'<a class="lnd-btn lnd-wa" href="{c["url"]}" target="_blank"><svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5Z"/></svg>{c["label"]}</a>'
+            btn_html += f'<a class="lnd-btn lnd-wa call-button" href="{c["url"]}" target="_blank"><svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5Z"/></svg>{c["label"]}</a>'
         else:
-            btn_html += f'<a class="lnd-btn" href="{c["url"]}" target="_blank" style="background:rgba(255,255,255,.12)">{c["label"]}</a>'
+            btn_html += f'<a class="lnd-btn call-button" href="{c["url"]}" target="_blank" style="background:rgba(255,255,255,.12)">{c["label"]}</a>'
 
     if not btn_html:
         btn_html = '<p style="color:rgba(255,255,255,.5);text-align:center">Контакты не настроены</p>'
 
+    px = _pixel_js(pixel_id)
+
     return f"""<!DOCTYPE html><html lang="en"><head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Relaxation and Balance 🌿✨</title>
+    {px}
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
     *{{box-sizing:border-box;margin:0;padding:0}}
@@ -2401,22 +2533,12 @@ def _render_client_landing(landing, contacts, pixel_id: str = "") -> str:
     </div></body></html>"""
 
 
-def _render_staff_landing(landing, contacts, pixel_id: str = "") -> str:
-    btn_html = ""
-    for c in contacts:
-        if c["type"] == "telegram":
-            btn_html += f'<a id="btn-telegram" class="btn tg call-button" href="{c["url"]}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg><span>{c["label"]}</span></a>'
-        elif c["type"] == "whatsapp":
-            btn_html += f'<a id="btn-whatsapp" class="btn wa call-button" href="{c["url"]}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5ZM6.5 18.4l.1-.3-.1.3Zm10.4-3.8c-.2.6-1.1 1.1-1.6 1.2-.4.1-.9.1-1.5-.1-.3-.1-.7-.2-1.2-.5-2.2-1.2-3.6-3-4-3.4-.2-.2-.9-1.1-.9-2 0-.9.5-1.3.6-1.5.1-.2.3-.3.5-.3h.4c.1 0 .3 0 .4.3.2.6.6 1.6.7 1.7.1.2.1.3 0 .5-.2.3-.4.5-.5.6-.1.1-.3.3-.1.6.2.3.9 1.5 2.1 2.4 1.5 1.1 2.4 1.3 2.7 1.4.3.1.5.1.6-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.6-.1.2.1 1.5.7 1.7.8.2.1.3.1.3.2 0 .1 0 .6-.2 1.2Z"/></svg><span>{c["label"]}</span></a>'
-        else:
-            btn_html += f'<a class="btn" href="{c["url"]}" target="_blank" style="background:rgba(255,255,255,.15)">{c["label"]}</a>'
-
-    if not btn_html:
-        btn_html = '<p style="text-align:center;color:#a9b4bf">Контакты не настроены</p>'
-
-    pixel_js = ""
-    if pixel_id:
-        pixel_js = f"""<script>
+def _pixel_js(pixel_id: str) -> str:
+    """Корректный FB Pixel код с PageView + Contact tracking"""
+    if not pixel_id:
+        return ""
+    return f"""<!-- Facebook Pixel -->
+<script>
 !function(f,b,e,v,n,t,s){{if(f.fbq)return;n=f.fbq=function(){{n.callMethod?
 n.callMethod.apply(n,arguments):n.queue.push(arguments)}};
 if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
@@ -2424,87 +2546,272 @@ n.queue=[];t=b.createElement(e);t.async=!0;
 t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}}(window,document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '{pixel_id}');
-fbq('track', 'PageView');
-// Трекинг кликов по кнопкам контактов
-document.addEventListener('click', function(e){{
-  var btn = e.target.closest('.call-button');
-  if(btn) fbq('track', 'Contact');
+fbq('init','{pixel_id}');
+fbq('track','PageView');
+document.addEventListener('click',function(e){{
+  var btn=e.target.closest('.call-button');
+  if(btn){{fbq('track','Contact');}}
 }});
 </script>
 <noscript><img height="1" width="1" style="display:none"
-src="https://www.facebook.com/tr?id={pixel_id}&ev=PageView&noscript=1"/></noscript>"""
+  src="https://www.facebook.com/tr?id={pixel_id}&ev=PageView&noscript=1"/></noscript>
+<!-- End Facebook Pixel -->"""
 
+
+def _build_buttons(contacts: list) -> str:
+    """Универсальная генерация кнопок контактов для всех шаблонов"""
+    TG_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>'
+    WA_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5ZM6.5 18.4l.1-.3-.1.3Zm10.4-3.8c-.2.6-1.1 1.1-1.6 1.2-.4.1-.9.1-1.5-.1-.3-.1-.7-.2-1.2-.5-2.2-1.2-3.6-3-4-3.4-.2-.2-.9-1.1-.9-2 0-.9.5-1.3.6-1.5.1-.2.3-.3.5-.3h.4c.1 0 .3 0 .4.3.2.6.6 1.6.7 1.7.1.2.1.3 0 .5-.2.3-.4.5-.5.6-.1.1-.3.3-.1.6.2.3.9 1.5 2.1 2.4 1.5 1.1 2.4 1.3 2.7 1.4.3.1.5.1.6-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.6-.1.2.1 1.5.7 1.7.8.2.1.3.1.3.2 0 .1 0 .6-.2 1.2Z"/></svg>'
+    html = ""
+    for c in contacts:
+        if c["type"] == "telegram":
+            html += f'<a class="hr-btn hr-btn-tg call-button" href="{c["url"]}" target="_blank" rel="noopener">{TG_SVG}<span>{c["label"]}</span></a>'
+        elif c["type"] == "whatsapp":
+            html += f'<a class="hr-btn hr-btn-wa call-button" href="{c["url"]}" target="_blank" rel="noopener">{WA_SVG}<span>{c["label"]}</span></a>'
+        else:
+            html += f'<a class="hr-btn hr-btn-other call-button" href="{c["url"]}" target="_blank" rel="noopener"><span>{c["label"]}</span></a>'
+    if not html:
+        html = '<p style="text-align:center;opacity:.5;padding:12px 0">Контакты не настроены</p>'
+    return html
+
+
+def _render_staff_landing(landing: dict, contacts: list, pixel_id: str = "") -> str:
+    """Диспетчер шаблонов HR лендингов"""
+    import json as _json
+    try:
+        lcontent = _json.loads(landing.get("content","{}"))
+        template = lcontent.get("template","dark_hr")
+    except:
+        template = "dark_hr"
+
+    buttons = _build_buttons(contacts)
+    px = _pixel_js(pixel_id)
+    year = __import__('datetime').datetime.now().year
+    name = landing.get("name","HR")
+
+    if template == "light_clean":
+        return _tpl_light_clean(name, buttons, px, year)
+    elif template == "bold_cta":
+        return _tpl_bold_cta(name, buttons, px, year)
+    else:
+        return _tpl_dark_hr(name, buttons, px, year)
+
+
+def _tpl_dark_hr(name: str, buttons: str, pixel_js: str, year: int) -> str:
     return f"""<!DOCTYPE html><html lang="ru"><head>
-    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>GREN SPA — Работа для массажисток в США</title>
-    {pixel_js}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-    :root{{--bg:#0b0d0f;--card:#12161a;--text:#e7edf3;--muted:#a9b4bf;--accent:#32d27f;--tg:#26A5E4;--wa:#25D366;--shadow:0 10px 30px rgba(0,0,0,.35)}}
-    *{{box-sizing:border-box}}html,body{{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Montserrat',system-ui,sans-serif}}
-    a{{color:inherit;text-decoration:none}}
-    .container{{width:min(1080px,92vw);margin:0 auto}}
-    .btn{{display:inline-flex;align-items:center;gap:.6rem;padding:1rem 1.4rem;border-radius:14px;font-weight:700;letter-spacing:.2px;box-shadow:var(--shadow);transition:transform .15s ease,opacity .15s;width:100%;justify-content:center}}
-    .btn:hover{{transform:translateY(-1px);opacity:.92}}
-    .btn svg{{width:1.2rem;height:1.2rem;flex-shrink:0}}
-    .hero{{position:relative;min-height:74vh;display:grid;place-items:center;text-align:center;overflow:hidden}}
-    .hero::before{{content:"";position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop') center/cover no-repeat;filter:brightness(.55)}}
-    .hero::after{{content:"";position:absolute;inset:0;background:radial-gradient(1200px 600px at 50% 20%,rgba(50,210,127,.22),transparent 55%),linear-gradient(to top,rgba(11,13,15,.85),rgba(11,13,15,.25))}}
-    .hero .inner{{position:relative;z-index:1;padding:4rem 1rem}}
-    .hero h1{{font-size:clamp(2rem,3vw + 1.2rem,3.2rem);margin:0 0 .7rem;line-height:1.1}}
-    .hero p{{margin:0 auto 1.6rem;max-width:740px;color:var(--muted);font-weight:500}}
-    .chip{{display:inline-block;padding:.5rem .8rem;border-radius:999px;background:rgba(255,255,255,.08);color:#fff;font-weight:600;font-size:.9rem;margin-bottom:1rem}}
-    section#about{{padding:56px 0}}
-    .card{{background:var(--card);border-radius:18px;padding:clamp(18px,3vw,28px);box-shadow:var(--shadow)}}
-    .about-grid{{display:grid;grid-template-columns:1.1fr .9fr;gap:22px}}
-    .about h2{{margin:0 0 .6rem;font-size:clamp(1.2rem,1.6vw + .8rem,1.8rem)}}
-    .about p.lead{{color:var(--muted);margin:.2rem 0 1rem}}
-    .about ul{{margin:0;padding-left:1.1rem;line-height:1.7}}
-    .about li{{margin:.25rem 0}}
-    .note{{margin-top:1rem;background:rgba(38,165,228,.08);border:1px solid rgba(38,165,228,.25);padding:.9rem 1rem;border-radius:14px;color:#d8f1ff}}
-    section#contact{{padding:56px 0 84px}}
-    .cta-card{{display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;max-width:480px;margin:0 auto;width:100%}}
-    .tg{{background:var(--tg);color:#fff}}
-    .wa{{background:var(--wa);color:#fff}}
-    .sub{{color:var(--muted);font-size:.95rem}}
-    footer{{text-align:center;padding:26px 0 40px;color:#8492a2;font-size:.9rem}}
-    @media(max-width:860px){{.about-grid{{grid-template-columns:1fr}}}}
-    </style></head><body>
-    <header class="hero"><div class="inner container">
-      <span class="chip">Сеть СПА-салонов №1 в США</span>
-      <h1>GREN SPA приглашает массажисток</h1>
-      <p>Ищешь высокооплачиваемую работу в США с обучением, жильём и гибким графиком? Присоединяйся к команде GREN SPA и начни зарабатывать с первого дня.</p>
-    </div></header>
-    <section id="about"><div class="container"><div class="card about">
-      <div class="about-grid"><div>
-        <h2>Описание вакансии</h2>
-        <p class="lead">Вас приветствует сеть СПА-салонов №1 в США — <strong>GREN SPA</strong>! 🌿</p>
-        <h3 style="margin:1rem 0 .6rem;font-size:1.05rem">Преимущества работы с нами:</h3>
-        <ul>
-          <li>Высокий доход с первого дня (от 400$ в день).</li>
-          <li>Обучение и постоянная поддержка со стороны компании.</li>
-          <li>Жильё предоставляет компания (при необходимости).</li>
-          <li>Простая система оформления: не требуем документов и знания английского.</li>
-          <li>Гибкий график — дни смен строишь сама.</li>
-          <li>Множество локаций в больших городах США.</li>
-        </ul>
-        <p class="note">Не веришь? Мы предоставляем пробную смену, которая оплачивается на общих основаниях 💵</p>
-        <p style="margin-top:1rem">Для связи напиши в удобный мессенджер 📲</p>
-      </div>
-      <div><div class="card" style="background:linear-gradient(135deg,rgba(38,165,228,.18),rgba(50,210,127,.18));height:100%;display:flex;align-items:center;justify-content:center;text-align:center">
-        <div><h3 style="margin:0 0 .8rem">Выбери мессенджер</h3><p class="sub">Наш HR оперативно ответит.</p></div>
-      </div></div></div></div></div></section>
-    <section id="contact"><div class="container"><div class="cta-card">
-      <h2 style="margin:.2rem 0 .3rem">Связаться с HR-менеджером</h2>
-      <p class="sub">Выберите удобный канал связи.</p>
-      <div style="display:flex;flex-direction:column;gap:.8rem;width:100%;max-width:400px">
-        {btn_html}
-      </div>
-    </div></div></section>
-    <footer>© {__import__('datetime').datetime.now().year} GREN SPA. Все права защищены.</footer>
-    </body></html>"""
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{name}</title>
+{pixel_js}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{{--bg:#0b0d0f;--card:#12161a;--text:#e7edf3;--muted:#a9b4bf;--accent:#32d27f;--tg:#26A5E4;--wa:#25D366}}
+*{{box-sizing:border-box;margin:0;padding:0}}
+html,body{{background:var(--bg);color:var(--text);font-family:'Montserrat',system-ui,sans-serif;min-height:100vh}}
+a{{color:inherit;text-decoration:none}}
+.wrap{{width:min(1080px,94vw);margin:0 auto}}
+.hero{{position:relative;min-height:72vh;display:grid;place-items:center;text-align:center;overflow:hidden}}
+.hero::before{{content:"";position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop') center/cover no-repeat;filter:brightness(.45)}}
+.hero::after{{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(11,13,15,1) 0%,rgba(11,13,15,.2) 50%,rgba(11,13,15,.5) 100%)}}
+.hero-inner{{position:relative;z-index:1;padding:3rem 1rem}}
+.chip{{display:inline-block;padding:.4rem .9rem;border-radius:999px;background:rgba(50,210,127,.15);border:1px solid rgba(50,210,127,.3);color:var(--accent);font-size:.85rem;font-weight:600;margin-bottom:1.2rem}}
+.hero h1{{font-size:clamp(2rem,4vw+.8rem,3.4rem);font-weight:800;margin:0 0 .8rem;line-height:1.1}}
+.hero p{{color:var(--muted);max-width:680px;margin:0 auto 1.8rem;font-size:1rem;font-weight:500}}
+.section{{padding:56px 0}}
+.grid{{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;align-items:start}}
+.card{{background:var(--card);border-radius:18px;padding:clamp(18px,3vw,28px)}}
+.card h2{{font-size:clamp(1.1rem,1.6vw+.5rem,1.6rem);font-weight:700;margin:0 0 .6rem}}
+.card p.lead{{color:var(--muted);margin:.2rem 0 1rem;font-size:.95rem}}
+.card ul{{padding-left:1.1rem;line-height:1.8;color:var(--muted)}}
+.card ul li{{margin:.2rem 0}}
+.card ul li strong{{color:var(--text)}}
+.note{{margin-top:1rem;background:rgba(50,210,127,.07);border:1px solid rgba(50,210,127,.2);padding:.85rem 1rem;border-radius:12px;color:#c6f6e0;font-size:.9rem}}
+.cta-section{{padding:56px 0 80px;text-align:center}}
+.cta-section h2{{font-size:clamp(1.4rem,2vw+.6rem,2rem);margin:0 0 .4rem}}
+.cta-section p{{color:var(--muted);margin:0 auto 1.8rem;max-width:480px}}
+.btns{{display:flex;flex-direction:column;gap:.75rem;width:100%;max-width:400px;margin:0 auto}}
+.hr-btn{{display:inline-flex;align-items:center;justify-content:center;gap:.65rem;padding:.95rem 1.4rem;border-radius:14px;font-weight:700;font-size:1rem;width:100%;transition:transform .15s,opacity .15s}}
+.hr-btn:hover{{transform:translateY(-2px);opacity:.92}}
+.hr-btn-tg{{background:var(--tg);color:#fff}}
+.hr-btn-wa{{background:var(--wa);color:#fff}}
+.hr-btn-other{{background:rgba(255,255,255,.12);color:var(--text);border:1px solid rgba(255,255,255,.15)}}
+footer{{text-align:center;padding:24px 0 40px;color:#576574;font-size:.85rem}}
+@media(max-width:768px){{.grid{{grid-template-columns:1fr}}}}
+</style></head><body>
+<header class="hero"><div class="hero-inner wrap">
+  <div class="chip">Работа за рубежом</div>
+  <h1>{name}</h1>
+  <p>Высокооплачиваемая работа с обучением, жильём и гибким графиком. Присоединяйся и начни зарабатывать с первого дня.</p>
+</div></header>
+<section class="section"><div class="wrap"><div class="grid">
+  <div class="card">
+    <h2>Описание вакансии</h2>
+    <p class="lead">Мы ищем активных и целеустремлённых сотрудников!</p>
+    <ul>
+      <li><strong>Высокий доход</strong> с первого рабочего дня</li>
+      <li><strong>Обучение</strong> и постоянная поддержка команды</li>
+      <li><strong>Жильё</strong> предоставляет компания</li>
+      <li><strong>Документы и язык</strong> — не требуются</li>
+      <li><strong>Гибкий график</strong> — выбираешь смены сам(а)</li>
+      <li><strong>Множество локаций</strong> в крупных городах</li>
+    </ul>
+    <p class="note">Мы предоставляем пробную смену — оплачивается на общих основаниях 💵</p>
+  </div>
+  <div class="card" style="background:linear-gradient(135deg,rgba(38,165,228,.12),rgba(50,210,127,.12));display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:200px;gap:16px">
+    <div style="font-size:2.5rem">💼</div>
+    <p style="font-size:1.05rem;font-weight:600">Напиши нам — <br>ответим в течение часа</p>
+  </div>
+</div></div></section>
+<section class="cta-section"><div class="wrap">
+  <h2>Связаться с HR-менеджером</h2>
+  <p>Выберите удобный канал связи — ответим быстро.</p>
+  <div class="btns">{buttons}</div>
+</div></section>
+<footer>© {year} {name}. Все права защищены.</footer>
+</body></html>"""
+
+
+def _tpl_light_clean(name: str, buttons: str, pixel_js: str, year: int) -> str:
+    return f"""<!DOCTYPE html><html lang="ru"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{name}</title>
+{pixel_js}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{{--bg:#f4f6fb;--white:#ffffff;--text:#111827;--muted:#6b7280;--accent:#2563eb;--tg:#26A5E4;--wa:#25D366;--border:#e5e7eb}}
+*{{box-sizing:border-box;margin:0;padding:0}}
+html,body{{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh}}
+a{{color:inherit;text-decoration:none}}
+.wrap{{width:min(1100px,94vw);margin:0 auto}}
+nav{{background:var(--white);border-bottom:1px solid var(--border);padding:0 5vw}}
+.nav-inner{{max-width:1100px;margin:0 auto;height:60px;display:flex;align-items:center;justify-content:space-between}}
+.nav-logo{{font-weight:800;font-size:1.1rem;color:var(--accent)}}
+.nav-cta{{background:var(--accent);color:#fff;padding:.5rem 1.2rem;border-radius:8px;font-weight:600;font-size:.9rem;transition:opacity .15s}}
+.nav-cta:hover{{opacity:.88}}
+.hero{{padding:80px 5vw 72px;text-align:center;background:var(--white)}}
+.badge{{display:inline-block;padding:.35rem .9rem;border-radius:999px;background:#eff6ff;color:var(--accent);font-size:.82rem;font-weight:600;border:1px solid #bfdbfe;margin-bottom:1.2rem}}
+.hero h1{{font-size:clamp(1.8rem,3.5vw+.8rem,3rem);font-weight:800;color:var(--text);margin:0 0 1rem;line-height:1.15}}
+.hero h1 span{{color:var(--accent)}}
+.hero p{{color:var(--muted);max-width:600px;margin:0 auto 2rem;font-size:1.05rem;line-height:1.7}}
+.perks{{padding:56px 5vw;background:var(--bg)}}
+.perks-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}}
+.perk{{background:var(--white);border-radius:14px;padding:20px;border:1px solid var(--border)}}
+.perk-icon{{font-size:1.6rem;margin-bottom:10px}}
+.perk h3{{font-size:.95rem;font-weight:700;margin:0 0 5px}}
+.perk p{{font-size:.84rem;color:var(--muted);line-height:1.6}}
+.cta-section{{padding:64px 5vw 80px;text-align:center;background:var(--white)}}
+.cta-section h2{{font-size:clamp(1.4rem,2.5vw+.5rem,2rem);font-weight:800;margin:0 0 .5rem}}
+.cta-section p{{color:var(--muted);margin:0 auto 2rem;max-width:440px;font-size:.95rem}}
+.btns{{display:flex;flex-direction:column;gap:.7rem;width:100%;max-width:380px;margin:0 auto}}
+.hr-btn{{display:inline-flex;align-items:center;justify-content:center;gap:.6rem;padding:.9rem 1.4rem;border-radius:12px;font-weight:700;font-size:.95rem;width:100%;transition:transform .12s,opacity .15s}}
+.hr-btn:hover{{transform:translateY(-2px);opacity:.9}}
+.hr-btn-tg{{background:var(--tg);color:#fff}}
+.hr-btn-wa{{background:var(--wa);color:#fff}}
+.hr-btn-other{{background:var(--accent);color:#fff}}
+footer{{background:var(--bg);border-top:1px solid var(--border);text-align:center;padding:24px;color:var(--muted);font-size:.84rem}}
+@media(max-width:640px){{.perks-grid{{grid-template-columns:1fr}}}}
+</style></head><body>
+<nav><div class="nav-inner">
+  <div class="nav-logo">{name}</div>
+  <a href="#contact" class="nav-cta">Откликнуться →</a>
+</div></nav>
+<section class="hero"><div>
+  <div class="badge">Открытый набор</div>
+  <h1>Работа, которая <span>меняет жизнь</span></h1>
+  <p>Стабильный доход, поддержка команды и карьерный рост. Узнай об условиях прямо сейчас.</p>
+  <a href="#contact" class="hr-btn hr-btn-tg" style="display:inline-flex;width:auto;margin:0 auto">Узнать подробности →</a>
+</div></section>
+<section class="perks"><div class="wrap">
+  <div class="perks-grid">
+    <div class="perk"><div class="perk-icon">💰</div><h3>Высокий доход</h3><p>Конкурентная оплата с первого рабочего дня. Бонусы и премии.</p></div>
+    <div class="perk"><div class="perk-icon">🎓</div><h3>Обучение</h3><p>Полная подготовка без опыта. Поддержка наставника на старте.</p></div>
+    <div class="perk"><div class="perk-icon">🏠</div><h3>Жильё</h3><p>Компания предоставляет жильё или компенсирует расходы.</p></div>
+    <div class="perk"><div class="perk-icon">🗓</div><h3>Гибкий график</h3><p>Выбираешь смены самостоятельно. Удобный режим работы.</p></div>
+    <div class="perk"><div class="perk-icon">📍</div><h3>Множество локаций</h3><p>Работай в крупных городах — выбирай ближайший.</p></div>
+    <div class="perk"><div class="perk-icon">🤝</div><h3>Простой старт</h3><p>Не требуем опыта, знания языка и специальных документов.</p></div>
+  </div>
+</div></section>
+<section class="cta-section" id="contact"><div>
+  <h2>Готов(а) к новой жизни?</h2>
+  <p>Напиши нам — HR-менеджер ответит в течение часа и расскажет все детали.</p>
+  <div class="btns">{buttons}</div>
+</div></section>
+<footer>© {year} {name}. Все права защищены.</footer>
+</body></html>"""
+
+
+def _tpl_bold_cta(name: str, buttons: str, pixel_js: str, year: int) -> str:
+    return f"""<!DOCTYPE html><html lang="ru"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{name}</title>
+{pixel_js}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{{--bg:#0d0618;--bg2:#150d28;--text:#f1f0ff;--muted:#9990c0;--accent:#a855f7;--accent2:#7c3aed;--tg:#26A5E4;--wa:#25D366}}
+*{{box-sizing:border-box;margin:0;padding:0}}
+html,body{{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh}}
+a{{color:inherit;text-decoration:none}}
+.wrap{{width:min(1060px,94vw);margin:0 auto}}
+.hero{{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;position:relative;overflow:hidden;padding:80px 5vw}}
+.hero::before{{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 900px 600px at 50% 40%,rgba(168,85,247,.18),transparent 70%)}}
+.hero-inner{{position:relative;z-index:1;max-width:760px}}
+.badge{{display:inline-block;padding:.4rem 1rem;border-radius:999px;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.35);color:#d8b4fe;font-size:.83rem;font-weight:600;margin-bottom:1.4rem}}
+h1{{font-size:clamp(2.2rem,5vw+.5rem,3.8rem);font-weight:900;line-height:1.05;margin:0 0 1.2rem;letter-spacing:-.02em}}
+h1 span{{background:linear-gradient(135deg,#a855f7,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
+.sub{{color:var(--muted);font-size:1.05rem;line-height:1.7;max-width:540px;margin:0 auto 2.4rem}}
+.stats{{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;margin-bottom:2.8rem}}
+.stat{{text-align:center}}
+.stat-v{{font-size:2rem;font-weight:800;color:var(--accent)}}
+.stat-l{{font-size:.78rem;color:var(--muted);margin-top:2px}}
+.btns{{display:flex;flex-direction:column;gap:.8rem;width:100%;max-width:380px;margin:0 auto}}
+.hr-btn{{display:inline-flex;align-items:center;justify-content:center;gap:.65rem;padding:1rem 1.6rem;border-radius:14px;font-weight:700;font-size:1rem;width:100%;transition:transform .15s,opacity .15s}}
+.hr-btn:hover{{transform:translateY(-2px);opacity:.9}}
+.hr-btn-tg{{background:var(--tg);color:#fff}}
+.hr-btn-wa{{background:var(--wa);color:#fff}}
+.hr-btn-other{{background:linear-gradient(135deg,var(--accent2),var(--accent));color:#fff}}
+.features{{padding:64px 5vw;background:var(--bg2)}}
+.features-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}}
+.feat{{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:20px}}
+.feat-icon{{font-size:1.5rem;margin-bottom:10px}}
+.feat h3{{font-size:.92rem;font-weight:700;margin:0 0 5px;color:var(--text)}}
+.feat p{{font-size:.82rem;color:var(--muted);line-height:1.6}}
+.cta2{{padding:64px 5vw 80px;text-align:center}}
+.cta2 h2{{font-size:clamp(1.4rem,2.5vw+.4rem,2rem);font-weight:800;margin:0 0 .5rem}}
+.cta2 p{{color:var(--muted);max-width:460px;margin:0 auto 2rem}}
+footer{{text-align:center;padding:24px 0 40px;color:#3d3460;font-size:.83rem}}
+@media(max-width:600px){{.stats{{gap:18px}}}}
+</style></head><body>
+<section class="hero"><div class="hero-inner">
+  <div class="badge">Горячая вакансия</div>
+  <h1>Работа, которую ты <span>искал(а)</span></h1>
+  <p class="sub">Стабильный доход, дружная команда, жильё и обучение. Начни новую главу своей жизни уже сейчас.</p>
+  <div class="stats">
+    <div class="stat"><div class="stat-v">400$+</div><div class="stat-l">доход в день</div></div>
+    <div class="stat"><div class="stat-v">100%</div><div class="stat-l">оформление</div></div>
+    <div class="stat"><div class="stat-v">24/7</div><div class="stat-l">поддержка</div></div>
+    <div class="stat"><div class="stat-v">1 час</div><div class="stat-l">ответ HR</div></div>
+  </div>
+  <div class="btns">{buttons}</div>
+</div></section>
+<section class="features"><div class="wrap">
+  <div class="features-grid">
+    <div class="feat"><div class="feat-icon">💰</div><h3>Высокий доход</h3><p>Зарабатывай конкурентно с первого дня без задержек.</p></div>
+    <div class="feat"><div class="feat-icon">📚</div><h3>Обучение включено</h3><p>Полная подготовка под руководством наставника.</p></div>
+    <div class="feat"><div class="feat-icon">🏠</div><h3>Жильё</h3><p>Компания обеспечивает жильём или компенсирует расходы.</p></div>
+    <div class="feat"><div class="feat-icon">🗓</div><h3>Гибкий график</h3><p>Сам(а) составляешь расписание смен.</p></div>
+    <div class="feat"><div class="feat-icon">🌍</div><h3>Работа за рубежом</h3><p>Множество локаций в крупнейших городах.</p></div>
+    <div class="feat"><div class="feat-icon">✅</div><h3>Простой старт</h3><p>Без опыта, без языка, без сложных требований.</p></div>
+  </div>
+</div></section>
+<section class="cta2" id="contact"><div class="wrap">
+  <h2>Напиши нам прямо сейчас</h2>
+  <p>HR-менеджер ответит в течение часа и расскажет все детали по вакансии.</p>
+  <div class="btns">{buttons}</div>
+</div></section>
+<footer>© {year} {name}. Все права защищены.</footer>
+</body></html>"""
 
 
 # ── API ───────────────────────────────────────────────────────────────────────

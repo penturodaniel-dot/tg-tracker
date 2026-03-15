@@ -629,7 +629,16 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM conversations WHERE tg_chat_id=%s", (tg_chat_id,))
                 r = cur.fetchone()
-                if r: return dict(r)
+                if r:
+                    # Обновляем имя и username при каждом заходе (могли измениться)
+                    if visitor_name and visitor_name != str(tg_chat_id):
+                        cur.execute("""UPDATE conversations
+                            SET visitor_name=%s, username=%s WHERE tg_chat_id=%s""",
+                            (visitor_name, username, tg_chat_id))
+                        conn.commit()
+                        cur.execute("SELECT * FROM conversations WHERE tg_chat_id=%s", (tg_chat_id,))
+                        r = cur.fetchone()
+                    return dict(r)
                 cur.execute("""INSERT INTO conversations
                     (tg_chat_id,visitor_name,username,utm_source,utm_campaign,fbclid,created_at)
                     VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
@@ -652,6 +661,8 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM messages WHERE conversation_id=%s", (conv_id,))
                 cur.execute("DELETE FROM utm_tracking WHERE conversation_id=%s", (conv_id,))
+                cur.execute("DELETE FROM staff WHERE conversation_id=%s", (conv_id,))
+                cur.execute("DELETE FROM staff_clicks WHERE conversation_id=%s", (conv_id,))
                 cur.execute("DELETE FROM conversations WHERE id=%s", (conv_id,))
             conn.commit()
 
@@ -886,6 +897,7 @@ class Database:
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM wa_messages WHERE conversation_id=%s", (conv_id,))
+                cur.execute("DELETE FROM staff WHERE wa_conv_id=%s", (conv_id,))
                 cur.execute("DELETE FROM wa_conversations WHERE id=%s", (conv_id,))
             conn.commit()
 

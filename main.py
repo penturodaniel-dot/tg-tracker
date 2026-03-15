@@ -3086,10 +3086,36 @@ async def wa_webhook(request: Request):
             wa_number   = data.get("wa_number")  or data.get("from", wa_chat_id).replace("@c.us","")
             sender_name = data.get("sender_name") or data.get("pushname") or wa_number
 
-            raw_text  = data.get("body") or data.get("text") or ""
-            media_url  = data.get("media_url")
-            media_type = data.get("media_type", "")
-            has_media  = data.get("hasMedia") or media_url
+            raw_text    = data.get("body") or data.get("text") or ""
+            media_url   = data.get("media_url")
+            media_type  = data.get("media_type", "")
+            media_b64   = data.get("media_base64")
+            has_media   = data.get("hasMedia") or media_url or media_b64
+
+            # Загружаем base64 медиа на Cloudinary если пришло от WA сервиса
+            if media_b64 and not media_url:
+                try:
+                    import cloudinary
+                    import cloudinary.uploader
+                    import base64 as _b64
+                    cld_url  = db.get_setting("cloudinary_url") or os.getenv("CLOUDINARY_URL", "")
+                    if cld_url:
+                        cloudinary.config(cloudinary_url=cld_url)
+                        mime = media_type or "image/jpeg"
+                        data_uri = f"data:{mime};base64,{media_b64}"
+                        result = cloudinary.uploader.upload(
+                            data_uri,
+                            folder="wa_media",
+                            resource_type="auto",
+                        )
+                        media_url = result.get("secure_url")
+                        log.info(f"[WA webhook] media uploaded to Cloudinary: {media_url}")
+                    else:
+                        # Cloudinary не настроен — сохраняем как data URI (только для картинок)
+                        if (media_type or "").startswith("image/"):
+                            media_url = f"data:{media_type};base64,{media_b64}"
+                except Exception as e:
+                    log.error(f"[WA webhook] Cloudinary upload error: {e}")
 
             if not raw_text and has_media:
                 raw_text = "[фото]" if (media_type or "").startswith("image/") else "[файл]"

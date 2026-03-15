@@ -3666,6 +3666,7 @@ async def wa_fetch_profile(request: Request, conv_id: int = Form(...)):
     if not conv: return JSONResponse({"ok": False, "error": "not found"})
     try:
         result = await wa_api("post", "/contact_info", json={"wa_chat_id": conv["wa_chat_id"]})
+        log.info(f"[wa/fetch_profile] result={result}")
         if result.get("ok"):
             db.update_wa_conv_profile(
                 conv_id,

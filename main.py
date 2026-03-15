@@ -1047,7 +1047,7 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
                     utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' + "".join(tags) + '</div>'
 
             # Lead статус
-            is_lead = staff and staff.get("fb_event_sent")
+            is_lead = (staff and staff.get("fb_event_sent")) or active_conv.get("fb_event_sent")
             lead_badge = '<span class="badge-green" style="font-size:.7rem;padding:2px 8px">✅ Lead отправлен</span>' if is_lead else \
                          f'<form method="post" action="/chat/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
 

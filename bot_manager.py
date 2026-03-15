@@ -67,12 +67,14 @@ def _build_tracker_dp() -> Dispatcher:
 
         pixel_id   = _db.get_setting("pixel_id")
         meta_token = _db.get_setting("meta_token")
+        test_event_code = _db.get_setting("test_event_code") or None
         await _meta.send_subscribe_event(
             pixel_id, meta_token, str(user.id), campaign_name,
             fbclid=click_data.get("fbclid") if click_data else None,
             fbp=click_data.get("fbp") if click_data else None,
             utm_source=click_data.get("utm_source") if click_data else None,
             utm_campaign=click_data.get("utm_campaign") if click_data else None,
+            test_event_code=test_event_code,
         )
         log.info(f"[BOT1] JOIN user={user.id} channel={cid} campaign={campaign_name}")
         asyncio.create_task(_run_flow(user.id, cid, _tracker_bot))
@@ -189,11 +191,13 @@ def _build_staff_dp() -> Dispatcher:
             utm = _db.get_utm_by_conv(conv["id"])
             pixel_id   = _db.get_setting("pixel_id_staff") or _db.get_setting("pixel_id")
             meta_token = _db.get_setting("meta_token_staff") or _db.get_setting("meta_token")
+            test_event_code = _db.get_setting("test_event_code") or None
             sent = await _meta.send_lead_event(
                 pixel_id, meta_token, str(user.id),
                 campaign=utm.get("utm_campaign", "staff_bot") if utm else "staff_bot",
                 fbclid=utm.get("fbclid") if utm else None,
                 fbp=utm.get("fbp") if utm else None,
+                test_event_code=test_event_code,
             )
             if sent:
                 _db.set_staff_fb_event(staff["id"], "Lead")

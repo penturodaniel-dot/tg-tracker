@@ -3701,15 +3701,17 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
     campaign = conv.get("utm_campaign") or "whatsapp"
     utm_src  = conv.get("utm_source") or "whatsapp"
     test_event_code = db.get_setting("test_event_code") or None
+    wa_number = conv.get("wa_number", "")
     sent = await meta_capi.send_lead_event(
         pixel_id, meta_token,
-        user_id=conv["wa_number"],
+        user_id=wa_number,
         campaign=campaign,
         fbclid=fbclid,
         fbp=fbp,
         utm_source=utm_src,
         utm_campaign=campaign,
         test_event_code=test_event_code,
+        event_source_url=f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/",
     )
     if sent:
         db.set_wa_fb_event(conv_id, "Lead")

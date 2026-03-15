@@ -186,22 +186,7 @@ def _build_staff_dp() -> Dispatcher:
                     _db.save_utm(click_data, conversation_id=conv["id"])
                     log.info(f"[BOT2] UTM linked conv={conv['id']} click={ref_code}")
 
-        # Отправляем Lead в Meta CAPI если ещё не отправляли
-        if not staff.get("fb_event_sent"):
-            utm = _db.get_utm_by_conv(conv["id"])
-            pixel_id   = _db.get_setting("pixel_id_staff") or _db.get_setting("pixel_id")
-            meta_token = _db.get_setting("meta_token_staff") or _db.get_setting("meta_token")
-            test_event_code = _db.get_setting("test_event_code") or None
-            sent = await _meta.send_lead_event(
-                pixel_id, meta_token, str(user.id),
-                campaign=utm.get("utm_campaign", "staff_bot") if utm else "staff_bot",
-                fbclid=utm.get("fbclid") if utm else None,
-                fbp=utm.get("fbp") if utm else None,
-                test_event_code=test_event_code,
-            )
-            if sent:
-                _db.set_staff_fb_event(staff["id"], "Lead")
-                _db.set_conv_fb_event(conv["id"], "Lead")
+        # Lead отправляется ВРУЧНУЮ через кнопку в чате СРМки (не автоматически)
 
         # Уведомление менеджеру
         asyncio.create_task(_notify_manager(name, conv["id"], "start"))

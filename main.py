@@ -1000,7 +1000,14 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
                     bubble = f'<div class="msg-bubble">{(m["content"] or "").replace("<","&lt;").replace(chr(10),"<br>")}</div>'
                 messages_html += f'<div class="msg {m["sender_type"]}" data-id="{m["id"]}">{bubble}<div class="msg-time">{t}</div></div>'
 
-            uname = f"@{active_conv['username']}" if active_conv.get('username') else active_conv.get('tg_chat_id','')
+            # Приоритет: username > visitor_name > tg_chat_id
+            _username = active_conv.get('username')
+            _vname    = active_conv.get('visitor_name','')
+            uname = f"@{_username}" if _username else active_conv.get('tg_chat_id','')
+            # Если visitor_name выглядит как числовой ID — заменяем на username
+            if _vname and _vname.isdigit() and _username:
+                pass  # display_name ниже подставит username
+            display_name = _username if (_vname.isdigit() and _username) else (_vname or uname)
             status_color = "var(--green)" if active_conv["status"] == "open" else "var(--red)"
             # Аватарка
             photo_url = active_conv.get("photo_url","")
@@ -1060,7 +1067,7 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
               <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
                 {avatar_html}
                 <div style="flex:1">
-                  <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.72rem">●</span></div>
+                  <div style="font-weight:700;color:var(--text)">{display_name} <span style="color:{status_color};font-size:.72rem">●</span></div>
                   <div style="font-size:.78rem;color:var(--text3)">{uname} {staff_link}</div>
                   {profile_info}
                   <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">
@@ -1093,7 +1100,7 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
         if utm_parts:
             utm_line = '<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">' + "".join(utm_parts) + '</div>'
         conv_items += f"""<a href="/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}">
-          <div class="conv-name"><span>{dot} {c['visitor_name']}</span>{ucount}</div>
+          <div class="conv-name"><span>{dot} {c.get('username') if (c.get('visitor_name','') or '').isdigit() and c.get('username') else c.get('visitor_name') or c.get('username') or c.get('tg_chat_id','')}</span>{ucount}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
           <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">{t} {src_badge}</div>
           {utm_line}</div></a>"""
@@ -3336,7 +3343,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         if c.get("utm_term"):      wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {c["utm_term"][:20]}</span>')
         utm_line = '<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">' + "".join(wa_utm_parts) + '</div>' if wa_utm_parts else ""
         conv_items += f"""<a href="/wa/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}" data-conv-id="{c['id']}">
-          <div class="conv-name"><span>{dot} {c['visitor_name']}</span>{ucount}</div>
+          <div class="conv-name"><span>{dot} {c.get('username') if (c.get('visitor_name','') or '').isdigit() and c.get('username') else c.get('visitor_name') or c.get('username') or c.get('tg_chat_id','')}</span>{ucount}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
           <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +{c['wa_number'][:10]} · {t[-5:]} {src_badge}</div>
           {utm_line}</div></a>"""

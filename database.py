@@ -577,34 +577,29 @@ class Database:
             conn.commit()
 
     def apply_utm_to_wa_conv(self, conv_id, fbclid=None, fbp=None, utm_source=None,
-                              utm_medium=None, utm_campaign=None):
+                              utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None):
         """Применяет UTM к существующему WA диалогу (если ещё не заполнен)"""
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""UPDATE wa_conversations
-                    SET fbclid=COALESCE(NULLIF(fbclid,''), fbclid),
-                        fbp=COALESCE(NULLIF(fbp,''), fbp),
-                        utm_source=COALESCE(NULLIF(utm_source,''), utm_source),
-                        utm_medium=COALESCE(NULLIF(utm_medium,''), utm_medium),
-                        utm_campaign=COALESCE(NULLIF(utm_campaign,''), utm_campaign)
+                    SET fbclid=%s, fbp=%s, utm_source=%s, utm_medium=%s,
+                        utm_campaign=%s, utm_content=%s, utm_term=%s
                     WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
-                    (conv_id,))
-                # Реально обновляем безусловно если пустые
-                cur.execute("""UPDATE wa_conversations
-                    SET fbclid=%s, fbp=%s, utm_source=%s, utm_medium=%s, utm_campaign=%s
-                    WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
-                    (fbclid, fbp, utm_source, utm_medium, utm_campaign, conv_id))
+                    (fbclid, fbp, utm_source, utm_medium, utm_campaign,
+                     utm_content, utm_term, conv_id))
             conn.commit()
 
     def apply_utm_to_tg_conv(self, conv_id, fbclid=None, fbp=None, utm_source=None,
-                              utm_medium=None, utm_campaign=None):
+                              utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None):
         """Применяет UTM к существующему TG диалогу"""
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""UPDATE conversations
-                    SET fbclid=%s, fbp=%s, utm_source=%s, utm_medium=%s, utm_campaign=%s
+                    SET fbclid=%s, fbp=%s, utm_source=%s, utm_medium=%s,
+                        utm_campaign=%s, utm_content=%s, utm_term=%s
                     WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
-                    (fbclid, fbp, utm_source, utm_medium, utm_campaign, conv_id))
+                    (fbclid, fbp, utm_source, utm_medium, utm_campaign,
+                     utm_content, utm_term, conv_id))
             conn.commit()
 
     def save_utm(self, click_data, conversation_id=None, join_id=None):

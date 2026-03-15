@@ -294,7 +294,7 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
 .no-conv{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text3);gap:10px;font-size:.85rem}
 
 /* ── AVATAR ──────────────────────────────────────── */
-.avatar{width:38px;height:38px;border-radius:50%;background:#431407;display:flex;align-items:center;justify-content:center;font-size:.88rem;flex-shrink:0;font-weight:700;color:#fb923c}
+.avatar{width:38px;height:38px;border-radius:50%;background:#431407;display:flex;align-items:center;justify-content:center;font-size:.88rem;flex-shrink:0;font-weight:700;color:#fb923c}.avatar-zoom{display:none}.avatar-zoom.show{display:block!important}
 
 /* ── UTM TAGS ────────────────────────────────────── */
 .utm-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
@@ -1093,8 +1093,7 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
             # Аватарка
             photo_url = active_conv.get("photo_url","")
             if photo_url:
-                avatar_html = f'<img src="{photo_url}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'">' \
-                              f'<div class="avatar" style="display:none">{active_conv["visitor_name"][0].upper()}</div>'
+                avatar_html = f'<div style="position:relative;flex-shrink:0;cursor:pointer" onclick="this.querySelector(\'.avatar-zoom\').classList.toggle(\'show\')">'                              f'<img src="{photo_url}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;transition:transform .2s" '                              f'onmouseover="this.style.transform=\'scale(1.1)\'" onmouseout="this.style.transform=\'scale(1)\'" '                              f'onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'" />'                              f'<div class="avatar" style="display:none">{active_conv["visitor_name"][0].upper()}</div>'                              f'<div class="avatar-zoom" style="display:none;position:absolute;top:48px;left:0;z-index:999;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);overflow:hidden">'                              f'<img src="{photo_url}" style="width:200px;height:200px;object-fit:cover;display:block" /></div>'                              f'</div>'
             else:
                 avatar_html = f'<div class="avatar">{active_conv["visitor_name"][0].upper()}</div>'
 

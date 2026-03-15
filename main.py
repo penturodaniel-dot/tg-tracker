@@ -537,16 +537,13 @@ async def login_submit(request: Request, username: str = Form(...), password: st
         if notify_chat and bot2:
             import datetime as _dt
             now_str = _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-            await bot2.send_message(
-                notify_chat,
-                f"🔐 Вход в CRM
-"
-                f"👤 Пользователь: {user['username']} ({user['role']})
-"
-                f"🌐 IP: {ip}
-"
+            msg_text = (
+                "🔐 Вход в CRM\n"
+                f"👤 Пользователь: {user['username']} ({user['role']})\n"
+                f"🌐 IP: {ip}\n"
                 f"🕐 Время: {now_str}"
             )
+            await bot2.send_message(notify_chat, msg_text)
     except Exception as e:
         log.warning(f"[login] TG notify error: {e}")
 

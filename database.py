@@ -662,7 +662,6 @@ class Database:
                 cur.execute("DELETE FROM messages WHERE conversation_id=%s", (conv_id,))
                 cur.execute("DELETE FROM utm_tracking WHERE conversation_id=%s", (conv_id,))
                 cur.execute("DELETE FROM staff WHERE conversation_id=%s", (conv_id,))
-                cur.execute("DELETE FROM staff_clicks WHERE conversation_id=%s", (conv_id,))
                 cur.execute("DELETE FROM conversations WHERE id=%s", (conv_id,))
             conn.commit()
 

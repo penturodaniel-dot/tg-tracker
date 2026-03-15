@@ -68,6 +68,12 @@ for key, val in [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Загружаем настройки безопасности из БД при старте
+    global _SESSION_TIMEOUT, _MAX_ATTEMPTS
+    try: _SESSION_TIMEOUT = int(db.get_setting("session_timeout_hours") or 12) * 3600
+    except: pass
+    try: _MAX_ATTEMPTS = int(db.get_setting("login_max_attempts") or 5)
+    except: pass
     await bot_manager.start_tracker_bot(db.get_setting("bot1_token"))
     await bot_manager.start_staff_bot(db.get_setting("bot2_token"))
     yield
@@ -1543,6 +1549,9 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
     if err: return err
     users = db.get_users()
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+    sec_notify_chat = db.get_setting("notify_chat_id", "")
+    sec_session_hours = db.get_setting("session_timeout_hours", "12")
+    sec_max_attempts = db.get_setting("login_max_attempts", "5")
 
     # Все вкладки и их названия
     ALL_TABS = [
@@ -1625,6 +1634,32 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
     <div class="page-sub">Управление доступом и правами</div>
     {alert}
     {edit_form}
+    <div class="section" style="border-left:3px solid #7c3aed">
+      <div class="section-head"><h3>🛡 Безопасность & Уведомления</h3></div>
+      <div class="section-body">
+        <form method="post" action="/users/security">
+          <div class="grid-2" style="margin-bottom:14px">
+            <div class="field-group">
+              <div class="field-label">Telegram Chat ID для уведомлений о входе</div>
+              <input type="text" name="notify_chat_id" value="{sec_notify_chat}" placeholder="Например: -1001234567890"/>
+              <div style="font-size:.74rem;color:var(--text3);margin-top:4px">Напишите /start боту @userinfobot чтобы узнать свой ID</div>
+            </div>
+            <div class="field-group">
+              <div class="field-label">Время сессии (часов)</div>
+              <input type="number" name="session_timeout_hours" value="{sec_session_hours}" min="1" max="72" placeholder="12"/>
+              <div style="font-size:.74rem;color:var(--text3);margin-top:4px">После скольких часов неактивности выходить автоматически</div>
+            </div>
+            <div class="field-group">
+              <div class="field-label">Макс. попыток входа до блокировки IP</div>
+              <input type="number" name="login_max_attempts" value="{sec_max_attempts}" min="1" max="20" placeholder="5"/>
+              <div style="font-size:.74rem;color:var(--text3);margin-top:4px">IP блокируется на 10 минут после N неудачных попыток</div>
+            </div>
+          </div>
+          <button class="btn" style="background:#7c3aed">🛡 Сохранить настройки безопасности</button>
+        </form>
+      </div>
+    </div>
+
     <div class="section"><div class="section-head"><h3>➕ Добавить пользователя</h3></div>
     <div class="section-body">
       <form method="post" action="/users/add">
@@ -1645,6 +1680,44 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
     <table><thead><tr><th>Логин</th><th>Роль</th><th>Доступы</th><th>Создан</th><th></th></tr></thead>
     <tbody>{rows}</tbody></table></div></div>"""
     return HTMLResponse(base(content, "users", request))
+
+
+@app.post("/users/security")
+async def users_security(request: Request,
+                          notify_chat_id: str = Form(""),
+                          session_timeout_hours: str = Form("12"),
+                          login_max_attempts: str = Form("5")):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    db.set_setting("notify_chat_id", notify_chat_id.strip())
+    db.set_setting("session_timeout_hours", session_timeout_hours.strip() or "12")
+    db.set_setting("login_max_attempts", login_max_attempts.strip() or "5")
+    # Обновляем глобальные переменные в памяти
+    global _SESSION_TIMEOUT, _MAX_ATTEMPTS
+    try: _SESSION_TIMEOUT = int(session_timeout_hours) * 3600
+    except: pass
+    try: _MAX_ATTEMPTS = int(login_max_attempts)
+    except: pass
+    return RedirectResponse("/users?msg=Настройки+безопасности+сохранены", 303)
+
+
+@app.post("/users/security")
+async def users_security(request: Request,
+                          notify_chat_id: str = Form(""),
+                          session_timeout_hours: str = Form("12"),
+                          login_max_attempts: str = Form("5")):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    db.set_setting("notify_chat_id", notify_chat_id.strip())
+    db.set_setting("session_timeout_hours", session_timeout_hours.strip() or "12")
+    db.set_setting("login_max_attempts", login_max_attempts.strip() or "5")
+    # Обновляем глобальные переменные в памяти
+    global _SESSION_TIMEOUT, _MAX_ATTEMPTS
+    try: _SESSION_TIMEOUT = int(session_timeout_hours) * 3600
+    except: pass
+    try: _MAX_ATTEMPTS = int(login_max_attempts)
+    except: pass
+    return RedirectResponse("/users?msg=Настройки+безопасности+сохранены", 303)
 
 
 @app.post("/users/add")

@@ -1086,8 +1086,12 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
         else:
             src_badge = '<span class="source-badge source-organic">organic</span>'
         utm_line = ""
-        if c.get("utm_campaign"):
-            utm_line = f'<div class="conv-meta"><span class="utm-tag">🎯 {c["utm_campaign"][:22]}</span></div>'
+        utm_parts = []
+        if c.get("utm_campaign"):  utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {c["utm_campaign"][:30]}</span>')
+        if c.get("utm_content"):   utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 {c["utm_content"][:20]}</span>')
+        if c.get("utm_term"):      utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {c["utm_term"][:20]}</span>')
+        if utm_parts:
+            utm_line = '<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">' + "".join(utm_parts) + '</div>'
         conv_items += f"""<a href="/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}">
           <div class="conv-name"><span>{dot} {c['visitor_name']}</span>{ucount}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
@@ -3161,7 +3165,9 @@ async def wa_webhook(request: Request):
                         fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),
                         utm_source=click_data.get("utm_source"),
                         utm_medium=click_data.get("utm_medium"),
-                        utm_campaign=click_data.get("utm_campaign"))
+                        utm_campaign=click_data.get("utm_campaign"),
+                        utm_content=click_data.get("utm_content"),
+                        utm_term=click_data.get("utm_term"))
                     db.mark_staff_click_used(ref_id)
                     conv = db.get_wa_conversation(conv["id"]) or conv
                     log.info(f"[WA webhook] UTM by ref:{ref_id} utm={click_data.get('utm_campaign')}")
@@ -3173,7 +3179,9 @@ async def wa_webhook(request: Request):
                         fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),
                         utm_source=click_data.get("utm_source"),
                         utm_medium=click_data.get("utm_medium"),
-                        utm_campaign=click_data.get("utm_campaign"))
+                        utm_campaign=click_data.get("utm_campaign"),
+                        utm_content=click_data.get("utm_content"),
+                        utm_term=click_data.get("utm_term"))
                     db.mark_staff_click_used(click_data["ref_id"])
                     conv = db.get_wa_conversation(conv["id"]) or conv
                     log.info(f"[WA webhook] UTM by time-window utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
@@ -3322,7 +3330,11 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             src_badge = f'<span class="source-badge source-tg">{c["utm_source"][:12]}</span>'
         else:
             src_badge = '<span class="source-badge source-organic">organic</span>'
-        utm_line = f'<div class="conv-meta"><span class="utm-tag">🎯 {c["utm_campaign"][:22]}</span></div>' if c.get("utm_campaign") else ""
+        wa_utm_parts = []
+        if c.get("utm_campaign"):  wa_utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {c["utm_campaign"][:30]}</span>')
+        if c.get("utm_content"):   wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 {c["utm_content"][:20]}</span>')
+        if c.get("utm_term"):      wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {c["utm_term"][:20]}</span>')
+        utm_line = '<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">' + "".join(wa_utm_parts) + '</div>' if wa_utm_parts else ""
         conv_items += f"""<a href="/wa/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}" data-conv-id="{c['id']}">
           <div class="conv-name"><span>{dot} {c['visitor_name']}</span>{ucount}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>

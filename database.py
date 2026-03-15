@@ -237,6 +237,10 @@ class Database:
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbp TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_medium TEXT",
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS utm_medium TEXT",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS utm_content TEXT",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS utm_term TEXT",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_content TEXT",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_term TEXT",
                 ]
                 for m in migrations:
                     try:

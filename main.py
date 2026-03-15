@@ -19,6 +19,29 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 
 SECRET             = os.getenv("DASHBOARD_PASSWORD", "changeme")
+
+# ── Security: rate limiting для /login ───────────────────────────────────────
+import time as _time
+_login_attempts: dict = {}   # ip -> [timestamp, ...]
+_SESSION_TIMEOUT = 12 * 3600  # 12 часов
+_MAX_ATTEMPTS    = 5
+_BLOCK_WINDOW    = 600        # 10 минут
+
+def _check_rate_limit(ip: str) -> bool:
+    """True = можно войти, False = заблокирован"""
+    now = _time.time()
+    attempts = _login_attempts.get(ip, [])
+    # Убираем старые попытки
+    attempts = [t for t in attempts if now - t < _BLOCK_WINDOW]
+    _login_attempts[ip] = attempts
+    return len(attempts) < _MAX_ATTEMPTS
+
+def _record_attempt(ip: str):
+    now = _time.time()
+    _login_attempts.setdefault(ip, []).append(now)
+
+def _clear_attempts(ip: str):
+    _login_attempts.pop(ip, None)
 DEFAULT_BOT1_TOKEN = os.getenv("BOT_TOKEN", "")
 DEFAULT_BOT2_TOKEN = os.getenv("BOT2_TOKEN", "")
 DEFAULT_PIXEL_ID   = os.getenv("PIXEL_ID", "")
@@ -63,8 +86,22 @@ def check_session(request: Request) -> dict | None:
     """Возвращает user dict если сессия валидна, иначе None"""
     token = request.cookies.get("session")
     if not token: return None
-    # token = sha256(username+password+secret)
+    # token = sha256(username + SECRET + login_ts)
+    # Поддержка старого формата (без ts) для обратной совместимости
     for u in db.get_users():
+        # Новый формат с таймстампом
+        login_ts = request.cookies.get("session_ts", "")
+        if login_ts:
+            try:
+                ts = float(login_ts)
+                if _time.time() - ts > _SESSION_TIMEOUT:
+                    return None  # Сессия истекла
+                expected = hashlib.sha256(f"{u['username']}{SECRET}{login_ts}".encode()).hexdigest()
+                if token == expected:
+                    return u
+            except Exception:
+                pass
+        # Старый формат (обратная совместимость)
         expected = hashlib.sha256(f"{u['username']}{SECRET}".encode()).hexdigest()
         if token == expected:
             return u
@@ -473,13 +510,46 @@ async def login_page(error: str = ""):
 
 
 @app.post("/login")
-async def login_submit(username: str = Form(...), password: str = Form(...)):
+async def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
+    ip = request.client.host if request.client else "unknown"
+
+    # Rate limiting
+    if not _check_rate_limit(ip):
+        return RedirectResponse("/login?error=Слишком+много+попыток.+Подождите+10+минут.", 303)
+
     user = db.verify_user(username, password)
     if not user:
-        return RedirectResponse("/login?error=Неверный+логин+или+пароль", 303)
-    token = hashlib.sha256(f"{user['username']}{SECRET}".encode()).hexdigest()
+        _record_attempt(ip)
+        remaining = _MAX_ATTEMPTS - len(_login_attempts.get(ip, []))
+        return RedirectResponse(f"/login?error=Неверный+логин+или+пароль.+Осталось+попыток:+{max(0,remaining)}", 303)
+
+    _clear_attempts(ip)
+    login_ts = str(_time.time())
+    token = hashlib.sha256(f"{user['username']}{SECRET}{login_ts}".encode()).hexdigest()
     resp = RedirectResponse("/overview", 303)
-    resp.set_cookie("session", token, max_age=86400*30, httponly=True)
+    resp.set_cookie("session", token, max_age=_SESSION_TIMEOUT, httponly=True, samesite="lax")
+    resp.set_cookie("session_ts", login_ts, max_age=_SESSION_TIMEOUT, httponly=True, samesite="lax")
+
+    # Уведомление в Telegram при входе
+    try:
+        notify_chat = db.get_setting("notify_chat_id")
+        bot2 = bot_manager.get_staff_bot()
+        if notify_chat and bot2:
+            import datetime as _dt
+            now_str = _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+            await bot2.send_message(
+                notify_chat,
+                f"🔐 Вход в CRM
+"
+                f"👤 Пользователь: {user['username']} ({user['role']})
+"
+                f"🌐 IP: {ip}
+"
+                f"🕐 Время: {now_str}"
+            )
+    except Exception as e:
+        log.warning(f"[login] TG notify error: {e}")
+
     return resp
 
 
@@ -1506,7 +1576,7 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
     edit_form = ""
     if edit:
         eu = db.get_user_by_id(edit)
-        if eu and eu["username"] != user["username"]:
+        if eu:
             eu_perms = eu.get("permissions") or ""
             edit_form = f"""<div class="section" style="border-left:3px solid #f97316;margin-bottom:20px">
               <div class="section-head"><h3>✏️ Редактировать: {eu['username']}</h3></div>
@@ -1540,10 +1610,13 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
         perms = u.get("permissions") or ""
         perm_count = len([p for p in perms.split(",") if p.strip()]) if perms else len(ALL_TABS)
         perm_badge = f'<span class="badge-gray" style="font-size:.7rem">{perm_count}/{len(ALL_TABS)} вкладок</span>'
-        edit_btn = f'<a href="/users?edit={u["id"]}"><button class="btn-gray btn-sm">✏️</button></a>' if u["username"] != user["username"] else ""
+        is_self = u["username"] == user["username"]
+        self_badge = ' <span style="font-size:.7rem;color:var(--orange)">(вы)</span>' if is_self else ""
+        edit_btn = f'<a href="/users?edit={u["id"]}"><button class="btn-gray btn-sm">✏️</button></a>'
+
         del_btn  = f'<form method="post" action="/users/delete" style="display:inline"><input type="hidden" name="user_id" value="{u["id"]}"/><button class="del-btn btn-sm">✕</button></form>' if u["username"] != user["username"] else ""
         rows += f"""<tr>
-            <td><b>{u['username']}</b></td>
+            <td><b>{u['username']}</b>{self_badge}</td>
             <td><span class="{'badge' if u['role']=='admin' else 'badge-gray'}">{u['role']}</span></td>
             <td>{perm_badge}</td>
             <td>{u['created_at'][:10]}</td>

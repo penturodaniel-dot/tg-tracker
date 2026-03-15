@@ -38,6 +38,7 @@ async def send_event(
     client_ip: str = None,
     user_agent: str = None,
     test_event_code: str = None,
+    event_source_url: str = None,
 ) -> bool:
     if not pixel_id or not access_token:
         log.warning("Meta CAPI: pixel_id or token not set")
@@ -68,7 +69,7 @@ async def send_event(
             "action_source": "website",
             "user_data": user_data,
             "custom_data": custom_data,
-            "event_source_url": "https://t.me/",
+            "event_source_url": event_source_url or "https://t.me/",
         }],
         "access_token": access_token,
     }

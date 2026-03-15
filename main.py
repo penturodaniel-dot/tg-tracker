@@ -516,7 +516,15 @@ async def login_page(error: str = ""):
 
 
 @app.post("/login")
-async def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
+async def login_submit(request: Request):
+    try:
+        form = await request.form()
+        username = form.get("username", "").strip()
+        password = form.get("password", "").strip()
+    except Exception:
+        return RedirectResponse("/login?error=Ошибка+формы.+Попробуйте+снова.", 303)
+    if not username or not password:
+        return RedirectResponse("/login?error=Введите+логин+и+пароль.", 303)
     ip = request.client.host if request.client else "unknown"
 
     # Rate limiting

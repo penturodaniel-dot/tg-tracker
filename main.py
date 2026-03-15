@@ -1291,6 +1291,7 @@ async def chat_send_lead(request: Request, conv_id: int = Form(...)):
     fbp      = (utm.get("fbp") if utm else None) or conv.get("fbp")
     campaign = (utm.get("utm_campaign") if utm else None) or conv.get("utm_campaign") or "telegram"
     utm_src  = (utm.get("utm_source") if utm else None) or conv.get("utm_source") or "telegram"
+    test_event_code = db.get_setting("test_event_code") or None
     sent = await meta_capi.send_lead_event(
         pixel_id, meta_token,
         user_id=conv.get("tg_chat_id", ""),
@@ -1299,6 +1300,7 @@ async def chat_send_lead(request: Request, conv_id: int = Form(...)):
         fbp=fbp,
         utm_source=utm_src,
         utm_campaign=campaign,
+        test_event_code=test_event_code,
     )
     if sent and staff:
         db.set_staff_fb_event(staff["id"], "Lead")
@@ -3653,6 +3655,7 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
     fbp      = conv.get("fbp")
     campaign = conv.get("utm_campaign") or "whatsapp"
     utm_src  = conv.get("utm_source") or "whatsapp"
+    test_event_code = db.get_setting("test_event_code") or None
     sent = await meta_capi.send_lead_event(
         pixel_id, meta_token,
         user_id=conv["wa_number"],
@@ -3661,6 +3664,7 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
         fbp=fbp,
         utm_source=utm_src,
         utm_campaign=campaign,
+        test_event_code=test_event_code,
     )
     if sent:
         db.set_wa_fb_event(conv_id, "Lead")

@@ -1617,6 +1617,7 @@ async def settings_page(request: Request, msg: str = ""):
     token_staff     = db.get_setting("meta_token_staff",   "")
     notify_chat     = db.get_setting("notify_chat_id", "")
     app_url         = db.get_setting("app_url", "")
+    test_event_code = db.get_setting("test_event_code", "")
 
     def masked_tok(t): return t[:12] + "..." + t[-6:] if len(t) > 20 else (t or "—")
 
@@ -1685,6 +1686,16 @@ async def settings_page(request: Request, msg: str = ""):
           </div>
           <button class="btn">💾 Сохранить пиксели</button>
         </form>
+        <form method="post" action="/settings/test_event_code" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+          <div style="font-size:.78rem;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">🧪 Тест событий Facebook</div>
+          <div class="grid-2" style="margin-bottom:12px">
+            <div class="field-group">
+              <div class="field-label">Test Event Code (оставь пустым чтобы отключить)</div>
+              <input type="text" name="test_event_code" value="{test_event_code}" placeholder="TEST12345 — только для теста, потом очисти"/>
+            </div>
+          </div>
+          <button class="btn" style="background:var(--purple,#7c3aed)">🧪 Сохранить тест-код</button>
+        </form>
       </div>
     </div>
 
@@ -1735,6 +1746,14 @@ async def settings_bot2(request: Request, bot2_token: str = Form("")):
         info = await bot_manager.get_bot_info(bot_manager.get_staff_bot())
         if info.get("username"): db.set_setting("bot2_name", f"@{info['username']}")
     return RedirectResponse("/settings?msg=Бот+2+обновлён", 303)
+
+
+@app.post("/settings/test_event_code")
+async def settings_test_event_code(request: Request, test_event_code: str = Form("")):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    db.set_setting("test_event_code", test_event_code.strip())
+    return RedirectResponse("/settings?msg=Тест-код+сохранён", 303)
 
 
 @app.post("/settings/pixel")

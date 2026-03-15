@@ -1052,7 +1052,14 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
                          f'<form method="post" action="/chat/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
 
             tg_number = active_conv.get("tg_chat_id","")
-            call_btn = f'<a href="tg://user?id={tg_number}" class="btn-gray btn-sm" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;font-size:.74rem;border:1px solid var(--border);text-decoration:none">📞 Звонок</a>' if tg_number else ""
+            _uname = active_conv.get('username')
+            if _uname:
+                call_url = f"https://t.me/{_uname}"
+            elif tg_number:
+                call_url = f"tg://user?id={tg_number}"
+            else:
+                call_url = None
+            call_btn = f'<a href="{call_url}" target="_blank" class="btn-gray btn-sm" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;font-size:.74rem;border:1px solid var(--border);text-decoration:none">📞 Звонок</a>' if call_url else ""
 
             close_btn = (f'<form method="post" action="/chat/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>'
                         if active_conv["status"] == "open"

@@ -176,6 +176,8 @@ def _build_staff_dp() -> Dispatcher:
                     utm_source=staff_click.get("utm_source"),
                     utm_medium=staff_click.get("utm_medium"),
                     utm_campaign=staff_click.get("utm_campaign"),
+                    utm_content=staff_click.get("utm_content"),
+                    utm_term=staff_click.get("utm_term"),
                 )
                 _db.mark_staff_click_used(ref_code)
                 log.info(f"[BOT2] Staff UTM linked conv={conv['id']} ref={ref_code} utm={staff_click.get('utm_campaign')}")

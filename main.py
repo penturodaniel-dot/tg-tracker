@@ -3632,7 +3632,7 @@ async def wa_send_media(request: Request, conv_id: int = Form(...), file: Upload
 
     result = await wa_api("post", "/send_media", json={
         "to": to,
-        "data": b64,
+        "base64": b64,
         "mimetype": mimetype,
         "filename": filename,
         "caption": ""

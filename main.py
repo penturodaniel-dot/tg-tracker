@@ -4296,6 +4296,9 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                       +'<div class="conv-time">'+c.last_message_at.substring(11,16)+' '+src+'</div>'
                       +'</div></a>';
                   }}).join('')||'<div style="padding:20px;text-align:center;color:var(--text3)">Нет диалогов</div>';
+                  if(ACTIVE_TGA_CONV_ID===0&&data.convs.length>0){{
+                    window.location.href='/tg_account/chat?conv_id='+data.convs[0].id;
+                  }}
                 }}
               }}catch(e){{}}
             }},4000);

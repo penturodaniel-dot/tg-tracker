@@ -4237,15 +4237,6 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 tgaMsgBox.appendChild(d);lastTgAId=m.id;
               }});tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
             }}
-            async function deleteTgAccConv(id){{
-              if(!confirm('Удалить диалог и все сообщения? Это нельзя отменить.'))return;
-              try{{
-                const r=await fetch('/tg_account/delete',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+id}});
-                const d=await r.json();
-                if(d.ok) window.location.href='/tg_account/chat?status_filter={status_filter}';
-                else alert('Ошибка удаления: '+(d.error||r.status));
-              }}catch(e){{alert('Ошибка: '+e.message);}}
-            }}
             function escTg(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}}
             // Авто-обновление сообщений каждые 3 сек
             setInterval(loadNewTgAccMsgs, 3000);
@@ -4298,13 +4289,28 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             }}, 4000);
             </script>"""
 
+    _cur_status_filter = status_filter
+    _cur_conv_id = conv_id
     content_html = f"""<div style="display:grid;grid-template-columns:300px 1fr;height:calc(100vh - 64px);overflow:hidden">
       <div style="border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
         <div style="padding:10px;border-bottom:1px solid var(--border)">{conn_badge}{tabs_html}</div>
         <div id="tg-conv-items" style="overflow-y:auto;flex:1">{conv_items}</div>
       </div>
       <div style="display:flex;flex-direction:column;overflow:hidden;min-height:0"><div class="chat-window" style="height:100%">{chat_area}</div></div>
-    </div>"""
+    </div>
+    <script>
+    async function deleteTgAccConv(id){{
+      const btn=document.querySelector('[onclick*="deleteTgAccConv"]');
+      if(btn){{btn.textContent='⏳';btn.disabled=true;}}
+      try{{
+        const r=await fetch('/tg_account/delete',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+id}});
+        if(r.status===401){{alert('Нет прав для удаления');if(btn){{btn.textContent='🗑 Удалить';btn.disabled=false;}}return;}}
+        const d=await r.json();
+        if(d.ok) window.location.href='/tg_account/chat?status_filter={_cur_status_filter}';
+        else {{alert('Ошибка: '+(d.error||r.status));if(btn){{btn.textContent='🗑 Удалить';btn.disabled=false;}}}}
+      }}catch(e){{alert('Ошибка: '+e.message);if(btn){{btn.textContent='🗑 Удалить';btn.disabled=false;}}}}
+    }}
+    </script>"""
     return HTMLResponse(base(content_html, "tg_account_chat", request))
 
 

@@ -4180,7 +4180,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             chat_area = f"""
             <div class="chat-header">
               <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
-                <div class="avatar">T</div>
+                {'<img src="' + active_conv['photo_url'] + '" style="width:42px;height:42px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--orange)" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'" /><div class="avatar" style="display:none">T</div>' if active_conv.get('photo_url') else '<div class="avatar">T</div>'}
                 <div style="flex:1">
                   <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.72rem">●</span></div>
                   <div style="font-size:.78rem;color:var(--text3)">{uname}</div>
@@ -4304,12 +4304,12 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             }},4000);
             </script>"""
 
-    content_html = f"""<div style="display:grid;grid-template-columns:300px 1fr;height:calc(100vh - 64px);overflow:hidden">
-      <div style="border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
-        <div style="padding:10px;border-bottom:1px solid var(--border)">{conn_badge}{tabs_html}</div>
+    content_html = f"""<div class="chat-layout">
+      <div class="conv-list">
+        <div class="conv-search">{conn_badge}{tabs_html}</div>
         <div id="tg-conv-items" style="overflow-y:auto;flex:1">{conv_items}</div>
       </div>
-      <div style="display:flex;flex-direction:column;overflow:hidden;min-height:0"><div class="chat-window" style="height:100%">{chat_area}</div></div>
+      <div class="chat-window">{chat_area}</div>
     </div>"""
     return HTMLResponse(base(content_html, "tg_account_chat", request))
 
@@ -4517,6 +4517,17 @@ async def tg_account_webhook(request: Request):
             text = (raw_text or "").strip() or "[сообщение]"
 
             conv = db.get_or_create_tg_account_conversation(tg_user_id, sender_name, username)
+            # Подтягиваем фото профиля если ещё не загружено
+            if not conv.get("photo_url"):
+                try:
+                    contact_info = await tg_api("get", f"/contact/{tg_user_id}")
+                    if contact_info.get("ok") and contact_info.get("photo_url"):
+                        db.update_tg_account_contact_info(conv["id"],
+                            photo_url=contact_info.get("photo_url"),
+                            about=contact_info.get("about",""))
+                        conv = db.get_tg_account_conversation(conv["id"]) or conv
+                except Exception as _e:
+                    log.warning(f"[TG webhook] photo fetch error: {_e}")
             is_new = not conv.get("utm_source") and not conv.get("fbclid")
             if is_new:
                 click_data = db.get_staff_click_recent_any(minutes=30)

@@ -4177,10 +4177,16 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             if active_conv.get("fbclid"): tags.append('<span class="utm-tag badge-green">fbclid ✓</span>')
             utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' + "".join(tags) + '</div>' if tags else ""
 
+            _tga_photo = active_conv.get("photo_url") or ""
+            _tga_onerr = "this.style.display:none"
+            if _tga_photo:
+                _tga_avatar = ("<img src=\"" + _tga_photo + "\" style=\"width:42px;height:42px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #f97316\" />")
+            else:
+                _tga_avatar = '<div class="avatar">T</div>'
             chat_area = f"""
             <div class="chat-header">
               <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
-                {'<img src="' + active_conv['photo_url'] + '" style="width:42px;height:42px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--orange)" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'" /><div class="avatar" style="display:none">T</div>' if active_conv.get('photo_url') else '<div class="avatar">T</div>'}
+                {_tga_avatar}
                 <div style="flex:1">
                   <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.72rem">●</span></div>
                   <div style="font-size:.78rem;color:var(--text3)">{uname}</div>

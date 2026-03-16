@@ -1483,13 +1483,17 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                 + '>' + (u.get("display_name") or u["username"]) + ' (' + u["role"] + ')</option>'
                 for u in db.get_users()
             )
+            if s.get("photo_url"):
+                photo_html = '<img src="' + s["photo_url"] + '" style="width:80px;height:80px;border-radius:12px;object-fit:cover;border:2px solid var(--border)" />'
+            else:
+                photo_html = '<div style="width:80px;height:80px;border-radius:12px;background:var(--bg3);border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:1.8rem">👤</div>'
             edit_form = f"""<div class="section" style="margin-bottom:18px;border-left:3px solid #f97316">
               <div class="section-head"><h3>✏️ {s.get('name','Карточка')}</h3>{chat_link}</div>
               <div class="section-body">
                 <form method="post" action="/staff/update" enctype="multipart/form-data">
                   <input type="hidden" name="staff_id" value="{s['id']}"/>
                   <div style="margin-bottom:16px;display:flex;align-items:center;gap:16px">
-                    {"<img src=\"" + s["photo_url"] + "\" style=\"width:80px;height:80px;border-radius:12px;object-fit:cover;border:2px solid var(--border)\" />" if s.get("photo_url") else "<div style=\"width:80px;height:80px;border-radius:12px;background:var(--bg3);border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:1.8rem\">👤</div>"}
+                    {photo_html}
                     <div>
                       <div class="field-label" style="margin-bottom:6px">Фото сотрудника</div>
                       <input type="file" name="staff_photo" accept="image/*" style="font-size:.82rem;color:var(--text3)"/>

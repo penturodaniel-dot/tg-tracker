@@ -1278,6 +1278,8 @@ class Database:
     def _init_tg_account_tables(self):
         with self._conn() as conn:
             with conn.cursor() as cur:
+                cur.execute("ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT ''")
+                cur.execute("ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS tg_about TEXT DEFAULT ''")
                 cur.execute("""
                 CREATE TABLE IF NOT EXISTS tg_account_conversations (
                     id              SERIAL PRIMARY KEY,
@@ -1427,6 +1429,13 @@ class Database:
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("UPDATE tg_account_conversations SET status='open' WHERE id=%s", (conv_id,))
+            conn.commit()
+
+    def update_tg_account_contact_info(self, conv_id, photo_url=None, about=None):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE tg_account_conversations SET photo_url=%s, tg_about=%s WHERE id=%s",
+                            (photo_url or "", about or "", conv_id))
             conn.commit()
 
     def delete_tg_account_conversation(self, conv_id):

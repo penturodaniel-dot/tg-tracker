@@ -4125,12 +4125,14 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
         src_badge = '<span class="source-badge source-fb">🔵 FB</span>' if c.get("fbclid") else '<span class="source-badge source-organic">organic</span>'
         utm_parts = []
         if c.get("utm_campaign"): utm_parts.append(f'<span class="utm-tag">🎯 {c["utm_campaign"][:25]}</span>')
-        utm_line = '<div class="conv-meta">' + "".join(utm_parts) + '</div>' if utm_parts else ""
-        conv_items += f"""<a href="/tg_account/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}">
+        if c.get("utm_content"):  utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac">📌 {c["utm_content"][:20]}</span>')
+        if c.get("utm_term"):     utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc">📂 {c["utm_term"][:20]}</span>')
+        utm_line = '<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">' + "".join(utm_parts) + '</div>' if utm_parts else ""
+        conv_items += f"""<a href="/tg_account/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}" data-conv-id="{c['id']}">
           <div class="conv-name"><span>{dot} {c['visitor_name']}</span>{ucount}</div>
           <div style="font-size:.75rem;color:var(--text3)">@{c.get('username') or '—'}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
-          <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">{t} {src_badge}</div>
+          <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">{t[-5:]} {src_badge}</div>
           {utm_line}</div></a>"""
 
     if not conv_items:
@@ -4190,15 +4192,17 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             </div>
             <div class="chat-messages" id="tga-msgs">{messages_html}</div>
             <div class="chat-input">
-              <div style="position:relative;flex:1">
-                <textarea id="tga-inp" placeholder="Написать в Telegram... (Enter — отправить)"
-                  style="width:100%;resize:none;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 44px 10px 14px;color:var(--text);font-size:.9rem;font-family:inherit;min-height:44px;max-height:120px"
-                  rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){{event.preventDefault();sendTgAccMsg()}}"></textarea>
-                <label style="position:absolute;right:10px;bottom:10px;cursor:pointer;opacity:.6">
-                  📎<input type="file" id="tga-file" style="display:none" onchange="sendTgAccFile(this)"/>
-                </label>
+              <div class="chat-input-row">
+                <div style="position:relative;flex:1">
+                  <textarea id="tga-inp" placeholder="Написать в Telegram... (Enter — отправить)"
+                    style="width:100%;resize:none;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 44px 10px 14px;color:var(--text);font-size:.9rem;font-family:inherit;min-height:44px;max-height:120px"
+                    rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){{event.preventDefault();sendTgAccMsg()}}"></textarea>
+                  <label style="position:absolute;right:10px;bottom:10px;cursor:pointer;opacity:.6">
+                    📎<input type="file" id="tga-file" style="display:none" onchange="sendTgAccFile(this)"/>
+                  </label>
+                </div>
+                <button class="btn-orange" onclick="sendTgAccMsg()" style="height:44px;padding:0 18px;flex-shrink:0">Отправить</button>
               </div>
-              <button class="btn-orange" onclick="sendTgAccMsg()">Отправить</button>
             </div>
             <script>
             const TGA_CONV_ID={conv_id};
@@ -4235,15 +4239,64 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               const r=await fetch('/tg_account/delete',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+id}});
               const d=await r.json();if(d.ok)window.location.href='/tg_account/chat?status_filter={status_filter}';else alert('Ошибка');
             }}
-            setInterval(loadNewTgAccMsgs,3000);
+            function escTg(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}}
+            // Авто-обновление сообщений каждые 3 сек
+            setInterval(loadNewTgAccMsgs, 3000);
+            // Авто-обновление списка диалогов каждые 4 сек
+            const ACTIVE_TGA_CONV_ID = {conv_id or 0};
+            let _knownTgIds = new Set([{','.join(str(c['id']) for c in convs)}]);
+            setInterval(async function(){{
+              try {{
+                const res = await fetch('/api/tg_account_convs');
+                const data = await res.json();
+                if(!data.convs) return;
+                const list = document.getElementById('tg-conv-items');
+                if(!list) return;
+                const newIds = new Set(data.convs.map(c=>c.id));
+                const hasNew = [...newIds].some(id=>!_knownTgIds.has(id));
+                // Обновляем счётчики и превью
+                data.convs.forEach(c=>{{
+                  const item = list.querySelector('[data-conv-id="'+c.id+'"]');
+                  if(item){{
+                    const badge = item.querySelector('.unread-badge');
+                    if(c.unread_count>0){{
+                      if(badge) badge.textContent=c.unread_count;
+                      else{{const b=document.createElement('span');b.className='unread-num unread-badge';b.textContent=c.unread_count;item.querySelector('.conv-name')?.appendChild(b);}}
+                    }} else if(badge) badge.remove();
+                    const prev=item.querySelector('.conv-preview');
+                    if(prev) prev.textContent=c.last_message||'Нет сообщений';
+                  }}
+                }});
+                if(hasNew){{
+                  _knownTgIds = newIds;
+                  list.innerHTML = data.convs.map(c=>{{
+                    const active = c.id===ACTIVE_TGA_CONV_ID?' active':'';
+                    const dot = c.status==='open'?'🟢':'⚫';
+                    const badge = c.unread_count>0?'<span class="unread-num unread-badge">'+c.unread_count+'</span>':'';
+                    const src = c.fbclid?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
+                    let utm='';
+                    if(c.utm_campaign) utm+='<span class="utm-tag">🎯 '+escTg(c.utm_campaign.substring(0,25))+'</span>';
+                    if(c.utm_content)  utm+='<span class="utm-tag" style="background:#1a2a1a;color:#86efac">📌 '+escTg(c.utm_content.substring(0,20))+'</span>';
+                    if(c.utm_term)     utm+='<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc">📂 '+escTg(c.utm_term.substring(0,20))+'</span>';
+                    const utmLine = utm?'<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">'+utm+'</div>':'';
+                    return '<a href="/tg_account/chat?conv_id='+c.id+'"><div class="conv-item'+active+'" data-conv-id="'+c.id+'">'
+                      +'<div class="conv-name"><span>'+dot+' '+escTg(c.visitor_name)+'</span>'+badge+'</div>'
+                      +'<div style="font-size:.75rem;color:var(--text3)">@'+escTg(c.username)+'</div>'
+                      +'<div class="conv-preview">'+escTg(c.last_message||'Нет сообщений')+'</div>'
+                      +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">'+c.last_message_at.substring(11,16)+' '+src+'</div>'
+                      +utmLine+'</div></a>';
+                  }}).join('')||'<div style="padding:20px;text-align:center;color:var(--text3)">Нет диалогов</div>';
+                }}
+              }} catch(e){{}}
+            }}, 4000);
             </script>"""
 
     content_html = f"""<div style="display:grid;grid-template-columns:300px 1fr;height:calc(100vh - 64px);overflow:hidden">
       <div style="border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
         <div style="padding:10px;border-bottom:1px solid var(--border)">{conn_badge}{tabs_html}</div>
-        <div style="overflow-y:auto;flex:1">{conv_items}</div>
+        <div id="tg-conv-items" style="overflow-y:auto;flex:1">{conv_items}</div>
       </div>
-      <div style="display:flex;flex-direction:column;overflow:hidden">{chat_area}</div>
+      <div class="chat-window">{chat_area}</div>
     </div>"""
     return HTMLResponse(base(content_html, "tg_account_chat", request))
 
@@ -4570,3 +4623,26 @@ async def api_tg_account_messages(request: Request, conv_id: int, after: int = 0
     if err: return JSONResponse({"error": "unauthorized"}, 401)
     msgs = db.get_new_tg_account_messages(conv_id, after)
     return JSONResponse({"messages": msgs})
+
+
+@app.get("/api/tg_account_convs")
+async def api_tg_account_convs(request: Request):
+    """Список TG диалогов для авто-обновления"""
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    convs = db.get_tg_account_conversations()
+    return JSONResponse({"convs": [
+        {
+            "id": c["id"],
+            "visitor_name": c.get("visitor_name") or c.get("username") or str(c.get("tg_user_id", "")),
+            "username": c.get("username") or "",
+            "last_message": c.get("last_message") or "",
+            "last_message_at": (c.get("last_message_at") or c["created_at"])[:16].replace("T", " "),
+            "unread_count": c.get("unread_count", 0),
+            "status": c.get("status", "open"),
+            "utm_campaign": c.get("utm_campaign") or "",
+            "utm_content":  c.get("utm_content") or "",
+            "utm_term":     c.get("utm_term") or "",
+            "fbclid":       bool(c.get("fbclid")),
+        } for c in convs
+    ]})

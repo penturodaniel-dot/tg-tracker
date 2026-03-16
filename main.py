@@ -4268,7 +4268,14 @@ async def tg_account_setup(request: Request, msg: str = ""):
             saved_api_id   = db.get_setting("tg_api_id", "")
             saved_api_hash = db.get_setting("tg_api_hash", "")
             has_creds = bool(saved_api_id and saved_api_hash)
-            creds_badge = f'<div style="background:#052e16;border:1px solid #166534;border-radius:8px;padding:8px 12px;font-size:.8rem;color:#86efac;margin-bottom:12px">✅ API credentials сохранены (App ID: {saved_api_id[:4]}...)</div>' if has_creds else '<div style="background:#1c1a00;border:1px solid #713f12;border-radius:8px;padding:8px 12px;font-size:.8rem;color:#fde047;margin-bottom:12px">⚠️ Введите API credentials с my.telegram.org</div>'
+            _api_id_short = saved_api_id[:4] if saved_api_id else ""
+            creds_badge = (
+                f'<div style="background:#052e16;border:1px solid #166534;border-radius:8px;padding:8px 12px;font-size:.8rem;color:#86efac;margin-bottom:12px">'
+                f'✅ API credentials сохранены (App ID: {_api_id_short}...)</div>'
+                if has_creds else
+                '<div style="background:#1c1a00;border:1px solid #713f12;border-radius:8px;padding:8px 12px;font-size:.8rem;color:#fde047;margin-bottom:12px">'
+                '⚠️ Введите API credentials с my.telegram.org</div>'
+            )
             body_html = f"""<div style="background:#2d0a0a;border:1px solid #7f1d1d;border-radius:12px;padding:16px;margin-bottom:20px">
                 <div style="font-weight:700;color:#fca5a5">⚠️ Не подключён</div></div>
               {creds_badge}

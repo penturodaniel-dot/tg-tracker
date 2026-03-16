@@ -4269,8 +4269,9 @@ async def tg_account_setup(request: Request, msg: str = ""):
     else:
         svc = await tg_api("get", "/status")
         svc_state = svc.get("status", "disconnected") if not svc.get("error") else "disconnected"
-        # Если TG сервис недоступен — берём состояние из БД (важно для awaiting_code / awaiting_2fa)
-        if svc.get("error") and tg_status in ("awaiting_code", "awaiting_2fa"):
+        # Состояние из БД имеет приоритет для awaiting_code / awaiting_2fa
+        # TG сервис может вернуть "disconnected" даже когда код уже отправлен
+        if tg_status in ("awaiting_code", "awaiting_2fa"):
             svc_state = tg_status
         if svc_state == "awaiting_code":
             body_html = """<div style="background:#1c1a00;border:1px solid #713f12;border-radius:12px;padding:16px;margin-bottom:20px">

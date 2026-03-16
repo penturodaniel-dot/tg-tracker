@@ -1477,6 +1477,12 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                 chat_link = f'<a href="/chat?conv_id={s["conversation_id"]}" class="btn-gray btn-sm" style="text-decoration:none">💬 TG чат</a>'
             elif s.get("wa_conv_id"):
                 chat_link = f'<a href="/wa/chat?conv_id={s["wa_conv_id"]}" class="btn-gray btn-sm" style="text-decoration:none;background:#052e16;border-color:#166534;color:#86efac">💚 WA чат</a>'
+            manager_opts = "\n".join(
+                '<option value="' + (u.get("display_name") or u["username"]) + '"'
+                + (' selected' if s.get("manager_name") == (u.get("display_name") or u["username"]) else '')
+                + '>' + (u.get("display_name") or u["username"]) + ' (' + u["role"] + ')</option>'
+                for u in db.get_users()
+            )
             edit_form = f"""<div class="section" style="margin-bottom:18px;border-left:3px solid #f97316">
               <div class="section-head"><h3>✏️ {s.get('name','Карточка')}</h3>{chat_link}</div>
               <div class="section-body">
@@ -1502,12 +1508,7 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                     <div class="field-label">👤 Закреплён за менеджером</div>
                     <select name="manager_name" style="width:100%;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.84rem">
                       <option value="">— Не закреплён —</option>
-                      {chr(10).join(
-                          '<option value="' + (u.get("display_name") or u["username"]) + '"'
-                          + (' selected' if s.get("manager_name") == (u.get("display_name") or u["username"]) else '')
-                          + '>' + (u.get("display_name") or u["username"]) + ' (' + u["role"] + ')</option>'
-                          for u in db.get_users()
-                      )}
+                      {manager_opts}
                     </select>
                   </div>
                   <div style="display:flex;gap:8px">

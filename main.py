@@ -3844,7 +3844,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
       if(btn){{btn.textContent='🔄';btn.disabled=false;}}
     }}
     </script>"""
-    return HTMLResponse(f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>WA Чаты</title>{CSS}</head><body>{nav_html("wa_chat",request)}<div class="main">{content}</div></body></html>')
+    return HTMLResponse(f'<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WA Чаты</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">{CSS}</head><body>{nav_html("wa_chat",request)}<div class="main">{content}</div></body></html>')
 
 
 @app.get("/wa/setup", response_class=HTMLResponse)
@@ -4269,6 +4269,9 @@ async def tg_account_setup(request: Request, msg: str = ""):
     else:
         svc = await tg_api("get", "/status")
         svc_state = svc.get("status", "disconnected") if not svc.get("error") else "disconnected"
+        # Если TG сервис недоступен — берём состояние из БД (важно для awaiting_code / awaiting_2fa)
+        if svc.get("error") and tg_status in ("awaiting_code", "awaiting_2fa"):
+            svc_state = tg_status
         if svc_state == "awaiting_code":
             body_html = """<div style="background:#1c1a00;border:1px solid #713f12;border-radius:12px;padding:16px;margin-bottom:20px">
                 <div style="font-weight:700;color:#fde047">📱 Введите код из SMS</div></div>
@@ -4348,7 +4351,11 @@ async def tg_account_send_code(request: Request, phone: str = Form(...),
         "api_hash": final_api_hash,
     })
     if result.get("error"):
+        db.set_setting("tg_account_status", "disconnected")
         return RedirectResponse(f"/tg_account/setup?msg=Ошибка:+{result['error']}", 303)
+    # Сохраняем в БД: ждём ввода кода
+    db.set_setting("tg_account_status", "awaiting_code")
+    db.set_setting("tg_account_phone",  phone.strip())
     return RedirectResponse("/tg_account/setup?msg=Код+отправлен", 303)
 
 
@@ -4358,9 +4365,13 @@ async def tg_account_sign_in(request: Request, code: str = Form(...)):
     if err: return err
     result = await tg_api("post", "/auth/sign_in", json={"code": code.strip()})
     if result.get("error") == "2fa_required":
+        db.set_setting("tg_account_status", "awaiting_2fa")
         return RedirectResponse("/tg_account/setup", 303)
     if result.get("error"):
+        db.set_setting("tg_account_status", "disconnected")
         return RedirectResponse(f"/tg_account/setup?msg=Ошибка: {result['error']}", 303)
+    # Успешный вход — статус придёт через webhook, но сбрасываем awaiting_code на всякий случай
+    db.set_setting("tg_account_status", "connected")
     return RedirectResponse("/tg_account/setup?msg=Аккаунт+подключён", 303)
 
 

@@ -277,7 +277,7 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
 .conv-preview{font-size:.75rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .conv-time{font-size:.68rem;color:var(--text3);margin-top:3px}
 .unread-num{background:var(--orange);color:#fff;border-radius:99px;padding:1px 7px;font-size:.67rem;font-weight:700}
-.chat-window{display:flex;flex-direction:column;height:100vh}
+.chat-window{display:flex;flex-direction:column;height:calc(100vh - 64px);overflow:hidden}
 .chat-header{padding:14px 18px;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;gap:10px}
 .chat-messages{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
 .msg{max-width:68%;word-break:break-word}
@@ -344,6 +344,7 @@ def nav_html(active: str, request: Request) -> str:
     stats = db.get_stats()
     unread     = stats.get("unread", 0)
     wa_unread  = stats.get("wa_unread", 0)
+    tga_unread = stats.get("tga_unread", 0)
     b1 = bot_manager.get_tracker_bot()
     b2 = bot_manager.get_staff_bot()
     b1_name = db.get_setting("bot1_name", "Бот трекер")
@@ -397,7 +398,7 @@ def nav_html(active: str, request: Request) -> str:
       {item("📈", "Статистика", "analytics_clients", "blue", url="/analytics/clients")}
       <div class="nav-divider"></div>
       <div class="nav-section">Сотрудники</div>
-      {item("📱", "TG Чаты", "tg_account_chat", "orange", url="/tg_account/chat")}
+      {item("📱", "TG Чаты", "tg_account_chat", "orange", badge_count=tga_unread, url="/tg_account/chat", badge_id="nav-tga-badge")}
       {item("💚", "WA Чаты", "wa_chat", "orange", badge_count=wa_unread, url="/wa/chat", badge_id="nav-wa-badge")}
       {item("🗂", "База", "staff", "orange")}
       {item("🌐", "Лендинги HR", "landings_staff", "orange")}
@@ -447,7 +448,7 @@ def nav_html(active: str, request: Request) -> str:
       playPing();
       setTimeout(() => {{ d.style.animation = 'toastIn .2s ease reverse'; setTimeout(() => d.remove(), 200); }}, 5000);
     }}
-    let _lastTgUnread = {unread}, _lastWaUnread = {wa_unread};
+    let _lastTgUnread = {unread}, _lastWaUnread = {wa_unread}, _lastTgaUnread = {tga_unread};
     function updateBadge(id, count){{
       const el = document.getElementById(id);
       if(!el) return;
@@ -460,9 +461,11 @@ def nav_html(active: str, request: Request) -> str:
         const d = await r.json();
         updateBadge('nav-tg-badge', d.unread || 0);
         updateBadge('nav-wa-badge', d.wa_unread || 0);
+        updateBadge('nav-tga-badge', d.tga_unread || 0);
         if(d.unread > _lastTgUnread) showToast('💬 Новое сообщение', 'TG чаты', 'tg-toast', '/chat');
         if(d.wa_unread > _lastWaUnread) showToast('💚 Новое сообщение', 'WhatsApp чаты', 'wa-toast', '/wa/chat');
-        _lastTgUnread = d.unread || 0; _lastWaUnread = d.wa_unread || 0;
+        if(d.tga_unread > _lastTgaUnread) showToast('📱 Новое сообщение', 'TG Чаты', 'tga-toast', '/tg_account/chat');
+        _lastTgUnread = d.unread || 0; _lastWaUnread = d.wa_unread || 0; _lastTgaUnread = d.tga_unread || 0;
       }}catch(e){{}}
     }}
     setInterval(pollUnread, 5000);
@@ -4296,7 +4299,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
         <div style="padding:10px;border-bottom:1px solid var(--border)">{conn_badge}{tabs_html}</div>
         <div id="tg-conv-items" style="overflow-y:auto;flex:1">{conv_items}</div>
       </div>
-      <div class="chat-window">{chat_area}</div>
+      <div style="display:flex;flex-direction:column;overflow:hidden;min-height:0"><div class="chat-window" style="height:100%">{chat_area}</div></div>
     </div>"""
     return HTMLResponse(base(content_html, "tg_account_chat", request))
 

@@ -4264,12 +4264,37 @@ async def tg_account_setup(request: Request, msg: str = ""):
                   <input type="password" name="password" autofocus required/></div>
                 <button class="btn">🔓 Подтвердить</button></form>"""
         else:
-            body_html = """<div style="background:#2d0a0a;border:1px solid #7f1d1d;border-radius:12px;padding:16px;margin-bottom:20px">
+            # Читаем сохранённые api_id/api_hash из БД
+            saved_api_id   = db.get_setting("tg_api_id", "")
+            saved_api_hash = db.get_setting("tg_api_hash", "")
+            has_creds = bool(saved_api_id and saved_api_hash)
+            creds_badge = f'<div style="background:#052e16;border:1px solid #166534;border-radius:8px;padding:8px 12px;font-size:.8rem;color:#86efac;margin-bottom:12px">✅ API credentials сохранены (App ID: {saved_api_id[:4]}...)</div>' if has_creds else '<div style="background:#1c1a00;border:1px solid #713f12;border-radius:8px;padding:8px 12px;font-size:.8rem;color:#fde047;margin-bottom:12px">⚠️ Введите API credentials с my.telegram.org</div>'
+            body_html = f"""<div style="background:#2d0a0a;border:1px solid #7f1d1d;border-radius:12px;padding:16px;margin-bottom:20px">
                 <div style="font-weight:700;color:#fca5a5">⚠️ Не подключён</div></div>
-              <form method="post" action="/tg_account/send_code" style="display:flex;flex-direction:column;gap:12px;max-width:360px">
-                <div class="field-group"><div class="field-label">Номер телефона (с кодом страны)</div>
-                  <input type="text" name="phone" placeholder="+79001234567" autofocus required/></div>
-                <button class="btn">📱 Отправить код</button></form>"""
+              {creds_badge}
+              <form method="post" action="/tg_account/send_code" style="display:flex;flex-direction:column;gap:14px;max-width:400px">
+                <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">
+                  <div style="font-size:.78rem;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:10px">🔑 API Credentials (my.telegram.org)</div>
+                  <div class="grid-2" style="gap:10px">
+                    <div class="field-group">
+                      <div class="field-label">App api_id</div>
+                      <input type="text" name="api_id" value="{saved_api_id}" placeholder="12345678" required/>
+                    </div>
+                    <div class="field-group">
+                      <div class="field-label">App api_hash</div>
+                      <input type="text" name="api_hash" value="{saved_api_hash}" placeholder="abc123def456..."/>
+                    </div>
+                  </div>
+                  <div style="font-size:.72rem;color:var(--text3);margin-top:8px">
+                    Получи на <a href="https://my.telegram.org" target="_blank" style="color:var(--orange)">my.telegram.org</a> → API development tools
+                  </div>
+                </div>
+                <div class="field-group">
+                  <div class="field-label">Номер телефона (с кодом страны)</div>
+                  <input type="text" name="phone" placeholder="+79001234567" required/>
+                </div>
+                <button class="btn">📱 Отправить код</button>
+              </form>"""
 
     content_html = f"""<div class="page-wrap">
       <div class="page-title">📱 TG Аккаунт — Подключение</div>
@@ -4280,12 +4305,23 @@ async def tg_account_setup(request: Request, msg: str = ""):
 
 
 @app.post("/tg_account/send_code")
-async def tg_account_send_code(request: Request, phone: str = Form(...)):
+async def tg_account_send_code(request: Request, phone: str = Form(...),
+                                 api_id: str = Form(""), api_hash: str = Form("")):
     user, err = require_auth(request, role="admin")
     if err: return err
-    result = await tg_api("post", "/auth/send_code", json={"phone": phone.strip()})
+    # Сохраняем credentials в БД
+    if api_id.strip():   db.set_setting("tg_api_id",   api_id.strip())
+    if api_hash.strip(): db.set_setting("tg_api_hash", api_hash.strip())
+    # Берём из БД если не пришли в форме
+    final_api_id   = api_id.strip()   or db.get_setting("tg_api_id", "")
+    final_api_hash = api_hash.strip() or db.get_setting("tg_api_hash", "")
+    result = await tg_api("post", "/auth/send_code", json={
+        "phone":    phone.strip(),
+        "api_id":   final_api_id,
+        "api_hash": final_api_hash,
+    })
     if result.get("error"):
-        return RedirectResponse(f"/tg_account/setup?msg=Ошибка: {result['error']}", 303)
+        return RedirectResponse(f"/tg_account/setup?msg=Ошибка:+{result['error']}", 303)
     return RedirectResponse("/tg_account/setup?msg=Код+отправлен", 303)
 
 

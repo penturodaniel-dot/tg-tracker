@@ -599,10 +599,10 @@ class Database:
 
     def apply_utm_to_tg_conv(self, conv_id, fbclid=None, fbp=None, utm_source=None,
                               utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None):
-        """Применяет UTM к существующему TG диалогу"""
+        """Применяет UTM к существующему TG аккаунт диалогу"""
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("""UPDATE conversations
+                cur.execute("""UPDATE tg_account_conversations
                     SET fbclid=%s, fbp=%s, utm_source=%s, utm_medium=%s,
                         utm_campaign=%s, utm_content=%s, utm_term=%s
                     WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",

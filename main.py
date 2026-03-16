@@ -1502,7 +1502,12 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                     <div class="field-label">👤 Закреплён за менеджером</div>
                     <select name="manager_name" style="width:100%;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.84rem">
                       <option value="">— Не закреплён —</option>
-                      {"".join(f'<option value="{u["display_name"] or u["username"]}" {"selected" if s.get("manager_name") == (u["display_name"] or u["username"]) else ""}>{u["display_name"] or u["username"]} ({u["role"]})</option>' for u in db.get_users())}
+                      {chr(10).join(
+                          '<option value="' + (u.get("display_name") or u["username"]) + '"'
+                          + (' selected' if s.get("manager_name") == (u.get("display_name") or u["username"]) else '')
+                          + '>' + (u.get("display_name") or u["username"]) + ' (' + u["role"] + ')</option>'
+                          for u in db.get_users()
+                      )}
                     </select>
                   </div>
                   <div style="display:flex;gap:8px">

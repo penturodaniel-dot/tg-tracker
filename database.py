@@ -287,13 +287,13 @@ class Database:
     def get_users(self):
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id,username,role,created_at,permissions FROM users ORDER BY created_at")
+                cur.execute("SELECT id,username,role,created_at,permissions,display_name FROM users ORDER BY created_at")
                 return [dict(r) for r in cur.fetchall()]
 
     def get_user_by_id(self, user_id):
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id,username,role,created_at,permissions FROM users WHERE id=%s", (user_id,))
+                cur.execute("SELECT id,username,role,created_at,permissions,display_name FROM users WHERE id=%s", (user_id,))
                 r = cur.fetchone(); return dict(r) if r else None
 
     def create_user(self, username, password, role="manager", permissions="", display_name=""):
@@ -1043,6 +1043,7 @@ class Database:
                     "staff":       cnt("SELECT COUNT(*) as c FROM staff"),
                     "clicks":      cnt("SELECT COUNT(*) as c FROM click_tracking"),
                     "wa_unread":   cnt("SELECT COALESCE(SUM(unread_count),0) as c FROM wa_conversations"),
+                    "tga_unread":  cnt("SELECT COALESCE(SUM(unread_count),0) as c FROM tg_account_conversations"),
                 }
 
     # ══════════════════════════════════════════════════════════════════════════

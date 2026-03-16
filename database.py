@@ -241,6 +241,10 @@ class Database:
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS utm_term TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_content TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_term TEXT",
+                    "ALTER TABLE staff ADD COLUMN IF NOT EXISTS photo_url TEXT",
+                    "ALTER TABLE staff ADD COLUMN IF NOT EXISTS manager_name TEXT DEFAULT ''",
+                    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_name TEXT DEFAULT ''",
+                    "ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS sender_name TEXT DEFAULT ''",
                 ]
                 for m in migrations:
                     try:
@@ -292,24 +296,24 @@ class Database:
                 cur.execute("SELECT id,username,role,created_at,permissions FROM users WHERE id=%s", (user_id,))
                 r = cur.fetchone(); return dict(r) if r else None
 
-    def create_user(self, username, password, role="manager", permissions=""):
+    def create_user(self, username, password, role="manager", permissions="", display_name=""):
         pwd = hashlib.sha256(password.encode()).hexdigest()
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("INSERT INTO users (username,password,role,created_at,permissions) VALUES (%s,%s,%s,%s,%s)",
-                            (username, pwd, role, datetime.utcnow().isoformat(), permissions))
+                cur.execute("INSERT INTO users (username,password,role,created_at,permissions,display_name) VALUES (%s,%s,%s,%s,%s,%s)",
+                            (username, pwd, role, datetime.utcnow().isoformat(), permissions, display_name))
             conn.commit()
 
-    def update_user(self, user_id, username, role, permissions, new_password=None):
+    def update_user(self, user_id, username, role, permissions, new_password=None, display_name=None):
         with self._conn() as conn:
             with conn.cursor() as cur:
                 if new_password:
                     pwd = hashlib.sha256(new_password.encode()).hexdigest()
-                    cur.execute("UPDATE users SET username=%s,role=%s,permissions=%s,password=%s WHERE id=%s",
-                                (username, role, permissions, pwd, user_id))
+                    cur.execute("UPDATE users SET username=%s,role=%s,permissions=%s,password=%s,display_name=%s WHERE id=%s",
+                                (username, role, permissions, pwd, display_name or "", user_id))
                 else:
-                    cur.execute("UPDATE users SET username=%s,role=%s,permissions=%s WHERE id=%s",
-                                (username, role, permissions, user_id))
+                    cur.execute("UPDATE users SET username=%s,role=%s,permissions=%s,display_name=%s WHERE id=%s",
+                                (username, role, permissions, display_name or "", user_id))
             conn.commit()
 
     def delete_user(self, user_id):
@@ -713,14 +717,14 @@ class Database:
 
     # ── Messages (TG) ─────────────────────────────────────────────────────────
     def save_message(self, conversation_id, tg_chat_id, sender_type, content,
-                     tg_message_id=None, media_url=None, media_type=None):
+                     tg_message_id=None, media_url=None, media_type=None, sender_name=None):
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""INSERT INTO messages
-                    (conversation_id,tg_chat_id,sender_type,content,tg_message_id,media_url,media_type,created_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (conversation_id,tg_chat_id,sender_type,content,tg_message_id,media_url,media_type,created_at,sender_name)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (conversation_id,tg_chat_id,sender_type,content,tg_message_id,
-                     media_url,media_type,datetime.utcnow().isoformat()))
+                     media_url,media_type,datetime.utcnow().isoformat(),sender_name))
             conn.commit()
 
     def get_messages(self, conversation_id, limit=100):
@@ -749,20 +753,51 @@ class Database:
                 r = cur.fetchone()
             conn.commit(); return dict(r)
 
-    def get_staff(self, status=None):
+    def get_staff(self, status=None, sort="newest", search=""):
         with self._conn() as conn:
             with conn.cursor() as cur:
+                conditions = []
+                params = []
                 if status:
-                    cur.execute("SELECT * FROM staff WHERE status=%s ORDER BY created_at DESC", (status,))
-                else:
-                    cur.execute("SELECT * FROM staff ORDER BY created_at DESC")
+                    conditions.append("status=%s")
+                    params.append(status)
+                if search:
+                    conditions.append("(LOWER(name) LIKE %s OR LOWER(username) LIKE %s OR LOWER(phone) LIKE %s OR LOWER(email) LIKE %s)")
+                    q = f"%{search.lower()}%"
+                    params.extend([q, q, q, q])
+                where = "WHERE " + " AND ".join(conditions) if conditions else ""
+                order = {
+                    "newest": "ORDER BY created_at DESC",
+                    "oldest": "ORDER BY created_at ASC",
+                    "name":   "ORDER BY name ASC",
+                    "status": "ORDER BY status ASC, created_at DESC",
+                }.get(sort, "ORDER BY created_at DESC")
+                cur.execute(f"SELECT * FROM staff {where} {order}", params)
                 return [dict(r) for r in cur.fetchall()]
 
-    def update_staff(self, staff_id, name, phone, email, position, status, notes, tags):
+    def update_staff(self, staff_id, name, phone, email, position, status, notes, tags, manager_name=None):
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("UPDATE staff SET name=%s,phone=%s,email=%s,position=%s,status=%s,notes=%s,tags=%s WHERE id=%s",
-                            (name,phone,email,position,status,notes,tags,staff_id))
+                cur.execute("UPDATE staff SET name=%s,phone=%s,email=%s,position=%s,status=%s,notes=%s,tags=%s,manager_name=%s WHERE id=%s",
+                            (name,phone,email,position,status,notes,tags,manager_name or "",staff_id))
+            conn.commit()
+
+    def delete_staff_full(self, staff_id):
+        """Полное удаление сотрудника со всей связанной информацией"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                # Получаем связанные conv_id
+                cur.execute("SELECT conversation_id, wa_conv_id FROM staff WHERE id=%s", (staff_id,))
+                r = cur.fetchone()
+                if r:
+                    if r["conversation_id"]:
+                        cur.execute("DELETE FROM messages WHERE conversation_id=%s", (r["conversation_id"],))
+                        cur.execute("DELETE FROM utm_tracking WHERE conversation_id=%s", (r["conversation_id"],))
+                        cur.execute("DELETE FROM conversations WHERE id=%s", (r["conversation_id"],))
+                    if r["wa_conv_id"]:
+                        cur.execute("DELETE FROM wa_messages WHERE conversation_id=%s", (r["wa_conv_id"],))
+                        cur.execute("DELETE FROM wa_conversations WHERE id=%s", (r["wa_conv_id"],))
+                cur.execute("DELETE FROM staff WHERE id=%s", (staff_id,))
             conn.commit()
 
     def get_staff_by_conv(self, conv_id):
@@ -770,6 +805,12 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM staff WHERE conversation_id=%s", (conv_id,))
                 r = cur.fetchone(); return dict(r) if r else None
+
+    def update_staff_photo(self, staff_id, photo_url):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE staff SET photo_url=%s WHERE id=%s", (photo_url, staff_id))
+            conn.commit()
 
     def get_staff_by_id(self, staff_id):
         with self._conn() as conn:
@@ -911,14 +952,14 @@ class Database:
                 r = cur.fetchone(); return dict(r) if r else None
 
     def save_wa_message(self, conv_id, wa_chat_id, sender_type, content,
-                        media_url=None, media_type=None):
+                        media_url=None, media_type=None, sender_name=None):
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""INSERT INTO wa_messages
-                    (conversation_id,wa_chat_id,sender_type,content,media_url,media_type,created_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                    (conversation_id,wa_chat_id,sender_type,content,media_url,media_type,created_at,sender_name)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (conv_id,wa_chat_id,sender_type,content,media_url,media_type,
-                     datetime.utcnow().isoformat()))
+                     datetime.utcnow().isoformat(),sender_name))
             conn.commit()
 
     def get_wa_messages(self, conv_id, limit=100):
@@ -1228,3 +1269,169 @@ class Database:
                     FROM click_tracking WHERE created_at::timestamp >= NOW() - INTERVAL '30 days'
                     GROUP BY day ORDER BY day""")
                 return [dict(r) for r in cur.fetchall()]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # TG АККАУНТ — методы работы с диалогами
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _init_tg_account_tables(self):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS tg_account_conversations (
+                    id              SERIAL PRIMARY KEY,
+                    tg_user_id      TEXT NOT NULL UNIQUE,
+                    visitor_name    TEXT NOT NULL DEFAULT 'Неизвестный',
+                    username        TEXT DEFAULT '',
+                    phone           TEXT DEFAULT '',
+                    status          TEXT DEFAULT 'open',
+                    unread_count    INTEGER DEFAULT 0,
+                    last_message    TEXT,
+                    last_message_at TEXT,
+                    fb_event_sent   TEXT,
+                    fbclid          TEXT,
+                    fbp             TEXT,
+                    utm_source      TEXT,
+                    utm_medium      TEXT,
+                    utm_campaign    TEXT,
+                    utm_content     TEXT,
+                    utm_term        TEXT,
+                    created_at      TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS tg_account_messages (
+                    id              SERIAL PRIMARY KEY,
+                    conversation_id INTEGER NOT NULL REFERENCES tg_account_conversations(id) ON DELETE CASCADE,
+                    tg_user_id      TEXT NOT NULL,
+                    sender_type     TEXT NOT NULL,
+                    sender_name     TEXT DEFAULT '',
+                    content         TEXT,
+                    media_url       TEXT,
+                    media_type      TEXT,
+                    created_at      TEXT NOT NULL
+                );
+                """)
+            conn.commit()
+
+    def get_or_create_tg_account_conversation(self, tg_user_id, visitor_name, username="", phone=""):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM tg_account_conversations WHERE tg_user_id=%s", (tg_user_id,))
+                r = cur.fetchone()
+                if r:
+                    if visitor_name and not visitor_name.isdigit():
+                        cur.execute("UPDATE tg_account_conversations SET visitor_name=%s, username=%s WHERE tg_user_id=%s",
+                                    (visitor_name, username, tg_user_id))
+                        conn.commit()
+                        cur.execute("SELECT * FROM tg_account_conversations WHERE tg_user_id=%s", (tg_user_id,))
+                        r = cur.fetchone()
+                    return dict(r)
+                cur.execute("""INSERT INTO tg_account_conversations
+                    (tg_user_id,visitor_name,username,phone,created_at)
+                    VALUES (%s,%s,%s,%s,%s) RETURNING *""",
+                    (tg_user_id, visitor_name, username, phone, datetime.utcnow().isoformat()))
+                r = cur.fetchone()
+            conn.commit()
+            return dict(r)
+
+    def get_tg_account_conversation(self, conv_id):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM tg_account_conversations WHERE id=%s", (conv_id,))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def get_tg_account_conversations(self, status=None):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if status:
+                    cur.execute("SELECT * FROM tg_account_conversations WHERE status=%s ORDER BY COALESCE(last_message_at,created_at) DESC", (status,))
+                else:
+                    cur.execute("SELECT * FROM tg_account_conversations ORDER BY COALESCE(last_message_at,created_at) DESC")
+                return [dict(r) for r in cur.fetchall()]
+
+    def save_tg_account_message(self, conv_id, tg_user_id, sender_type, content,
+                                 media_url=None, media_type=None, sender_name=None):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""INSERT INTO tg_account_messages
+                    (conversation_id,tg_user_id,sender_type,sender_name,content,media_url,media_type,created_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (conv_id,tg_user_id,sender_type,sender_name or "",content,media_url,media_type,datetime.utcnow().isoformat()))
+            conn.commit()
+
+    def get_tg_account_messages(self, conv_id, limit=100):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM tg_account_messages WHERE conversation_id=%s ORDER BY created_at ASC LIMIT %s", (conv_id, limit))
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_new_tg_account_messages(self, conv_id, after_id=0):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM tg_account_messages WHERE conversation_id=%s AND id>%s ORDER BY created_at ASC", (conv_id, after_id))
+                return [dict(r) for r in cur.fetchall()]
+
+    def update_tg_account_last_message(self, tg_user_id, text, increment_unread=True):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if increment_unread:
+                    cur.execute("UPDATE tg_account_conversations SET last_message=%s,last_message_at=%s,unread_count=unread_count+1 WHERE tg_user_id=%s",
+                                (text[:100],datetime.utcnow().isoformat(),tg_user_id))
+                else:
+                    cur.execute("UPDATE tg_account_conversations SET last_message=%s,last_message_at=%s WHERE tg_user_id=%s",
+                                (text[:100],datetime.utcnow().isoformat(),tg_user_id))
+            conn.commit()
+
+    def mark_tg_account_conv_read(self, conv_id):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE tg_account_conversations SET unread_count=0 WHERE id=%s", (conv_id,))
+            conn.commit()
+
+    def apply_utm_to_tg_account_conv(self, conv_id, fbclid=None, fbp=None, utm_source=None,
+                                      utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""UPDATE tg_account_conversations
+                    SET fbclid=%s, fbp=%s, utm_source=%s, utm_medium=%s,
+                        utm_campaign=%s, utm_content=%s, utm_term=%s
+                    WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
+                    (fbclid, fbp, utm_source, utm_medium, utm_campaign, utm_content, utm_term, conv_id))
+            conn.commit()
+
+    def set_tg_account_fb_event(self, conv_id, event):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE tg_account_conversations SET fb_event_sent=%s WHERE id=%s", (event, conv_id))
+            conn.commit()
+
+    def close_tg_account_conv(self, conv_id):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE tg_account_conversations SET status='closed' WHERE id=%s", (conv_id,))
+            conn.commit()
+
+    def reopen_tg_account_conv(self, conv_id):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE tg_account_conversations SET status='open' WHERE id=%s", (conv_id,))
+            conn.commit()
+
+    def delete_tg_account_conversation(self, conv_id):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM tg_account_messages WHERE conversation_id=%s", (conv_id,))
+                cur.execute("DELETE FROM tg_account_conversations WHERE id=%s", (conv_id,))
+            conn.commit()

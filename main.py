@@ -48,6 +48,9 @@ DEFAULT_PIXEL_ID   = os.getenv("PIXEL_ID", "")
 DEFAULT_META_TOKEN = os.getenv("META_TOKEN", "")
 APP_URL            = os.getenv("APP_URL", "")
 WA_URL             = os.getenv("WA_SERVICE_URL", "").rstrip("/")
+TG_SVC_URL         = os.getenv("TG_SERVICE_URL", "").rstrip("/")
+TG_SVC_SECRET      = os.getenv("TG_API_SECRET", "changeme")
+TG_WH_SECRET       = os.getenv("TG_WEBHOOK_SECRET", "changeme")
 WA_SECRET          = os.getenv("WA_API_SECRET",  "changeme")
 WA_WH_SECRET       = os.getenv("WA_WEBHOOK_SECRET", "changeme")
 
@@ -295,6 +298,10 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
 
 /* ── AVATAR ──────────────────────────────────────── */
 .avatar{width:38px;height:38px;border-radius:50%;background:#431407;display:flex;align-items:center;justify-content:center;font-size:.88rem;flex-shrink:0;font-weight:700;color:#fb923c}.avatar-zoom{display:none}.avatar-zoom.show{display:block!important}
+input[type=date]{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-family:'Inter',sans-serif;font-size:.85rem;cursor:pointer;color-scheme:dark}
+input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;cursor:pointer}
+input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
+input[type=date]:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 2px rgba(249,115,22,.15)}
 
 /* ── UTM TAGS ────────────────────────────────────── */
 .utm-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
@@ -391,6 +398,7 @@ def nav_html(active: str, request: Request) -> str:
       <div class="nav-divider"></div>
       <div class="nav-section">Сотрудники</div>
       {item("💬", "TG Чаты", "chat", "orange", badge_count=unread, badge_id="nav-tg-badge")}
+      {item("📱", "TG Аккаунт", "tg_account_chat", "orange", url="/tg_account/chat")}
       {item("💚", "WA Чаты", "wa_chat", "orange", badge_count=wa_unread, url="/wa/chat", badge_id="nav-wa-badge")}
       {item("🗂", "База", "staff", "orange")}
       {item("🌐", "Лендинги HR", "landings_staff", "orange")}
@@ -475,10 +483,10 @@ def base(content: str, active: str, request: Request) -> str:
 
 STAFF_STATUSES = {
     "new":         ("🆕", "Новый",          "badge-gray"),
-    "review":      ("👀", "На рассмотрении", "badge-yellow"),
-    "interview":   ("🎙", "Интервью",        "badge"),
-    "hired":       ("✅", "Принят",          "badge-green"),
-    "rejected":    ("❌", "Отказ",           "badge-red"),
+    "review":      ("👀", "Инструктаж",      "badge-yellow"),
+    "interview":   ("🔍", "Верификация",     "badge"),
+    "hired":       ("💼", "В работе",        "badge-green"),
+    "rejected":    ("🚫", "Слив",            "badge-red"),
 }
 
 
@@ -662,9 +670,9 @@ async def overview(request: Request):
     fn_steps = [
         ("new", "🆕 Новых"),
         ("review", "👀 Смотрим"),
-        ("interview", "🎙 Интервью"),
-        ("hired", "✅ Принят"),
-        ("rejected", "❌ Отказ"),
+        ("interview", "🔍 Верификация"),
+        ("hired", "💼 В работе"),
+        ("rejected", "🚫 Слив"),
     ]
     funnel_html = "".join(f"""<div class="funnel-step">
         <div class="fn" style="color:{'#34d399' if s=='hired' else '#f87171' if s=='rejected' else '#60a5fa'}">{funnel.get(s,0)}</div>
@@ -908,9 +916,9 @@ async def analytics_staff(request: Request,
     fn_steps  = [
         ("s_new",       "🆕 Новые",     "#60a5fa"),
         ("s_review",    "👀 Смотрим",   "#a78bfa"),
-        ("s_interview", "🎙 Интервью",  "#f59e0b"),
-        ("s_hired",     "✅ Принят",    "#34d399"),
-        ("s_rejected",  "❌ Отказ",     "#f87171"),
+        ("s_interview", "🔍 Верификация", "#f59e0b"),
+        ("s_hired",     "💼 В работе",    "#34d399"),
+        ("s_rejected",  "🚫 Слив",        "#f87171"),
     ]
     funnel_html = ""
     for key, label, color in fn_steps:
@@ -972,9 +980,9 @@ async def analytics_staff(request: Request,
 
     <div class="kpi-grid">
       {kpi(summary['total'], 'Новых лидов', f"за период")}
-      {kpi(summary['s_hired'], 'Принято', f'{conv_hire}% конверсия', '#34d399')}
+      {kpi(summary['s_hired'], 'В работе', f'{conv_hire}% конверсия', '#34d399')}
       {kpi(summary['s_interview'], 'На интервью', '', '#f59e0b')}
-      {kpi(summary['s_rejected'], 'Отказов', '', '#f87171')}
+      {kpi(summary['s_rejected'], 'Сливов', '', '#f87171')}
       {kpi(msg_sum['total'], 'Сообщений TG', f"{msg_sum['incoming']} вх / {msg_sum['outgoing']} исх")}
       {kpi(msg_sum['active_convos'], 'Активных TG чатов', '')}
       {kpi(wa_stats.get('total_convs', 0), 'WA чатов всего', f"{wa_stats.get('open_convs',0)} открытых", '#25d366')}
@@ -1079,7 +1087,10 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
                     bubble = f'<img src="{m["media_url"]}" class="msg-img" onclick="window.open(this.src)" />'
                 else:
                     bubble = f'<div class="msg-bubble">{(m["content"] or "").replace("<","&lt;").replace(chr(10),"<br>")}</div>'
-                messages_html += f'<div class="msg {m["sender_type"]}" data-id="{m["id"]}">{bubble}<div class="msg-time">{t}</div></div>'
+                sender_label = ""
+                if m["sender_type"] == "manager" and m.get("sender_name"):
+                    sender_label = f'<div style="font-size:.68rem;color:var(--orange);margin-bottom:2px;text-align:right;opacity:.8">{m["sender_name"]}</div>'
+                messages_html += f'<div class="msg {m["sender_type"]}" data-id="{m["id"]}">{sender_label}{bubble}<div class="msg-time">{t}</div></div>'
 
             # Приоритет: username > visitor_name > tg_chat_id
             _username = active_conv.get('username')
@@ -1145,7 +1156,7 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
                         if active_conv["status"] == "open"
                         else f'<form method="post" action="/chat/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-orange btn-sm">↺ Открыть</button></form>')
 
-            delete_btn = f'<button class="btn-gray btn-sm" style="color:var(--red);border-color:#7f1d1d" onclick="deleteConv({conv_id})">🗑</button>'
+            delete_btn = f'<button class="btn-gray btn-sm" style="color:var(--red);border-color:#7f1d1d" onclick="deleteConv({conv_id})">🗑</button>' if user and user.get("role") == "admin" else ""
 
             staff_link = f'<a href="/staff?edit={staff["id"]}" style="color:var(--orange);font-size:.74rem;text-decoration:none">Карточка →</a>' if staff else \
                          f'<a href="/staff/create_from_conv?conv_id={conv_id}" style="color:var(--text3);font-size:.74rem;text-decoration:none">+ Создать карточку</a>'
@@ -1173,8 +1184,11 @@ async def chat_panel(request: Request, conv_id: int = 0, status_filter: str = "o
         ucount = f'<span class="unread-num">{c["unread_count"]}</span>' if c["unread_count"] > 0 else ""
         dot = "🟢" if c["status"] == "open" else "⚫"
         # Source badge
-        if c.get("fbclid"):
+        _utm_src = c.get("utm_source", "")
+        if c.get("fbclid") or _utm_src in ("facebook","fb"):
             src_badge = '<span class="source-badge source-fb">🔵 FB</span>'
+        elif _utm_src in ("tiktok","tt","tik_tok"):
+            src_badge = '<span class="source-badge" style="background:#ff2d55;color:#fff">🎵 TikTok</span>'
         elif c.get("utm_source"):
             src_badge = f'<span class="source-badge source-tg">{c["utm_source"][:12]}</span>'
         else:
@@ -1283,7 +1297,8 @@ async def chat_send(request: Request, conv_id: int = Form(...), text: str = Form
     if not conv: return JSONResponse({"error": "not found"}, 404)
     ok = await bot_manager.send_staff_message(conv["tg_chat_id"], text)
     if ok:
-        db.save_message(conv_id, conv["tg_chat_id"], "manager", text)
+        manager_name = user.get("display_name") or user.get("username") or "Менеджер"
+        db.save_message(conv_id, conv["tg_chat_id"], "manager", text, sender_name=manager_name)
         db.update_conversation_last_message(conv["tg_chat_id"], f"Вы: {text}", increment_unread=False)
     return JSONResponse({"ok": ok})
 
@@ -1404,6 +1419,13 @@ async def chat_send_lead(request: Request, conv_id: int = Form(...)):
         db.set_staff_fb_event(staff["id"], "Lead")
     elif sent:
         db.set_conv_fb_event(conv_id, "Lead")
+    # TikTok Lead
+    tt_pixel = db.get_setting("tt_pixel_id")
+    tt_token = db.get_setting("tt_access_token")
+    if tt_pixel and tt_token:
+        await send_tiktok_event(tt_pixel, tt_token, "SubmitForm",
+            user_id=conv.get("tg_chat_id", ""),
+            ip=request.client.host if request.client else None)
     return RedirectResponse(f"/chat?conv_id={conv_id}", 303)
 
 
@@ -1412,12 +1434,29 @@ async def chat_send_lead(request: Request, conv_id: int = Form(...)):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/staff", response_class=HTMLResponse)
-async def staff_page(request: Request, edit: int = 0, status_filter: str = "", msg: str = ""):
+async def staff_page(request: Request, edit: int = 0, status_filter: str = "", msg: str = "", sort: str = "newest", search: str = ""):
     user, err = require_auth(request)
     if err: return err
-    staff_list = db.get_staff(status_filter if status_filter else None)
+    staff_list = db.get_staff(status_filter if status_filter else None, sort=sort, search=search)
     funnel = db.get_staff_funnel()
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+
+    # Поиск и сортировка
+    search_bar = f'''<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+      <form method="get" action="/staff" style="display:flex;gap:8px;flex:1;align-items:center;flex-wrap:wrap">
+        <input type="hidden" name="status_filter" value="{status_filter}"/>
+        <input type="text" name="search" value="{search}" placeholder="🔍 Поиск по имени, Telegram, WhatsApp..." 
+               style="flex:1;min-width:200px;padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.84rem"/>
+        <select name="sort" style="padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.84rem">
+          <option value="newest" {"selected" if sort=="newest" else ""}>Сначала новые</option>
+          <option value="oldest" {"selected" if sort=="oldest" else ""}>Сначала старые</option>
+          <option value="name" {"selected" if sort=="name" else ""}>По имени А-Я</option>
+          <option value="status" {"selected" if sort=="status" else ""}>По статусу</option>
+        </select>
+        <button class="btn btn-sm">Применить</button>
+        {'<a href="/staff"><button class="btn-gray btn-sm" type="button">✕ Сбросить</button></a>' if search or sort != "newest" else ""}
+      </form>
+    </div>'''
 
     # Фильтр
     filter_btns = '<a href="/staff"><button class="btn-gray btn-sm" style="margin-right:4px">Все</button></a>'
@@ -1441,17 +1480,31 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
             edit_form = f"""<div class="section" style="margin-bottom:18px;border-left:3px solid #f97316">
               <div class="section-head"><h3>✏️ {s.get('name','Карточка')}</h3>{chat_link}</div>
               <div class="section-body">
-                <form method="post" action="/staff/update">
+                <form method="post" action="/staff/update" enctype="multipart/form-data">
                   <input type="hidden" name="staff_id" value="{s['id']}"/>
+                  <div style="margin-bottom:16px;display:flex;align-items:center;gap:16px">
+                    {"<img src=\"" + s["photo_url"] + "\" style=\"width:80px;height:80px;border-radius:12px;object-fit:cover;border:2px solid var(--border)\" />" if s.get("photo_url") else "<div style=\"width:80px;height:80px;border-radius:12px;background:var(--bg3);border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:1.8rem\">👤</div>"}
+                    <div>
+                      <div class="field-label" style="margin-bottom:6px">Фото сотрудника</div>
+                      <input type="file" name="staff_photo" accept="image/*" style="font-size:.82rem;color:var(--text3)"/>
+                      <div style="font-size:.72rem;color:var(--text3);margin-top:4px">JPG, PNG до 5MB</div>
+                    </div>
+                  </div>
                   <div class="grid-3" style="margin-bottom:12px">
                     <div class="field-group"><div class="field-label">Имя</div><input type="text" name="name" value="{s.get('name') or ''}"/></div>
-                    <div class="field-group"><div class="field-label">Телефон</div><input type="text" name="phone" value="{s.get('phone') or ''}"/></div>
-                    <div class="field-group"><div class="field-label">Email</div><input type="email" name="email" value="{s.get('email') or ''}"/></div>
+                    <div class="field-group"><div class="field-label">Telegram</div><input type="text" name="phone" value="{s.get('phone') or ''}" placeholder="@username или +номер"/></div>
+                    <div class="field-group"><div class="field-label">WhatsApp</div><input type="text" name="email" value="{s.get('email') or ''}" placeholder="+1234567890"/></div>
                     <div class="field-group"><div class="field-label">Должность</div><input type="text" name="position" value="{s.get('position') or ''}"/></div>
                     <div class="field-group"><div class="field-label">Статус</div><select name="status">{status_opts}</select></div>
-                    <div class="field-group"><div class="field-label">Теги</div><input type="text" name="tags" value="{s.get('tags') or ''}"/></div>
                   </div>
                   <div class="field-group" style="margin-bottom:12px"><div class="field-label">Заметки</div><textarea name="notes">{s.get('notes') or ''}</textarea></div>
+                  <div class="field-group" style="margin-bottom:12px">
+                    <div class="field-label">👤 Закреплён за менеджером</div>
+                    <select name="manager_name" style="width:100%;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.84rem">
+                      <option value="">— Не закреплён —</option>
+                      {"".join(f'<option value="{u["display_name"] or u["username"]}" {"selected" if s.get("manager_name") == (u["display_name"] or u["username"]) else ""}>{u["display_name"] or u["username"]} ({u["role"]})</option>' for u in db.get_users())}
+                    </select>
+                  </div>
                   <div style="display:flex;gap:8px">
                     <button class="btn-orange">💾 Сохранить</button>
                     <a href="/staff"><button class="btn-gray" type="button">Отмена</button></a>
@@ -1463,17 +1516,32 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
     for s in staff_list:
         icon, label, badge_cls = STAFF_STATUSES.get(s.get("status","new"), ("🆕","Новый","badge-gray"))
         fb = '<span class="badge-green" style="font-size:.7rem">FB ✓</span>' if s.get("fb_event_sent") else ""
+        _photo = s.get("photo_url") or ""
+        if _photo:
+            _avatar = ('<img src="' + _photo + '" style="width:32px;height:32px;border-radius:8px;object-fit:cover;flex-shrink:0;transition:transform .2s,box-shadow .2s;cursor:pointer" '
+                      'onmouseover="this.style.transform=\'scale(3)\';this.style.zIndex=\'999\';this.style.position=\'relative\';this.style.boxShadow=\'0 4px 20px rgba(0,0,0,.6)\'" '
+                      'onmouseout="this.style.transform=\'scale(1)\';this.style.zIndex=\'auto\'" />')
+        else:
+            _avatar = '<div style="width:32px;height:32px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0">👤</div>'
         rows += f"""<tr>
-            <td><div style="font-weight:600;color:#fff">{s['name'] or '—'}</div>
-              <div style="font-size:.75rem;color:var(--text3)">@{s['username'] or '—'}</div></td>
+            <td><div style="display:flex;align-items:center;gap:8px">
+              {_avatar}
+              <div>
+                <div style="font-weight:600;color:#fff">{s['name'] or '—'}</div>
+                <div style="font-size:.75rem;color:var(--text3)">@{s['username'] or '—'}</div>
+              </div>
+            </div></td>
             <td>{s.get('position') or '—'}</td>
             <td><span class="{badge_cls}">{icon} {label}</span></td>
             <td>{s.get('phone') or '—'}</td>
+            <td style="font-size:.8rem;color:#86efac">{s.get('email') or '—'}</td>
+            <td style="font-size:.8rem;color:var(--orange)">{s.get('manager_name') or '—'}</td>
             <td>{fb}</td>
             <td>{s['created_at'][:10]}</td>
             <td style="white-space:nowrap">
               <a href="/staff?edit={s['id']}"><button class="btn-orange btn-sm">✏️</button></a>
               {'<a href="/chat?conv_id=' + str(s.get("conversation_id","")) + '"><button class="btn-gray btn-sm" style="margin-left:4px">💬</button></a>' if s.get("conversation_id") else ''}
+              {('<form method="post" action="/staff/delete" style="display:inline"><input type="hidden" name="staff_id" value="' + str(s["id"]) + '"/><button class="btn-gray btn-sm" style="color:var(--red);border-color:#7f1d1d;margin-left:4px" onclick="return confirm(''Удалить сотрудника полностью?'')">🗑</button></form>') if user and user.get("role") == "admin" else ""}
             </td></tr>"""
 
     if not rows:
@@ -1483,11 +1551,12 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
     <div class="page-title">🗂 База сотрудников</div>
     <div class="page-sub">Все кто написал боту</div>
     {alert}
+    {search_bar}
     <div style="margin-bottom:16px">{filter_btns}</div>
     {edit_form}
     <div class="section">
       <div class="section-head"><h3>📋 Сотрудники ({len(staff_list)})</h3></div>
-      <table><thead><tr><th>Имя</th><th>Должность</th><th>Статус</th><th>Телефон</th><th>FB</th><th>Добавлен</th><th></th></tr></thead>
+      <table><thead><tr><th>Имя</th><th>Должность</th><th>Статус</th><th>Telegram</th><th>WhatsApp</th><th>Менеджер</th><th>FB</th><th>Добавлен</th><th></th></tr></thead>
       <tbody>{rows}</tbody></table>
     </div></div>"""
     return HTMLResponse(base(content, "staff", request))
@@ -1496,11 +1565,43 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
 @app.post("/staff/update")
 async def staff_update(request: Request, staff_id: int = Form(...), name: str = Form(""),
                         phone: str = Form(""), email: str = Form(""), position: str = Form(""),
-                        status: str = Form("new"), notes: str = Form(""), tags: str = Form("")):
+                        status: str = Form("new"), notes: str = Form(""), tags: str = Form(""),
+                        manager_name: str = Form(""), staff_photo: UploadFile = File(None)):
     user, err = require_auth(request)
     if err: return err
-    db.update_staff(staff_id, name, phone, email, position, status, notes, tags)
+    db.update_staff(staff_id, name, phone, email, position, status, notes, tags, manager_name=manager_name.strip())
+    # Загрузка фото если прислали
+    if staff_photo and staff_photo.filename:
+        try:
+            import cloudinary, cloudinary.uploader, base64 as _b64
+            photo_data = await staff_photo.read()
+            cld_url = db.get_setting("cloudinary_url") or os.getenv("CLOUDINARY_URL", "")
+            photo_url = None
+            if cld_url:
+                cloudinary.config(cloudinary_url=cld_url)
+                b64 = _b64.b64encode(photo_data).decode()
+                mime = staff_photo.content_type or "image/jpeg"
+                result = cloudinary.uploader.upload(
+                    f"data:{mime};base64,{b64}",
+                    folder="staff_photos", resource_type="image"
+                )
+                photo_url = result.get("secure_url")
+            else:
+                mime = staff_photo.content_type or "image/jpeg"
+                photo_url = f"data:{mime};base64,{_b64.b64encode(photo_data).decode()}"
+            if photo_url:
+                db.update_staff_photo(staff_id, photo_url)
+        except Exception as e:
+            log.error(f"[staff/update] photo upload error: {e}")
     return RedirectResponse(f"/staff?msg=Сохранено", 303)
+
+
+@app.post("/staff/delete")
+async def staff_delete(request: Request, staff_id: int = Form(...)):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    db.delete_staff_full(staff_id)
+    return RedirectResponse("/staff?msg=Сотрудник+удалён+полностью", 303)
 
 
 @app.get("/staff/create_from_conv")
@@ -1597,6 +1698,8 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
                 <form method="post" action="/users/update">
                   <input type="hidden" name="user_id" value="{eu['id']}"/>
                   <div class="grid-2" style="margin-bottom:12px">
+                    <div class="field-group"><div class="field-label">Имя (отображается в чатах)</div>
+                      <input type="text" name="display_name" value="{eu.get('display_name') or ''}" placeholder="Например: Анна"/></div>
                     <div class="field-group"><div class="field-label">Логин</div>
                       <input type="text" name="username" value="{eu['username']}" required/></div>
                     <div class="field-group"><div class="field-label">Роль</div>
@@ -1629,6 +1732,7 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
 
         del_btn  = f'<form method="post" action="/users/delete" style="display:inline"><input type="hidden" name="user_id" value="{u["id"]}"/><button class="del-btn btn-sm">✕</button></form>' if u["username"] != user["username"] else ""
         rows += f"""<tr>
+            <td>{u.get('display_name') or '—'}</td>
             <td><b>{u['username']}</b>{self_badge}</td>
             <td><span class="{'badge' if u['role']=='admin' else 'badge-gray'}">{u['role']}</span></td>
             <td>{perm_badge}</td>
@@ -1671,6 +1775,7 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
     <div class="section-body">
       <form method="post" action="/users/add">
         <div class="grid-2" style="margin-bottom:12px">
+          <div class="field-group"><div class="field-label">Имя (отображается в чатах)</div><input type="text" name="display_name" placeholder="Например: Анна"/></div>
           <div class="field-group"><div class="field-label">Логин</div><input type="text" name="username" required/></div>
           <div class="field-group"><div class="field-label">Пароль</div><input type="password" name="password" required/></div>
           <div class="field-group"><div class="field-label">Роль</div>
@@ -1684,7 +1789,7 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
       </form>
     </div></div>
     <div class="section"><div class="section-head"><h3>👤 Пользователи ({len(users)})</h3></div>
-    <table><thead><tr><th>Логин</th><th>Роль</th><th>Доступы</th><th>Создан</th><th></th></tr></thead>
+    <table><thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Доступы</th><th>Создан</th><th></th></tr></thead>
     <tbody>{rows}</tbody></table></div></div>"""
     return HTMLResponse(base(content, "users", request))
 
@@ -1728,18 +1833,16 @@ async def users_security(request: Request,
 
 
 @app.post("/users/add")
-async def users_add(request: Request, username: str = Form(...), password: str = Form(...), role: str = Form("manager")):
+async def users_add(request: Request, username: str = Form(...), password: str = Form(...), role: str = Form("manager"), display_name: str = Form("")):
     user, err = require_auth(request, role="admin")
     if err: return err
     ALL_TAB_IDS = ["overview","channels","campaigns","landings","analytics_clients",
                    "chat","wa_chat","staff","landings_staff","analytics_staff"]
     form = await request.form()
-    # Собираем отмеченные чекбоксы
     checked = [t for t in ALL_TAB_IDS if form.get(f"perm_{t}")]
-    # Если все отмечены — пустая строка (полный доступ)
     perms = "" if len(checked) == len(ALL_TAB_IDS) else ",".join(checked)
     try:
-        db.create_user(username.strip(), password, role, perms)
+        db.create_user(username.strip(), password, role, perms, display_name.strip())
         return RedirectResponse("/users?msg=Пользователь+добавлен", 303)
     except:
         return RedirectResponse("/users?msg=Такой+логин+уже+существует", 303)
@@ -1747,7 +1850,7 @@ async def users_add(request: Request, username: str = Form(...), password: str =
 
 @app.post("/users/update")
 async def users_update(request: Request, user_id: int = Form(...), username: str = Form(...),
-                        role: str = Form("manager"), new_password: str = Form("")):
+                        role: str = Form("manager"), new_password: str = Form(""), display_name: str = Form("")):
     user, err = require_auth(request, role="admin")
     if err: return err
     ALL_TAB_IDS = ["overview","channels","campaigns","landings","analytics_clients",
@@ -1755,7 +1858,7 @@ async def users_update(request: Request, user_id: int = Form(...), username: str
     form = await request.form()
     checked = [t for t in ALL_TAB_IDS if form.get(f"perm_{t}")]
     perms = "" if len(checked) == len(ALL_TAB_IDS) else ",".join(checked)
-    db.update_user(user_id, username.strip(), role, perms, new_password.strip() or None)
+    db.update_user(user_id, username.strip(), role, perms, new_password.strip() or None, display_name.strip())
     return RedirectResponse("/users?msg=Сохранено", 303)
 
 
@@ -1811,7 +1914,7 @@ async def settings_page(request: Request, msg: str = ""):
 
     <div class="section-head" style="padding:0;margin-bottom:12px"><h3 style="font-size:.78rem;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.08em">🤖 Управление ботами</h3></div>
     {bot_card("🔵 Бот 1 — Трекер (Клиенты)", "blue", b1_info, "bot1_token", "settings/bot1")}
-    {bot_card("🟠 Бот 2 — Сотрудники", "orange", b2_info, "bot2_token", "settings/bot2")}
+    {bot_card("🟠 Бот 2 — Уведомления (авторизация)", "orange", b2_info, "bot2_token", "settings/bot2")}
 
     <div class="section" style="border-left:3px solid #25d366">
       <div class="section-head"><h3>💚 WhatsApp</h3>
@@ -1826,6 +1929,21 @@ async def settings_page(request: Request, msg: str = ""):
       <div class="section-body">
         <a href="/wa/setup" class="btn" style="background:#059669;display:inline-flex;align-items:center;gap:8px;text-decoration:none">
           📱 Открыть подключение WhatsApp / QR-код
+        </a>
+      </div>
+    </div>
+
+    <div class="section" style="border-left:3px solid #2563eb">
+      <div class="section-head"><h3>📱 Telegram Аккаунт</h3>
+        <span style="font-size:.82rem">
+          {'<span style="color:#34d399">● Подключён · @' + db.get_setting("tg_account_username","") + '</span>'
+           if db.get_setting("tg_account_status") == "connected"
+           else '<span style="color:var(--red)">● Не подключён</span>'}
+        </span>
+      </div>
+      <div class="section-body">
+        <a href="/tg_account/setup" class="btn" style="background:#2563eb;display:inline-flex;align-items:center;gap:8px;text-decoration:none">
+          📱 Открыть подключение Telegram аккаунта
         </a>
       </div>
     </div>
@@ -1853,6 +1971,16 @@ async def settings_page(request: Request, msg: str = ""):
             </div>
           </div>
           <button class="btn">💾 Сохранить пиксели</button>
+        </form>
+        <form method="post" action="/settings/tiktok_pixel" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+          <div style="font-size:.78rem;font-weight:700;color:#ff2d55;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">🎵 TikTok Pixel & Events API</div>
+          <div class="grid-2" style="margin-bottom:12px">
+            <div class="field-group"><div class="field-label">TikTok Pixel ID</div>
+              <input type="text" name="tt_pixel_id" value="{db.get_setting('tt_pixel_id','')}" placeholder="CXXXXXXXXXXXXXXX"/></div>
+            <div class="field-group"><div class="field-label">TikTok Access Token (Events API)</div>
+              <input type="text" name="tt_access_token" placeholder="Оставь пустым — не менять"/></div>
+          </div>
+          <button class="btn" style="background:#ff2d55">🎵 Сохранить TikTok</button>
         </form>
         <form method="post" action="/settings/test_event_code" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
           <div style="font-size:.78rem;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">🧪 Тест событий Facebook</div>
@@ -1914,6 +2042,16 @@ async def settings_bot2(request: Request, bot2_token: str = Form("")):
         info = await bot_manager.get_bot_info(bot_manager.get_staff_bot())
         if info.get("username"): db.set_setting("bot2_name", f"@{info['username']}")
     return RedirectResponse("/settings?msg=Бот+2+обновлён", 303)
+
+
+@app.post("/settings/tiktok_pixel")
+async def settings_tiktok_pixel(request: Request, tt_pixel_id: str = Form(""), tt_access_token: str = Form("")):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    db.set_setting("tt_pixel_id", tt_pixel_id.strip())
+    if tt_access_token.strip():
+        db.set_setting("tt_access_token", tt_access_token.strip())
+    return RedirectResponse("/settings?msg=TikTok+пиксель+сохранён", 303)
 
 
 @app.post("/settings/test_event_code")
@@ -2661,7 +2799,7 @@ def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
     *{{box-sizing:border-box;margin:0;padding:0}}
-    body{{font-family:'Inter',system-ui;background:#060a0f;color:#e8f0f8;min-height:100vh}}
+    body{{font-family:'Inter',system-ui,sans-serif;background:#060a0f;color:#e8f0f8;min-height:100vh;font-size:14px;-webkit-font-smoothing:antialiased}}
     .top-bar{{background:linear-gradient(135deg,#1a0a2e,#0d1a2e);border-bottom:1px solid rgba(255,255,255,.08);padding:12px 20px;text-align:center;font-size:.82rem;font-weight:600;color:#f8d56b;letter-spacing:.02em}}
     .hero{{position:relative;min-height:50vh;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}}
     .hero::before{{content:"";position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop') center/cover;filter:brightness(.35)}}
@@ -2750,7 +2888,8 @@ def _render_client_landing(landing, contacts, pixel_id: str = "") -> str:
     if not btn_html:
         btn_html = '<p style="color:rgba(255,255,255,.5);text-align:center">Контакты не настроены</p>'
 
-    px = _pixel_js(pixel_id)
+    tt_pixel_id = db.get_setting("tt_pixel_id", "")
+    px = _pixel_js(pixel_id) + _tiktok_pixel_js(tt_pixel_id)
 
     return f"""<!DOCTYPE html><html lang="en"><head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -2759,7 +2898,7 @@ def _render_client_landing(landing, contacts, pixel_id: str = "") -> str:
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
     *{{box-sizing:border-box;margin:0;padding:0}}
-    body{{font-family:'Inter',system-ui;background:#060a0f;color:#e8f0f8;min-height:100vh}}
+    body{{font-family:'Inter',system-ui,sans-serif;background:#060a0f;color:#e8f0f8;min-height:100vh;font-size:14px;-webkit-font-smoothing:antialiased}}
     .top-bar{{background:linear-gradient(135deg,#1a0a2e,#0d1a2e);border-bottom:1px solid rgba(255,255,255,.08);padding:12px 20px;text-align:center;font-size:.82rem;font-weight:600;color:#f8d56b;letter-spacing:.02em}}
     .hero{{position:relative;min-height:50vh;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}}
     .hero::before{{content:"";position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop') center/cover;filter:brightness(.35)}}
@@ -2877,7 +3016,8 @@ def _render_staff_landing(landing: dict, contacts: list, pixel_id: str = "") -> 
     except:
         template = "massage_job"
 
-    px   = _pixel_js(pixel_id)
+    tt_pixel_id = db.get_setting("tt_pixel_id", "")
+    px   = _pixel_js(pixel_id) + _tiktok_pixel_js(tt_pixel_id)
     year = __import__('datetime').datetime.now().year
     name = landing.get("name","HR")
 
@@ -3253,6 +3393,23 @@ async def wa_api(method: str, path: str, **kwargs) -> dict:
         return {"error": str(e)}
 
 
+# ── Хелпер вызова TG аккаунт сервиса ─────────────────────────────────────────
+async def tg_api(method: str, path: str, **kwargs) -> dict:
+    if not TG_SVC_URL:
+        return {"error": "TG_SERVICE_URL not configured"}
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await getattr(client, method)(
+                f"{TG_SVC_URL}{path}",
+                headers={"X-Api-Secret": TG_SVC_SECRET},
+                **kwargs
+            )
+            return resp.json()
+    except Exception as e:
+        log.error(f"TG API error: {e}")
+        return {"error": str(e)}
+
+
 @app.post("/wa/webhook")
 async def wa_webhook(request: Request):
     secret = request.headers.get("X-WA-Secret", "")
@@ -3432,8 +3589,11 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
                     content_html = f'<a href="{m["media_url"]}" target="_blank" style="color:#60a5fa">📎 Открыть файл</a>'
                 else:
                     content_html = (m["content"] or "").replace("<","&lt;")
+                wa_sender_label = ""
+                if m["sender_type"] == "manager" and m.get("sender_name"):
+                    wa_sender_label = f'<div style="font-size:.68rem;color:var(--orange);margin-bottom:2px;text-align:right;opacity:.8">{m["sender_name"]}</div>'
                 messages_html += f"""<div class="msg {m['sender_type']}" data-id="{m['id']}">
-                  <div class="msg-bubble">{content_html}</div>
+                  {wa_sender_label}<div class="msg-bubble">{content_html}</div>
                   <div class="msg-time">{t}</div></div>"""
             # Фото профиля WA
             wa_photo = active_conv.get("photo_url","")
@@ -3448,7 +3608,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             status_color = "#34d399" if active_conv["status"] == "open" else "#ef4444"
             close_btn = f'<form method="post" action="/wa/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>' if active_conv["status"] == "open" else \
                         f'<form method="post" action="/wa/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-green btn-sm">↺ Открыть</button></form>'
-            delete_wa_btn = f'<button class="btn-gray btn-sm" style="color:var(--red);border-color:#7f1d1d" onclick="deleteWaConv({conv_id})">🗑</button>'
+            delete_wa_btn = f'<button class="btn-gray btn-sm" style="color:var(--red);border-color:#7f1d1d" onclick="deleteWaConv({conv_id})">🗑</button>' if user and user.get("role") == "admin" else ""
 
             # Карточка сотрудника для WA
             wa_staff = db.get_staff_by_wa_conv(conv_id)
@@ -3759,7 +3919,8 @@ async def wa_send(request: Request, conv_id: int = Form(...), text: str = Form(.
     log.info(f"[WA send] result={result}")
 
     if not result.get("error"):
-        db.save_wa_message(conv_id, conv["wa_chat_id"], "manager", text)
+        manager_name = user.get("display_name") or user.get("username") or "Менеджер"
+        db.save_wa_message(conv_id, conv["wa_chat_id"], "manager", text, sender_name=manager_name)
         db.update_wa_last_message(conv["wa_chat_id"], f"Вы: {text}", increment_unread=False)
     return JSONResponse({"ok": not result.get("error"), "error": result.get("error")})
 
@@ -3866,6 +4027,13 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
     )
     if sent:
         db.set_wa_fb_event(conv_id, "Lead")
+    # TikTok Lead
+    tt_pixel = db.get_setting("tt_pixel_id")
+    tt_token = db.get_setting("tt_access_token")
+    if tt_pixel and tt_token:
+        await send_tiktok_event(tt_pixel, tt_token, "SubmitForm",
+            user_id=conv.get("wa_number", ""),
+            ip=request.client.host if request.client else None)
     return RedirectResponse(f"/wa/chat?conv_id={conv_id}", 303)
 
 
@@ -3901,3 +4069,429 @@ async def health():
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TG АККАУНТ — роуты
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/tg_account/chat", response_class=HTMLResponse)
+async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter: str = "open"):
+    user, err = require_auth(request)
+    if err: return err
+
+    convs = db.get_tg_account_conversations(status=status_filter if status_filter != "all" else None)
+
+    tg_status   = db.get_setting("tg_account_status", "disconnected")
+    tg_username = db.get_setting("tg_account_username", "")
+    tg_phone    = db.get_setting("tg_account_phone", "")
+
+    if tg_status == "connected":
+        conn_badge = f'<div style="background:#052e16;border:1px solid #166534;border-radius:7px;padding:6px 12px;font-size:.8rem;color:#86efac;margin-bottom:8px">📱 Подключён · @{tg_username} · +{tg_phone}</div>'
+    else:
+        conn_badge = '<div style="background:#2d0a0a;border:1px solid #7f1d1d;border-radius:7px;padding:6px 12px;font-size:.8rem;color:#fca5a5;margin-bottom:8px">⚠️ TG аккаунт не подключён → <a href="/tg_account/setup" style="color:#fca5a5;text-decoration:underline">Подключить</a></div>'
+
+    def tab(val, label):
+        active = "background:var(--orange);color:#fff" if val == status_filter else "background:var(--bg3);color:var(--text3)"
+        return f'<a href="/tg_account/chat?status_filter={val}" style="flex:1;text-align:center;padding:5px 0;border-radius:7px;font-size:.78rem;font-weight:600;text-decoration:none;{active}">{label}</a>'
+    tabs_html = f'<div style="display:flex;gap:4px;margin-bottom:8px">{tab("open","Открытые")}{tab("closed","Закрытые")}{tab("all","Все")}</div>'
+
+    conv_items = ""
+    for c in convs:
+        cls = "conv-item active" if c["id"] == conv_id else "conv-item"
+        t = (c.get("last_message_at") or c["created_at"])[:16].replace("T", " ")
+        ucount = f'<span class="unread-num">{c["unread_count"]}</span>' if c.get("unread_count", 0) > 0 else ""
+        dot = "🟢" if c["status"] == "open" else "⚫"
+        src_badge = '<span class="source-badge source-fb">🔵 FB</span>' if c.get("fbclid") else '<span class="source-badge source-organic">organic</span>'
+        utm_parts = []
+        if c.get("utm_campaign"): utm_parts.append(f'<span class="utm-tag">🎯 {c["utm_campaign"][:25]}</span>')
+        utm_line = '<div class="conv-meta">' + "".join(utm_parts) + '</div>' if utm_parts else ""
+        conv_items += f"""<a href="/tg_account/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}">
+          <div class="conv-name"><span>{dot} {c['visitor_name']}</span>{ucount}</div>
+          <div style="font-size:.75rem;color:var(--text3)">@{c.get('username') or '—'}</div>
+          <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
+          <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">{t} {src_badge}</div>
+          {utm_line}</div></a>"""
+
+    if not conv_items:
+        conv_items = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Нет диалогов</div>'
+
+    chat_area = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:.9rem">Выберите диалог</div>'
+
+    if conv_id:
+        active_conv = db.get_tg_account_conversation(conv_id)
+        if active_conv:
+            db.mark_tg_account_conv_read(conv_id)
+            msgs = db.get_tg_account_messages(conv_id)
+            messages_html = ""
+            for m in msgs:
+                t = m["created_at"][11:16]
+                if m.get("media_url") and (m.get("media_type") or "").startswith("image/"):
+                    ch = f'<img src="{m["media_url"]}" style="max-width:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)" />'
+                elif m.get("media_url"):
+                    ch = f'<a href="{m["media_url"]}" target="_blank" style="color:#60a5fa">📎 Открыть файл</a>'
+                else:
+                    ch = (m["content"] or "").replace("<", "&lt;")
+                sl = f'<div style="font-size:.68rem;color:var(--orange);margin-bottom:2px;text-align:right;opacity:.8">{m["sender_name"]}</div>' if m.get("sender_name") and m["sender_type"] == "manager" else ""
+                messages_html += f'<div class="msg {m["sender_type"]}" data-id="{m["id"]}">{sl}<div class="msg-bubble">{ch}</div><div class="msg-time">{t}</div></div>'
+
+            uname = f"@{active_conv['username']}" if active_conv.get("username") else active_conv.get("tg_user_id", "")
+            fb_sent = active_conv.get("fb_event_sent")
+            lead_btn = '<span class="badge-green">✅ Lead отправлен</span>' if fb_sent else \
+                       f'<form method="post" action="/tg_account/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
+            status_color = "#34d399" if active_conv["status"] == "open" else "#ef4444"
+            close_btn = f'<form method="post" action="/tg_account/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>' if active_conv["status"] == "open" else \
+                        f'<form method="post" action="/tg_account/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-orange btn-sm">↺ Открыть</button></form>'
+            delete_btn = f'<button class="btn-gray btn-sm" style="color:var(--red);border-color:#7f1d1d" onclick="deleteTgAccConv({conv_id})">🗑</button>' if user and user.get("role") == "admin" else ""
+            call_url = f"https://t.me/{active_conv['username']}" if active_conv.get("username") else f"tg://user?id={active_conv.get('tg_user_id','')}"
+            tags = []
+            if active_conv.get("fbclid"): tags.append('<span class="utm-tag" style="background:#1e3a5f;color:#60a5fa">🔵 Facebook</span>')
+            if active_conv.get("utm_campaign"): tags.append(f'<span class="utm-tag">🎯 {active_conv["utm_campaign"][:25]}</span>')
+            if active_conv.get("utm_content"): tags.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac">📌 {active_conv["utm_content"][:20]}</span>')
+            if active_conv.get("utm_term"): tags.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc">📂 {active_conv["utm_term"][:20]}</span>')
+            if active_conv.get("fbclid"): tags.append('<span class="utm-tag badge-green">fbclid ✓</span>')
+            utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' + "".join(tags) + '</div>' if tags else ""
+
+            chat_area = f"""
+            <div class="chat-header">
+              <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
+                <div class="avatar">T</div>
+                <div style="flex:1">
+                  <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.72rem">●</span></div>
+                  <div style="font-size:.78rem;color:var(--text3)">{uname}</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">
+                    {lead_btn}
+                    <a href="{call_url}" target="_blank" class="btn-gray btn-sm" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;font-size:.74rem;border:1px solid var(--border);text-decoration:none">📞 Открыть в TG</a>
+                  </div>
+                  {utm_tags}
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;flex-shrink:0">{close_btn} {delete_btn}</div>
+            </div>
+            <div class="chat-messages" id="tga-msgs">{messages_html}</div>
+            <div class="chat-input">
+              <div style="position:relative;flex:1">
+                <textarea id="tga-inp" placeholder="Написать в Telegram... (Enter — отправить)"
+                  style="width:100%;resize:none;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 44px 10px 14px;color:var(--text);font-size:.9rem;font-family:inherit;min-height:44px;max-height:120px"
+                  rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){{event.preventDefault();sendTgAccMsg()}}"></textarea>
+                <label style="position:absolute;right:10px;bottom:10px;cursor:pointer;opacity:.6">
+                  📎<input type="file" id="tga-file" style="display:none" onchange="sendTgAccFile(this)"/>
+                </label>
+              </div>
+              <button class="btn-orange" onclick="sendTgAccMsg()">Отправить</button>
+            </div>
+            <script>
+            const TGA_CONV_ID={conv_id};
+            const tgaMsgBox=document.getElementById('tga-msgs');
+            if(tgaMsgBox)tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
+            let lastTgAId=(()=>{{const m=document.querySelectorAll('#tga-msgs .msg[data-id]');return m.length?m[m.length-1].dataset.id:0}})();
+            async function sendTgAccMsg(){{
+              const inp=document.getElementById('tga-inp');const text=inp.value.trim();if(!text)return;inp.value='';
+              const r=await fetch('/tg_account/send',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+TGA_CONV_ID+'&text='+encodeURIComponent(text)}});
+              const d=await r.json();if(!d.ok)alert('Ошибка: '+(d.error||''));else loadNewTgAccMsgs();
+            }}
+            async function sendTgAccFile(input){{
+              if(!input.files[0])return;
+              const fd=new FormData();fd.append('conv_id',TGA_CONV_ID);fd.append('file',input.files[0]);
+              const r=await fetch('/tg_account/send_media',{{method:'POST',body:fd}});
+              const d=await r.json();if(!d.ok)alert('Ошибка: '+(d.error||''));else loadNewTgAccMsgs();input.value='';
+            }}
+            async function loadNewTgAccMsgs(){{
+              const res=await fetch('/api/tg_account_messages/{conv_id}?after='+lastTgAId);
+              if(!res.ok)return;const data=await res.json();
+              if(!data.messages||!data.messages.length)return;
+              data.messages.forEach(m=>{{
+                const d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
+                let inner=m.media_url&&m.media_type&&m.media_type.startsWith('image/')
+                  ?'<img src="'+m.media_url+'" style="max-width:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)"/>'
+                  :m.media_url?'<a href="'+m.media_url+'" target="_blank" style="color:#60a5fa">📎 Открыть файл</a>':(m.content||'');
+                const sl=m.sender_name&&m.sender_type==='manager'?'<div style="font-size:.68rem;color:var(--orange);margin-bottom:2px;text-align:right;opacity:.8">'+m.sender_name+'</div>':'';
+                d.innerHTML=sl+'<div class="msg-bubble">'+inner+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
+                tgaMsgBox.appendChild(d);lastTgAId=m.id;
+              }});tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
+            }}
+            async function deleteTgAccConv(id){{
+              if(!confirm('Удалить диалог?'))return;
+              const r=await fetch('/tg_account/delete',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+id}});
+              const d=await r.json();if(d.ok)window.location.href='/tg_account/chat?status_filter={status_filter}';else alert('Ошибка');
+            }}
+            setInterval(loadNewTgAccMsgs,3000);
+            </script>"""
+
+    content_html = f"""<div style="display:grid;grid-template-columns:300px 1fr;height:calc(100vh - 64px);overflow:hidden">
+      <div style="border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:10px;border-bottom:1px solid var(--border)">{conn_badge}{tabs_html}</div>
+        <div style="overflow-y:auto;flex:1">{conv_items}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;overflow:hidden">{chat_area}</div>
+    </div>"""
+    return HTMLResponse(base(content_html, "tg_account_chat", request))
+
+
+@app.get("/tg_account/setup", response_class=HTMLResponse)
+async def tg_account_setup(request: Request, msg: str = ""):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    tg_status   = db.get_setting("tg_account_status", "disconnected")
+    tg_username = db.get_setting("tg_account_username", "")
+    tg_phone    = db.get_setting("tg_account_phone", "")
+    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+
+    if tg_status == "connected":
+        body_html = f"""
+          <div style="background:#052e16;border:1px solid #166534;border-radius:12px;padding:16px;margin-bottom:20px">
+            <div style="font-weight:700;color:#86efac;margin-bottom:4px">✅ Telegram аккаунт подключён</div>
+            <div style="font-size:.85rem;color:#6ee7b7">@{tg_username} · +{tg_phone}</div>
+          </div>
+          <form method="post" action="/tg_account/disconnect">
+            <button class="btn-gray" style="color:var(--red);border-color:#7f1d1d">🔌 Отключить аккаунт</button>
+          </form>"""
+    else:
+        svc = await tg_api("get", "/status")
+        svc_state = svc.get("status", "disconnected") if not svc.get("error") else "disconnected"
+        if svc_state == "awaiting_code":
+            body_html = """<div style="background:#1c1a00;border:1px solid #713f12;border-radius:12px;padding:16px;margin-bottom:20px">
+                <div style="font-weight:700;color:#fde047">📱 Введите код из SMS</div></div>
+              <form method="post" action="/tg_account/sign_in" style="display:flex;flex-direction:column;gap:12px;max-width:360px">
+                <div class="field-group"><div class="field-label">Код из SMS / Telegram</div>
+                  <input type="text" name="code" placeholder="12345" autofocus required style="letter-spacing:.2em;font-size:1.1rem"/></div>
+                <button class="btn">✅ Войти</button></form>"""
+        elif svc_state == "awaiting_2fa":
+            body_html = """<div style="background:#1c1a00;border:1px solid #713f12;border-radius:12px;padding:16px;margin-bottom:20px">
+                <div style="font-weight:700;color:#fde047">🔐 Требуется пароль 2FA</div></div>
+              <form method="post" action="/tg_account/sign_in_2fa" style="display:flex;flex-direction:column;gap:12px;max-width:360px">
+                <div class="field-group"><div class="field-label">Пароль 2FA</div>
+                  <input type="password" name="password" autofocus required/></div>
+                <button class="btn">🔓 Подтвердить</button></form>"""
+        else:
+            body_html = """<div style="background:#2d0a0a;border:1px solid #7f1d1d;border-radius:12px;padding:16px;margin-bottom:20px">
+                <div style="font-weight:700;color:#fca5a5">⚠️ Не подключён</div></div>
+              <form method="post" action="/tg_account/send_code" style="display:flex;flex-direction:column;gap:12px;max-width:360px">
+                <div class="field-group"><div class="field-label">Номер телефона (с кодом страны)</div>
+                  <input type="text" name="phone" placeholder="+79001234567" autofocus required/></div>
+                <button class="btn">📱 Отправить код</button></form>"""
+
+    content_html = f"""<div class="page-wrap">
+      <div class="page-title">📱 TG Аккаунт — Подключение</div>
+      {alert}
+      <div class="section"><div class="section-head"><h3>🔗 Управление подключением</h3></div>
+        <div class="section-body">{body_html}</div></div></div>"""
+    return HTMLResponse(base(content_html, "tg_account_setup", request))
+
+
+@app.post("/tg_account/send_code")
+async def tg_account_send_code(request: Request, phone: str = Form(...)):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    result = await tg_api("post", "/auth/send_code", json={"phone": phone.strip()})
+    if result.get("error"):
+        return RedirectResponse(f"/tg_account/setup?msg=Ошибка: {result['error']}", 303)
+    return RedirectResponse("/tg_account/setup?msg=Код+отправлен", 303)
+
+
+@app.post("/tg_account/sign_in")
+async def tg_account_sign_in(request: Request, code: str = Form(...)):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    result = await tg_api("post", "/auth/sign_in", json={"code": code.strip()})
+    if result.get("error") == "2fa_required":
+        return RedirectResponse("/tg_account/setup", 303)
+    if result.get("error"):
+        return RedirectResponse(f"/tg_account/setup?msg=Ошибка: {result['error']}", 303)
+    return RedirectResponse("/tg_account/setup?msg=Аккаунт+подключён", 303)
+
+
+@app.post("/tg_account/sign_in_2fa")
+async def tg_account_sign_in_2fa(request: Request, password: str = Form(...)):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    result = await tg_api("post", "/auth/sign_in", json={"password": password})
+    if result.get("error"):
+        return RedirectResponse(f"/tg_account/setup?msg=Ошибка: {result['error']}", 303)
+    return RedirectResponse("/tg_account/setup?msg=Аккаунт+подключён", 303)
+
+
+@app.post("/tg_account/disconnect")
+async def tg_account_disconnect(request: Request):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    await tg_api("post", "/auth/sign_out")
+    db.set_setting("tg_account_status", "disconnected")
+    db.set_setting("tg_account_username", "")
+    db.set_setting("tg_account_phone", "")
+    return RedirectResponse("/tg_account/setup?msg=Аккаунт+отключён", 303)
+
+
+@app.post("/tg/webhook")
+async def tg_account_webhook(request: Request):
+    secret = request.headers.get("X-TG-Secret", "")
+    if secret != TG_WH_SECRET:
+        return JSONResponse({"error": "unauthorized"}, 401)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": True})
+
+    event = body.get("event")
+    data  = body.get("data", {})
+    log.info(f"[TG webhook] event={event} keys={list(data.keys())}")
+
+    try:
+        if event == "ready":
+            db.set_setting("tg_account_status", "connected")
+            db.set_setting("tg_account_username", data.get("username", ""))
+            db.set_setting("tg_account_phone", data.get("phone", ""))
+            db.set_setting("tg_account_name", data.get("name", ""))
+
+        elif event == "disconnected":
+            db.set_setting("tg_account_status", "disconnected")
+            db.set_setting("tg_account_username", "")
+
+        elif event == "message":
+            tg_user_id  = data.get("tg_user_id", "")
+            username    = data.get("username", "")
+            sender_name = data.get("sender_name") or username or tg_user_id
+            raw_text    = data.get("body") or ""
+            has_media   = data.get("has_media", False)
+            media_b64   = data.get("media_base64")
+            media_type  = data.get("media_type", "")
+
+            media_url = None
+            if media_b64:
+                try:
+                    import cloudinary, cloudinary.uploader, base64 as _b64
+                    cld_url = db.get_setting("cloudinary_url") or os.getenv("CLOUDINARY_URL", "")
+                    if cld_url:
+                        cloudinary.config(cloudinary_url=cld_url)
+                        mime = media_type or "image/jpeg"
+                        result = cloudinary.uploader.upload(f"data:{mime};base64,{media_b64}", folder="tg_account_media", resource_type="auto")
+                        media_url = result.get("secure_url")
+                    elif media_type and media_type.startswith("image/"):
+                        media_url = f"data:{media_type};base64,{media_b64}"
+                except Exception as e:
+                    log.error(f"[TG webhook] media upload error: {e}")
+
+            if not raw_text and has_media:
+                raw_text = "[фото]" if (media_type or "").startswith("image/") else "[файл]"
+            text = (raw_text or "").strip() or "[сообщение]"
+
+            conv = db.get_or_create_tg_account_conversation(tg_user_id, sender_name, username)
+            is_new = not conv.get("utm_source") and not conv.get("fbclid")
+            if is_new:
+                click_data = db.get_staff_click_recent_any(minutes=30)
+                if click_data:
+                    db.apply_utm_to_tg_conv(conv["id"],
+                        fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),
+                        utm_source=click_data.get("utm_source"), utm_medium=click_data.get("utm_medium"),
+                        utm_campaign=click_data.get("utm_campaign"), utm_content=click_data.get("utm_content"),
+                        utm_term=click_data.get("utm_term"))
+                    db.mark_staff_click_used(click_data["ref_id"])
+                    conv = db.get_tg_account_conversation(conv["id"]) or conv
+
+            db.save_tg_account_message(conv["id"], tg_user_id, "visitor", text, media_url=media_url, media_type=media_type)
+            db.update_tg_account_last_message(tg_user_id, text, increment_unread=True)
+
+            notify_chat = db.get_setting("notify_chat_id")
+            bot2 = bot_manager.get_staff_bot()
+            if notify_chat and bot2:
+                try:
+                    ustr = f"@{username}" if username else tg_user_id
+                    short = text[:80] + ("..." if len(text) > 80 else "")
+                    await bot2.send_message(int(notify_chat),
+                        f"📱 TG Аккаунт — новое сообщение\n👤 {sender_name} ({ustr})\n✉️ {short}")
+                except Exception as e:
+                    log.warning(f"[TG webhook] notify error: {e}")
+    except Exception as e:
+        log.error(f"[TG webhook] error: {e}", exc_info=True)
+    return JSONResponse({"ok": True})
+
+
+@app.post("/tg_account/send")
+async def tg_account_send(request: Request, conv_id: int = Form(...), text: str = Form(...)):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    conv = db.get_tg_account_conversation(conv_id)
+    if not conv: return JSONResponse({"error": "not found"}, 404)
+    result = await tg_api("post", "/send", json={"to": conv["tg_user_id"], "message": text})
+    if not result.get("error"):
+        manager_name = user.get("display_name") or user.get("username") or "Менеджер"
+        db.save_tg_account_message(conv_id, conv["tg_user_id"], "manager", text, sender_name=manager_name)
+        db.update_tg_account_last_message(conv["tg_user_id"], f"Вы: {text}", increment_unread=False)
+    return JSONResponse({"ok": not result.get("error"), "error": result.get("error")})
+
+
+@app.post("/tg_account/send_media")
+async def tg_account_send_media(request: Request, conv_id: int = Form(...), file: UploadFile = File(...)):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    conv = db.get_tg_account_conversation(conv_id)
+    if not conv: return JSONResponse({"error": "not found"}, 404)
+    import base64 as _b64
+    file_data = await file.read()
+    b64 = _b64.b64encode(file_data).decode()
+    mimetype = file.content_type or "image/jpeg"
+    filename = file.filename or "file"
+    result = await tg_api("post", "/send_media", json={"to": conv["tg_user_id"], "base64": b64, "mimetype": mimetype, "filename": filename})
+    if not result.get("error"):
+        manager_name = user.get("display_name") or user.get("username") or "Менеджер"
+        db.save_tg_account_message(conv_id, conv["tg_user_id"], "manager", "[файл]", media_type=mimetype, sender_name=manager_name)
+        db.update_tg_account_last_message(conv["tg_user_id"], "Вы: [файл]", increment_unread=False)
+    return JSONResponse({"ok": not result.get("error"), "error": result.get("error")})
+
+
+@app.post("/tg_account/send_lead")
+async def tg_account_send_lead(request: Request, conv_id: int = Form(...)):
+    user, err = require_auth(request)
+    if err: return err
+    conv = db.get_tg_account_conversation(conv_id)
+    if not conv: return RedirectResponse("/tg_account/chat", 303)
+    if conv.get("fb_event_sent"):
+        return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
+    pixel_id   = db.get_setting("pixel_id_staff") or db.get_setting("pixel_id")
+    meta_token = db.get_setting("meta_token_staff") or db.get_setting("meta_token")
+    test_event_code = db.get_setting("test_event_code") or None
+    sent = await meta_capi.send_lead_event(
+        pixel_id, meta_token,
+        user_id=conv.get("tg_user_id", ""),
+        campaign=conv.get("utm_campaign") or "telegram_account",
+        fbclid=conv.get("fbclid"), fbp=conv.get("fbp"),
+        utm_source=conv.get("utm_source") or "telegram",
+        utm_campaign=conv.get("utm_campaign"),
+        test_event_code=test_event_code,
+        event_source_url="https://t.me/",
+    )
+    if sent:
+        db.set_tg_account_fb_event(conv_id, "Lead")
+    return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
+
+
+@app.post("/tg_account/close")
+async def tg_account_close(request: Request, conv_id: int = Form(...)):
+    user, err = require_auth(request)
+    if err: return err
+    db.close_tg_account_conv(conv_id)
+    return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
+
+
+@app.post("/tg_account/reopen")
+async def tg_account_reopen(request: Request, conv_id: int = Form(...)):
+    user, err = require_auth(request)
+    if err: return err
+    db.reopen_tg_account_conv(conv_id)
+    return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
+
+
+@app.post("/tg_account/delete")
+async def tg_account_delete(request: Request, conv_id: int = Form(...)):
+    user, err = require_auth(request, role="admin")
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    db.delete_tg_account_conversation(conv_id)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/tg_account_messages/{conv_id}")
+async def api_tg_account_messages(request: Request, conv_id: int, after: int = 0):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    msgs = db.get_new_tg_account_messages(conv_id, after)
+    return JSONResponse({"messages": msgs})

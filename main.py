@@ -4167,7 +4167,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             status_color = "#34d399" if active_conv["status"] == "open" else "#ef4444"
             close_btn = f'<form method="post" action="/tg_account/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>' if active_conv["status"] == "open" else \
                         f'<form method="post" action="/tg_account/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-orange btn-sm">↺ Открыть</button></form>'
-            delete_btn = f'<button class="btn-gray btn-sm" style="color:var(--red);border-color:#7f1d1d" onclick="deleteTgAccConv({conv_id})">🗑</button>' if user and user.get("role") == "admin" else ""
+            delete_btn = f'<button class="btn-gray btn-sm" style="color:#fff;background:#7f1d1d;border-color:#7f1d1d;font-size:.78rem;padding:5px 10px" onclick="deleteTgAccConv({conv_id})" title="Удалить диалог">🗑 Удалить</button>' if user and user.get("role") == "admin" else ""
             call_url = f"https://t.me/{active_conv['username']}" if active_conv.get("username") else f"tg://user?id={active_conv.get('tg_user_id','')}"
             tags = []
             if active_conv.get("fbclid"): tags.append('<span class="utm-tag" style="background:#1e3a5f;color:#60a5fa">🔵 Facebook</span>')
@@ -4238,9 +4238,13 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               }});tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
             }}
             async function deleteTgAccConv(id){{
-              if(!confirm('Удалить диалог?'))return;
-              const r=await fetch('/tg_account/delete',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+id}});
-              const d=await r.json();if(d.ok)window.location.href='/tg_account/chat?status_filter={status_filter}';else alert('Ошибка');
+              if(!confirm('Удалить диалог и все сообщения? Это нельзя отменить.'))return;
+              try{{
+                const r=await fetch('/tg_account/delete',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+id}});
+                const d=await r.json();
+                if(d.ok) window.location.href='/tg_account/chat?status_filter={status_filter}';
+                else alert('Ошибка удаления: '+(d.error||r.status));
+              }}catch(e){{alert('Ошибка: '+e.message);}}
             }}
             function escTg(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}}
             // Авто-обновление сообщений каждые 3 сек

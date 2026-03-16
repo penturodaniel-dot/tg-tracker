@@ -397,8 +397,7 @@ def nav_html(active: str, request: Request) -> str:
       {item("📈", "Статистика", "analytics_clients", "blue", url="/analytics/clients")}
       <div class="nav-divider"></div>
       <div class="nav-section">Сотрудники</div>
-      {item("💬", "TG Чаты", "chat", "orange", badge_count=unread, badge_id="nav-tg-badge")}
-      {item("📱", "TG Аккаунт", "tg_account_chat", "orange", url="/tg_account/chat")}
+      {item("📱", "TG Чаты", "tg_account_chat", "orange", url="/tg_account/chat")}
       {item("💚", "WA Чаты", "wa_chat", "orange", badge_count=wa_unread, url="/wa/chat", badge_id="nav-wa-badge")}
       {item("🗂", "База", "staff", "orange")}
       {item("🌐", "Лендинги HR", "landings_staff", "orange")}
@@ -1484,9 +1483,9 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                 for u in db.get_users()
             )
             if s.get("photo_url"):
-                photo_html = '<img src="' + s["photo_url"] + '" style="width:80px;height:80px;border-radius:12px;object-fit:cover;border:2px solid var(--border)" />'
+                photo_html = '<img src="' + s["photo_url"] + '" style="width:200px;height:200px;border-radius:12px;object-fit:cover;border:2px solid var(--border)" />'
             else:
-                photo_html = '<div style="width:80px;height:80px;border-radius:12px;background:var(--bg3);border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:1.8rem">👤</div>'
+                photo_html = '<div style="width:200px;height:200px;border-radius:12px;background:var(--bg3);border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:3rem">👤</div>'
             edit_form = f"""<div class="section" style="margin-bottom:18px;border-left:3px solid #f97316">
               <div class="section-head"><h3>✏️ {s.get('name','Карточка')}</h3>{chat_link}</div>
               <div class="section-body">
@@ -1528,8 +1527,8 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
         fb = '<span class="badge-green" style="font-size:.7rem">FB ✓</span>' if s.get("fb_event_sent") else ""
         _photo = s.get("photo_url") or ""
         if _photo:
-            _avatar = ('<img src="' + _photo + '" style="width:32px;height:32px;border-radius:8px;object-fit:cover;flex-shrink:0;transition:transform .2s,box-shadow .2s;cursor:pointer" '
-                      'onmouseover="this.style.transform=\'scale(3)\';this.style.zIndex=\'999\';this.style.position=\'relative\';this.style.boxShadow=\'0 4px 20px rgba(0,0,0,.6)\'" '
+            _avatar = ('<img src="' + _photo + '" style="width:32px;height:32px;border-radius:8px;object-fit:cover;flex-shrink:0;transition:transform .2s,box-shadow .2s;cursor:pointer;transform-origin:left center" '
+                      'onmouseover="this.style.transform=\'scale(2)\';this.style.zIndex=\'999\';this.style.position=\'relative\';this.style.boxShadow=\'0 4px 20px rgba(0,0,0,.6)\'" '
                       'onmouseout="this.style.transform=\'scale(1)\';this.style.zIndex=\'auto\'" />')
         else:
             _avatar = '<div style="width:32px;height:32px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0">👤</div>'
@@ -2998,6 +2997,17 @@ document.addEventListener('click',function(e){{
 <noscript><img height="1" width="1" style="display:none"
   src="https://www.facebook.com/tr?id={pixel_id}&ev=PageView&noscript=1"/></noscript>
 <!-- End Facebook Pixel -->"""
+
+
+def _tiktok_pixel_js(pixel_id: str) -> str:
+    """TikTok Pixel код"""
+    if not pixel_id:
+        return ""
+    return f"""<!-- TikTok Pixel -->
+<script>
+!function(w,d,t){{w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"],ttq.setAndDefer=function(t,e){{t[e]=function(){{t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}}}; for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){{for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e}},ttq.load=function(e,n){{var i="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{{}},ttq._i[e]=[],ttq._i[e]._u=i,ttq._t=ttq._t||{{}},ttq._t[e]=+new Date,ttq._o=ttq._o||{{}},ttq._o[e]=n||{{}};var o=document.createElement("script");o.type="text/javascript",o.async=!0,o.src=i+"?sdkid="+e+"&lib="+t;var a=document.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)}};ttq.load('{pixel_id}');ttq.page();}}(window,document,'ttq');
+</script>
+<!-- End TikTok Pixel -->"""
 
 
 def _build_buttons(contacts: list) -> str:

@@ -4208,96 +4208,97 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               </div>
             </div>
             <script>
-            const TGA_CONV_ID={conv_id};
-            const tgaMsgBox=document.getElementById('tga-msgs');
-            if(tgaMsgBox)tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
-            let lastTgAId=(()=>{{const m=document.querySelectorAll('#tga-msgs .msg[data-id]');return m.length?m[m.length-1].dataset.id:0}})();
+            var TGA_CONV_ID={conv_id};
+            var TGA_SF='{status_filter}';
+            var tgaMsgBox=document.getElementById('tga-msgs');
+            if(tgaMsgBox) tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
+            var lastTgAId=(function(){{var m=document.querySelectorAll('#tga-msgs .msg[data-id]');return m.length?m[m.length-1].dataset.id:0;}})();
+            function escTga(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}}
             async function sendTgAccMsg(){{
-              const inp=document.getElementById('tga-inp');const text=inp.value.trim();if(!text)return;inp.value='';
-              const r=await fetch('/tg_account/send',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+TGA_CONV_ID+'&text='+encodeURIComponent(text)}});
-              const d=await r.json();if(!d.ok)alert('Ошибка: '+(d.error||''));else loadNewTgAccMsgs();
+              var inp=document.getElementById('tga-inp');
+              var text=inp.value.trim();if(!text)return;inp.value='';
+              try{{
+                var r=await fetch('/tg_account/send',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+TGA_CONV_ID+'&text='+encodeURIComponent(text)}});
+                var d=await r.json();if(!d.ok)alert('Ошибка: '+(d.error||''));else loadNewTgAccMsgs();
+              }}catch(e){{alert('Ошибка отправки: '+e.message);}}
             }}
             async function sendTgAccFile(input){{
               if(!input.files[0])return;
-              const fd=new FormData();fd.append('conv_id',TGA_CONV_ID);fd.append('file',input.files[0]);
-              const r=await fetch('/tg_account/send_media',{{method:'POST',body:fd}});
-              const d=await r.json();if(!d.ok)alert('Ошибка: '+(d.error||''));else loadNewTgAccMsgs();input.value='';
+              var fd=new FormData();fd.append('conv_id',TGA_CONV_ID);fd.append('file',input.files[0]);
+              try{{
+                var r=await fetch('/tg_account/send_media',{{method:'POST',body:fd}});
+                var d=await r.json();if(!d.ok)alert('Ошибка: '+(d.error||''));else loadNewTgAccMsgs();
+              }}catch(e){{alert('Ошибка: '+e.message);}}
+              input.value='';
             }}
             async function loadNewTgAccMsgs(){{
-              const res=await fetch('/api/tg_account_messages/{conv_id}?after='+lastTgAId);
-              if(!res.ok)return;const data=await res.json();
-              if(!data.messages||!data.messages.length)return;
-              data.messages.forEach(m=>{{
-                const d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
-                let inner=m.media_url&&m.media_type&&m.media_type.startsWith('image/')
-                  ?'<img src="'+m.media_url+'" style="max-width:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)"/>'
-                  :m.media_url?'<a href="'+m.media_url+'" target="_blank" style="color:#60a5fa">📎 Открыть файл</a>':(m.content||'');
-                const sl=m.sender_name&&m.sender_type==='manager'?'<div style="font-size:.68rem;color:var(--orange);margin-bottom:2px;text-align:right;opacity:.8">'+m.sender_name+'</div>':'';
-                d.innerHTML=sl+'<div class="msg-bubble">'+inner+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
-                tgaMsgBox.appendChild(d);lastTgAId=m.id;
-              }});tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
+              try{{
+                var res=await fetch('/api/tg_account_messages/{conv_id}?after='+lastTgAId);
+                if(!res.ok)return;var data=await res.json();
+                if(!data.messages||!data.messages.length)return;
+                data.messages.forEach(function(m){{
+                  var d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
+                  var inner=m.media_url&&m.media_type&&m.media_type.startsWith('image/')
+                    ?'<img src="'+m.media_url+'" style="max-width:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)"/>'
+                    :m.media_url?'<a href="'+m.media_url+'" target="_blank" style="color:#60a5fa">Открыть файл</a>':escTga(m.content||'');
+                  var sl=m.sender_name&&m.sender_type==='manager'?'<div style="font-size:.68rem;color:var(--orange);margin-bottom:2px;text-align:right;opacity:.8">'+escTga(m.sender_name)+'</div>':'';
+                  d.innerHTML=sl+'<div class="msg-bubble">'+inner+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
+                  tgaMsgBox.appendChild(d);lastTgAId=m.id;
+                }});
+                tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
+              }}catch(e){{}}
             }}
             async function deleteTgAccConv(id){{
-              const btn=document.querySelector('[onclick*="deleteTgAccConv"]');
-              if(btn){{btn.textContent='⏳';btn.disabled=true;}}
+              var btn=document.querySelector('[onclick*="deleteTgAccConv"]');
+              if(btn){{btn.textContent='...';btn.disabled=true;}}
               try{{
-                const r=await fetch('/tg_account/delete',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+id}});
-                if(r.status===401){{alert('Нет прав');if(btn){{btn.textContent='🗑 Удалить';btn.disabled=false;}}return;}}
-                const d=await r.json();
-                if(d.ok) window.location.href='/tg_account/chat?status_filter={status_filter}';
-                else{{alert('Ошибка: '+(d.error||r.status));if(btn){{btn.textContent='🗑 Удалить';btn.disabled=false;}}}}
-              }}catch(e){{alert('Ошибка: '+e.message);if(btn){{btn.textContent='🗑 Удалить';btn.disabled=false;}}}}
+                var r=await fetch('/tg_account/delete',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+id}});
+                var d=await r.json();
+                if(d.ok) window.location.href='/tg_account/chat?status_filter='+TGA_SF;
+                else{{alert('Ошибка: '+(d.error||r.status));if(btn){{btn.textContent='Удалить';btn.disabled=false;}}}}
+              }}catch(e){{alert('Ошибка: '+e.message);if(btn){{btn.textContent='Удалить';btn.disabled=false;}}}}
             }}
-            function escTg(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}}
-            // Авто-обновление сообщений каждые 3 сек
-            setInterval(loadNewTgAccMsgs, 3000);
-            // Авто-обновление списка диалогов каждые 4 сек
-            const ACTIVE_TGA_CONV_ID = {conv_id or 0};
-            let _knownTgIds = new Set([{','.join(str(c['id']) for c in convs)}]);
+            setInterval(loadNewTgAccMsgs,3000);
+            var ACTIVE_TGA_CONV_ID={conv_id};
+            var _knownTgIds=new Set([{','.join(str(c['id']) for c in convs)}]);
             setInterval(async function(){{
-              try {{
-                const res = await fetch('/api/tg_account_convs');
-                const data = await res.json();
-                if(!data.convs) return;
-                const list = document.getElementById('tg-conv-items');
-                if(!list) return;
-                const newIds = new Set(data.convs.map(c=>c.id));
-                const hasNew = [...newIds].some(id=>!_knownTgIds.has(id));
-                // Обновляем счётчики и превью
-                data.convs.forEach(c=>{{
-                  const item = list.querySelector('[data-conv-id="'+c.id+'"]');
+              try{{
+                var res=await fetch('/api/tg_account_convs');
+                var data=await res.json();
+                if(!data.convs)return;
+                var list=document.getElementById('tg-conv-items');
+                if(!list)return;
+                var newIds=new Set(data.convs.map(function(c){{return c.id;}}));
+                var hasNew=[...newIds].some(function(id){{return!_knownTgIds.has(id);}});
+                data.convs.forEach(function(c){{
+                  var item=list.querySelector('[data-conv-id="'+c.id+'"]');
                   if(item){{
-                    const badge = item.querySelector('.unread-badge');
+                    var badge=item.querySelector('.unread-badge');
                     if(c.unread_count>0){{
-                      if(badge) badge.textContent=c.unread_count;
-                      else{{const b=document.createElement('span');b.className='unread-num unread-badge';b.textContent=c.unread_count;item.querySelector('.conv-name')?.appendChild(b);}}
-                    }} else if(badge) badge.remove();
-                    const prev=item.querySelector('.conv-preview');
-                    if(prev) prev.textContent=c.last_message||'Нет сообщений';
+                      if(badge)badge.textContent=c.unread_count;
+                      else{{var b=document.createElement('span');b.className='unread-num unread-badge';b.textContent=c.unread_count;var nm=item.querySelector('.conv-name');if(nm)nm.appendChild(b);}}
+                    }}else if(badge)badge.remove();
+                    var prev=item.querySelector('.conv-preview');
+                    if(prev)prev.textContent=c.last_message||'Нет сообщений';
                   }}
                 }});
                 if(hasNew){{
-                  _knownTgIds = newIds;
-                  list.innerHTML = data.convs.map(c=>{{
-                    const active = c.id===ACTIVE_TGA_CONV_ID?' active':'';
-                    const dot = c.status==='open'?'🟢':'⚫';
-                    const badge = c.unread_count>0?'<span class="unread-num unread-badge">'+c.unread_count+'</span>':'';
-                    const src = c.fbclid?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
-                    let utm='';
-                    if(c.utm_campaign) utm+='<span class="utm-tag">🎯 '+escTg(c.utm_campaign.substring(0,25))+'</span>';
-                    if(c.utm_content)  utm+='<span class="utm-tag" style="background:#1a2a1a;color:#86efac">📌 '+escTg(c.utm_content.substring(0,20))+'</span>';
-                    if(c.utm_term)     utm+='<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc">📂 '+escTg(c.utm_term.substring(0,20))+'</span>';
-                    const utmLine = utm?'<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">'+utm+'</div>':'';
+                  _knownTgIds=newIds;
+                  list.innerHTML=data.convs.map(function(c){{
+                    var active=c.id===ACTIVE_TGA_CONV_ID?' active':'';
+                    var dot=c.status==='open'?'🟢':'⚫';
+                    var bdg=c.unread_count>0?'<span class="unread-num unread-badge">'+c.unread_count+'</span>':'';
+                    var src=c.fbclid?'<span class="source-badge source-fb">FB</span>':'<span class="source-badge source-organic">organic</span>';
                     return '<a href="/tg_account/chat?conv_id='+c.id+'"><div class="conv-item'+active+'" data-conv-id="'+c.id+'">'
-                      +'<div class="conv-name"><span>'+dot+' '+escTg(c.visitor_name)+'</span>'+badge+'</div>'
-                      +'<div style="font-size:.75rem;color:var(--text3)">@'+escTg(c.username)+'</div>'
-                      +'<div class="conv-preview">'+escTg(c.last_message||'Нет сообщений')+'</div>'
-                      +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">'+c.last_message_at.substring(11,16)+' '+src+'</div>'
-                      +utmLine+'</div></a>';
+                      +'<div class="conv-name"><span>'+dot+' '+escTga(c.visitor_name)+'</span>'+bdg+'</div>'
+                      +'<div style="font-size:.75rem;color:var(--text3)">@'+escTga(c.username)+'</div>'
+                      +'<div class="conv-preview">'+escTga(c.last_message||'Нет сообщений')+'</div>'
+                      +'<div class="conv-time">'+c.last_message_at.substring(11,16)+' '+src+'</div>'
+                      +'</div></a>';
                   }}).join('')||'<div style="padding:20px;text-align:center;color:var(--text3)">Нет диалогов</div>';
                 }}
-              }} catch(e){{}}
-            }}, 4000);
+              }}catch(e){{}}
+            }},4000);
             </script>"""
 
     content_html = f"""<div style="display:grid;grid-template-columns:300px 1fr;height:calc(100vh - 64px);overflow:hidden">

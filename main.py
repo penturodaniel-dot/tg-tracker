@@ -277,7 +277,7 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
 .conv-preview{font-size:.75rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .conv-time{font-size:.68rem;color:var(--text3);margin-top:3px}
 .unread-num{background:var(--orange);color:#fff;border-radius:99px;padding:1px 7px;font-size:.67rem;font-weight:700}
-.chat-window{display:flex;flex-direction:column;height:calc(100vh - 64px);overflow:hidden}
+.chat-window{display:flex;flex-direction:column;overflow:hidden}
 .chat-header{padding:14px 18px;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;gap:10px}
 .chat-messages{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
 .msg{max-width:68%;word-break:break-word}

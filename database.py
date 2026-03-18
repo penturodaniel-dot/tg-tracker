@@ -247,6 +247,16 @@ class Database:
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_name TEXT DEFAULT ''",
                     "ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS sender_name TEXT DEFAULT ''",
                 ]
+                # Таблица галереи фото сотрудников
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS staff_gallery (
+                        id         SERIAL PRIMARY KEY,
+                        staff_id   INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+                        photo_url  TEXT NOT NULL,
+                        caption    TEXT DEFAULT '',
+                        created_at TEXT NOT NULL
+                    )
+                """)
                 for m in migrations:
                     try:
                         cur.execute(m)
@@ -812,6 +822,32 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("UPDATE staff SET photo_url=%s WHERE id=%s", (photo_url, staff_id))
             conn.commit()
+
+    # ── Галерея фото сотрудника ───────────────────────────────────────────────
+    def add_staff_gallery_photo(self, staff_id: int, photo_url: str, caption: str = "") -> dict:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO staff_gallery (staff_id, photo_url, caption, created_at) VALUES (%s,%s,%s,%s) RETURNING *",
+                    (staff_id, photo_url, caption, datetime.utcnow().isoformat())
+                )
+                r = cur.fetchone()
+            conn.commit()
+            return dict(r)
+
+    def get_staff_gallery(self, staff_id: int) -> list:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM staff_gallery WHERE staff_id=%s ORDER BY created_at ASC", (staff_id,))
+                return [dict(r) for r in cur.fetchall()]
+
+    def delete_staff_gallery_photo(self, photo_id: int, staff_id: int) -> bool:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM staff_gallery WHERE id=%s AND staff_id=%s", (photo_id, staff_id))
+                deleted = cur.rowcount > 0
+            conn.commit()
+            return deleted
 
     def get_staff_by_id(self, staff_id):
         with self._conn() as conn:

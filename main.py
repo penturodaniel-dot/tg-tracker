@@ -288,6 +288,28 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
 .tga-avatar-wrap:hover .tga-avatar-zoom{display:block}
 .tga-avatar-zoom{display:none;position:absolute;top:48px;left:0;z-index:999;width:100px;height:100px;border-radius:10px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.6);border:2px solid var(--orange)}
 .tga-avatar-zoom img{width:100%;height:100%;object-fit:cover}
+
+/* ── STAFF PHOTO HOVER ────────────────────────────── */
+.staff-photo-wrap{position:relative;display:inline-block;cursor:pointer}
+.staff-photo-wrap:hover .staff-photo-popup{display:flex}
+.staff-photo-popup{display:none;position:fixed;z-index:9999;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.75);align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.staff-photo-popup img{width:500px;height:500px;object-fit:cover;border-radius:16px;box-shadow:0 16px 64px rgba(0,0,0,.8);border:2px solid var(--border2)}
+.staff-photo-popup-btns{display:flex;gap:10px}
+.staff-photo-popup-btns a{padding:8px 18px;border-radius:8px;font-size:.82rem;font-weight:600;text-decoration:none;cursor:pointer}
+
+/* ── STAFF GALLERY ─────────────────────────────────── */
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:10px}
+.gallery-item{position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1;background:var(--bg3);cursor:pointer;border:2px solid transparent;transition:border-color .15s}
+.gallery-item:hover{border-color:var(--orange)}
+.gallery-item img{width:100%;height:100%;object-fit:cover;display:block}
+.gallery-item-del{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.7);color:#fff;border:none;border-radius:5px;width:22px;height:22px;font-size:.75rem;cursor:pointer;display:none;align-items:center;justify-content:center;line-height:1}
+.gallery-item:hover .gallery-item-del{display:flex}
+.gallery-lightbox{display:none;position:fixed;z-index:9999;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.88);align-items:center;justify-content:center;flex-direction:column;gap:14px}
+.gallery-lightbox.open{display:flex}
+.gallery-lightbox img{max-width:min(500px,90vw);max-height:min(500px,80vh);object-fit:contain;border-radius:14px;box-shadow:0 16px 64px rgba(0,0,0,.8);border:2px solid var(--border2)}
+.gallery-lightbox-btns{display:flex;gap:10px;align-items:center}
+.gallery-lightbox-close{position:absolute;top:20px;right:24px;color:#fff;font-size:1.6rem;cursor:pointer;opacity:.7;line-height:1}
+.gallery-lightbox-close:hover{opacity:1}
 .chat-messages{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
 .msg{max-width:68%;word-break:break-word}
 .msg.visitor{align-self:flex-start}.msg.manager{align-self:flex-end}
@@ -1568,20 +1590,51 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                 for u in db.get_users()
             )
             if s.get("photo_url"):
-                photo_html = '<img src="' + s["photo_url"] + '" style="width:200px;height:200px;border-radius:12px;object-fit:cover;border:2px solid var(--border)" />'
+                _purl = s["photo_url"]
+                _pid  = s['id']
+                photo_html = (
+                    f'<div class="staff-photo-wrap" id="edit-photo-wrap">'
+                    f'<img src="{_purl}" style="width:200px;height:200px;border-radius:12px;object-fit:cover;border:2px solid var(--border);display:block" />'
+                    f'<div class="staff-photo-popup" onclick="event.stopPropagation()">'
+                    f'<span class="gallery-lightbox-close" onclick="this.closest(\'.staff-photo-popup\').style.display=\'none\'">✕</span>'
+                    f'<img src="{_purl}" />'
+                    f'<div class="staff-photo-popup-btns">'
+                    f'<a href="{_purl}" download="photo_{_pid}.jpg" style="background:var(--orange);color:#fff">⬇ Скачать</a>'
+                    f'</div></div></div>'
+                )
             else:
                 photo_html = '<div style="width:200px;height:200px;border-radius:12px;background:var(--bg3);border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:3rem">👤</div>'
+            # Галерея
+            gallery_items = db.get_staff_gallery(s['id'])
+            gallery_html = ""
+            if gallery_items:
+                gallery_html = '<div class="gallery-grid" id="staff-gallery">'
+                for gi in gallery_items:
+                    gi_id   = gi["id"]
+                    gi_url  = gi["photo_url"]
+                    s_id    = s["id"]
+                    gallery_html += (
+                        f'<div class="gallery-item" onclick="openGalleryLightbox(\'{gi_url}\',{gi_id})">'
+                        f'<img src="{gi_url}" loading="lazy" />'
+                        f'<button class="gallery-item-del" onclick="event.stopPropagation();deleteGalleryPhoto({gi_id},{s_id})" title="Удалить">✕</button>'
+                        f'</div>'
+                    )
+                gallery_html += '</div>'
+            else:
+                gallery_html = '<div style="color:var(--text3);font-size:.82rem;padding:8px 0">Нет дополнительных фото</div>'
             edit_form = f"""<div class="section" style="margin-bottom:18px;border-left:3px solid #f97316">
               <div class="section-head"><h3>✏️ {s.get('name','Карточка')}</h3>{chat_link}</div>
               <div class="section-body">
                 <form method="post" action="/staff/update" enctype="multipart/form-data">
                   <input type="hidden" name="staff_id" value="{s['id']}"/>
-                  <div style="margin-bottom:16px;display:flex;align-items:center;gap:16px">
+                  <div style="margin-bottom:16px;display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
                     {photo_html}
-                    <div>
-                      <div class="field-label" style="margin-bottom:6px">Фото сотрудника</div>
-                      <input type="file" name="staff_photo" accept="image/*" style="font-size:.82rem;color:var(--text3)"/>
-                      <div style="font-size:.72rem;color:var(--text3);margin-top:4px">JPG, PNG до 5MB</div>
+                    <div style="display:flex;flex-direction:column;gap:10px">
+                      <div>
+                        <div class="field-label" style="margin-bottom:6px">Главное фото</div>
+                        <input type="file" name="staff_photo" accept="image/*" style="font-size:.82rem;color:var(--text3)"/>
+                        <div style="font-size:.72rem;color:var(--text3);margin-top:4px">JPG, PNG до 5MB</div>
+                      </div>
                     </div>
                   </div>
                   <div class="grid-3" style="margin-bottom:12px">
@@ -1604,7 +1657,73 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                     <a href="/staff"><button class="btn-gray" type="button">Отмена</button></a>
                   </div>
                 </form>
-              </div></div>"""
+                <!-- Галерея -->
+                <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                    <div style="font-weight:600;font-size:.9rem">🖼 Галерея фото ({len(gallery_items)})</div>
+                    <label style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:.78rem;cursor:pointer;color:var(--text2);transition:border-color .15s" onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border)'">
+                      ➕ Добавить фото
+                      <input type="file" accept="image/*" multiple style="display:none" onchange="uploadGalleryPhotos(this,{s['id']})"/>
+                    </label>
+                  </div>
+                  {gallery_html}
+                </div>
+              </div></div>
+<!-- Lightbox для галереи -->
+<div class="gallery-lightbox" id="gallery-lightbox">
+  <span class="gallery-lightbox-close" onclick="closeGalleryLightbox()">✕</span>
+  <img src="" id="lightbox-img" />
+  <div class="gallery-lightbox-btns">
+    <a id="lightbox-dl" href="#" download style="background:var(--orange);color:#fff;padding:8px 18px;border-radius:8px;font-size:.82rem;font-weight:600;text-decoration:none">⬇ Скачать</a>
+    <button onclick="closeGalleryLightbox()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 18px;font-size:.82rem;cursor:pointer">Закрыть</button>
+  </div>
+</div>
+<script>
+function openGalleryLightbox(url, id) {{
+  var lb = document.getElementById('gallery-lightbox');
+  var img = document.getElementById('lightbox-img');
+  var dl = document.getElementById('lightbox-dl');
+  if (!lb || !img) return;
+  img.src = url;
+  dl.href = url;
+  dl.download = 'photo_' + id + '.jpg';
+  lb.classList.add('open');
+}}
+function closeGalleryLightbox() {{
+  var lb = document.getElementById('gallery-lightbox');
+  if (lb) lb.classList.remove('open');
+}}
+document.addEventListener('keydown', function(e) {{
+  if (e.key === 'Escape') closeGalleryLightbox();
+}});
+async function uploadGalleryPhotos(input, staffId) {{
+  if (!input.files || !input.files.length) return;
+  var files = Array.from(input.files);
+  var uploaded = 0;
+  for (var i = 0; i < files.length; i++) {{
+    var fd = new FormData();
+    fd.append('staff_id', staffId);
+    fd.append('photo', files[i]);
+    try {{
+      var r = await fetch('/staff/gallery/add', {{method:'POST', body: fd}});
+      var d = await r.json();
+      if (d.ok) uploaded++;
+    }} catch(e) {{ console.error(e); }}
+  }}
+  if (uploaded > 0) window.location.reload();
+  else alert('Ошибка загрузки фото');
+}}
+async function deleteGalleryPhoto(photoId, staffId) {{
+  if (!confirm('Удалить фото из галереи?')) return;
+  var fd = new FormData();
+  fd.append('photo_id', photoId);
+  fd.append('staff_id', staffId);
+  var r = await fetch('/staff/gallery/delete', {{method:'POST', body: fd}});
+  var d = await r.json();
+  if (d.ok) window.location.reload();
+  else alert('Ошибка удаления');
+}}
+</script>"""
 
     rows = ""
     for s in staff_list:
@@ -1612,11 +1731,20 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
         fb = '<span class="badge-green" style="font-size:.7rem">FB ✓</span>' if s.get("fb_event_sent") else ""
         _photo = s.get("photo_url") or ""
         if _photo:
-            _avatar = ('<img src="' + _photo + '" style="width:32px;height:32px;border-radius:8px;object-fit:cover;flex-shrink:0;transition:transform .2s,box-shadow .2s;cursor:pointer;transform-origin:left center" '
-                      'onmouseover="this.style.transform=\'scale(2)\';this.style.zIndex=\'999\';this.style.position=\'relative\';this.style.boxShadow=\'0 4px 20px rgba(0,0,0,.6)\'" '
-                      'onmouseout="this.style.transform=\'scale(1)\';this.style.zIndex=\'auto\'" />')
+            _sid = s['id']
+            _avatar = (
+                f'<div class="staff-photo-wrap" style="flex-shrink:0">'
+                f'<img src="{_photo}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;display:block" />'
+                f'<div class="staff-photo-popup" onclick="event.stopPropagation()">'
+                f'<span class="gallery-lightbox-close" onclick="this.closest(\'.staff-photo-popup\').style.display=\'none\'">✕</span>'
+                f'<img src="{_photo}" />'
+                f'<div class="staff-photo-popup-btns">'
+                f'<a href="{_photo}" download="photo_{_sid}.jpg" style="background:var(--orange);color:#fff">⬇ Скачать</a>'
+                f'<a href="/staff?edit={_sid}" style="background:var(--bg3);color:var(--text);border:1px solid var(--border)">✏️ Карточка</a>'
+                f'</div></div></div>'
+            )
         else:
-            _avatar = '<div style="width:32px;height:32px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0">👤</div>'
+            _avatar = '<div style="width:36px;height:36px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0">👤</div>'
         rows += f"""<tr>
             <td><div style="display:flex;align-items:center;gap:8px">
               {_avatar}
@@ -1696,6 +1824,48 @@ async def staff_delete(request: Request, staff_id: int = Form(...)):
     if err: return err
     db.delete_staff_full(staff_id)
     return RedirectResponse("/staff?msg=Сотрудник+удалён+полностью", 303)
+
+
+@app.post("/staff/gallery/add")
+async def staff_gallery_add(request: Request, staff_id: int = Form(...), photo: UploadFile = File(...)):
+    """Добавить фото в галерею сотрудника"""
+    user, err = require_auth(request)
+    if err: return JSONResponse({"ok": False, "error": "unauthorized"}, 401)
+    if not photo or not photo.filename:
+        return JSONResponse({"ok": False, "error": "no file"})
+    try:
+        import cloudinary, cloudinary.uploader, base64 as _b64
+        photo_data = await photo.read()
+        cld_url = db.get_setting("cloudinary_url") or os.getenv("CLOUDINARY_URL", "")
+        photo_url = None
+        if cld_url:
+            cloudinary.config(cloudinary_url=cld_url)
+            mime = photo.content_type or "image/jpeg"
+            b64 = _b64.b64encode(photo_data).decode()
+            result = cloudinary.uploader.upload(
+                f"data:{mime};base64,{b64}",
+                folder="staff_gallery", resource_type="image"
+            )
+            photo_url = result.get("secure_url")
+        else:
+            mime = photo.content_type or "image/jpeg"
+            photo_url = f"data:{mime};base64,{_b64.b64encode(photo_data).decode()}"
+        if not photo_url:
+            return JSONResponse({"ok": False, "error": "upload failed"})
+        gi = db.add_staff_gallery_photo(staff_id, photo_url)
+        return JSONResponse({"ok": True, "id": gi["id"], "photo_url": photo_url})
+    except Exception as e:
+        log.error(f"[gallery/add] error: {e}")
+        return JSONResponse({"ok": False, "error": str(e)})
+
+
+@app.post("/staff/gallery/delete")
+async def staff_gallery_delete(request: Request, photo_id: int = Form(...), staff_id: int = Form(...)):
+    """Удалить фото из галереи"""
+    user, err = require_auth(request)
+    if err: return JSONResponse({"ok": False, "error": "unauthorized"}, 401)
+    ok = db.delete_staff_gallery_photo(photo_id, staff_id)
+    return JSONResponse({"ok": ok})
 
 
 @app.get("/staff/create_from_conv")

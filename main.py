@@ -290,12 +290,14 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
 .tga-avatar-zoom img{width:100%;height:100%;object-fit:cover}
 
 /* ── STAFF PHOTO HOVER ────────────────────────────── */
-.staff-photo-wrap{position:relative;display:inline-block;cursor:pointer}
-.staff-photo-wrap:hover .staff-photo-popup{display:flex}
-.staff-photo-popup{display:none;position:fixed;z-index:9999;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.75);align-items:center;justify-content:center;flex-direction:column;gap:12px}
-.staff-photo-popup img{width:500px;height:500px;object-fit:cover;border-radius:16px;box-shadow:0 16px 64px rgba(0,0,0,.8);border:2px solid var(--border2)}
+.staff-photo-wrap{position:relative;display:inline-block;flex-shrink:0}
+.staff-photo-popup{display:none;position:fixed;z-index:9999;pointer-events:none;
+  align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.staff-photo-popup.visible{display:flex;pointer-events:auto}
+.staff-photo-popup img{width:500px;height:500px;object-fit:cover;border-radius:16px;
+  box-shadow:0 16px 64px rgba(0,0,0,.8);border:2px solid var(--border2)}
 .staff-photo-popup-btns{display:flex;gap:10px}
-.staff-photo-popup-btns a{padding:8px 18px;border-radius:8px;font-size:.82rem;font-weight:600;text-decoration:none;cursor:pointer}
+.staff-photo-popup-btns a{padding:8px 18px;border-radius:8px;font-size:.82rem;font-weight:600;text-decoration:none;cursor:pointer;background:var(--orange);color:#fff}
 
 /* ── STAFF GALLERY ─────────────────────────────────── */
 .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:10px}
@@ -514,6 +516,57 @@ def nav_html(active: str, request: Request) -> str:
       }}catch(e){{}}
     }}
     setInterval(pollUnread, 5000);
+
+    // ── Staff photo hover popup ──────────────────────────────────────────────
+    (function(){{
+      var _popup = null;
+      var _hideTimer = null;
+
+      function showPopup(wrap){{
+        var popup = wrap.querySelector('.staff-photo-popup');
+        if(!popup) return;
+        if(_hideTimer){{ clearTimeout(_hideTimer); _hideTimer = null; }}
+        // Позиционируем по центру экрана
+        popup.style.top = '0';
+        popup.style.left = '0';
+        popup.style.width = '100vw';
+        popup.style.height = '100vh';
+        popup.style.background = 'rgba(0,0,0,0.78)';
+        popup.classList.add('visible');
+        _popup = popup;
+      }}
+
+      function hidePopup(popup){{
+        if(!popup) return;
+        _hideTimer = setTimeout(function(){{
+          popup.classList.remove('visible');
+          _popup = null;
+          _hideTimer = null;
+        }}, 120);
+      }}
+
+      document.addEventListener('mouseover', function(e){{
+        var wrap = e.target.closest('.staff-photo-wrap');
+        if(wrap){{ showPopup(wrap); return; }}
+        var popup = e.target.closest('.staff-photo-popup');
+        if(popup){{ if(_hideTimer){{ clearTimeout(_hideTimer); _hideTimer = null; }} return; }}
+        // мышь ушла со всего
+        if(_popup && !_popup.contains(e.target)){{
+          // проверяем что мышь не на wrap
+          var onWrap = e.target.closest('.staff-photo-wrap');
+          if(!onWrap) hidePopup(_popup);
+        }}
+      }});
+
+      document.addEventListener('mouseout', function(e){{
+        if(!_popup) return;
+        var to = e.relatedTarget;
+        if(!to) {{ hidePopup(_popup); return; }}
+        var onWrap  = to.closest('.staff-photo-wrap');
+        var onPopup = to.closest('.staff-photo-popup');
+        if(!onWrap && !onPopup) hidePopup(_popup);
+      }});
+    }})();
     </script>"""
 
 
@@ -1595,11 +1648,10 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                 photo_html = (
                     f'<div class="staff-photo-wrap" id="edit-photo-wrap">'
                     f'<img src="{_purl}" style="width:200px;height:200px;border-radius:12px;object-fit:cover;border:2px solid var(--border);display:block" />'
-                    f'<div class="staff-photo-popup" onclick="event.stopPropagation()">'
-                    f'<span class="gallery-lightbox-close" onclick="this.closest(\'.staff-photo-popup\').style.display=\'none\'">✕</span>'
+                    f'<div class="staff-photo-popup">'
                     f'<img src="{_purl}" />'
                     f'<div class="staff-photo-popup-btns">'
-                    f'<a href="{_purl}" download="photo_{_pid}.jpg" style="background:var(--orange);color:#fff">⬇ Скачать</a>'
+                    f'<a href="{_purl}" download="photo_{_pid}.jpg">⬇ Скачать</a>'
                     f'</div></div></div>'
                 )
             else:
@@ -1733,13 +1785,12 @@ async function deleteGalleryPhoto(photoId, staffId) {{
         if _photo:
             _sid = s['id']
             _avatar = (
-                f'<div class="staff-photo-wrap" style="flex-shrink:0">'
+                f'<div class="staff-photo-wrap">'
                 f'<img src="{_photo}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;display:block" />'
-                f'<div class="staff-photo-popup" onclick="event.stopPropagation()">'
-                f'<span class="gallery-lightbox-close" onclick="this.closest(\'.staff-photo-popup\').style.display=\'none\'">✕</span>'
+                f'<div class="staff-photo-popup">'
                 f'<img src="{_photo}" />'
                 f'<div class="staff-photo-popup-btns">'
-                f'<a href="{_photo}" download="photo_{_sid}.jpg" style="background:var(--orange);color:#fff">⬇ Скачать</a>'
+                f'<a href="{_photo}" download="photo_{_sid}.jpg">⬇ Скачать</a>'
                 f'<a href="/staff?edit={_sid}" style="background:var(--bg3);color:var(--text);border:1px solid var(--border)">✏️ Карточка</a>'
                 f'</div></div></div>'
             )

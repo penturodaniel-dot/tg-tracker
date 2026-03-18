@@ -163,6 +163,11 @@ CSS = """<style>
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;-webkit-font-smoothing:antialiased}
+*::-webkit-scrollbar{width:4px;height:4px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+*::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+*{scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
 a{color:inherit;text-decoration:none}
 
 /* ── SIDEBAR ─────────────────────────────────────── */
@@ -277,8 +282,12 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
 .conv-preview{font-size:.75rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .conv-time{font-size:.68rem;color:var(--text3);margin-top:3px}
 .unread-num{background:var(--orange);color:#fff;border-radius:99px;padding:1px 7px;font-size:.67rem;font-weight:700}
-.chat-window{display:flex;flex-direction:column;overflow:hidden}
+.chat-window{display:flex;flex-direction:column;height:calc(100vh - 64px);overflow:hidden}
 .chat-header{padding:14px 18px;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;gap:10px}
+.tga-avatar-wrap{position:relative;flex-shrink:0;cursor:pointer}
+.tga-avatar-wrap:hover .tga-avatar-zoom{display:block}
+.tga-avatar-zoom{display:none;position:absolute;top:48px;left:0;z-index:999;width:100px;height:100px;border-radius:10px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.6);border:2px solid var(--orange)}
+.tga-avatar-zoom img{width:100%;height:100%;object-fit:cover}
 .chat-messages{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
 .msg{max-width:68%;word-break:break-word}
 .msg.visitor{align-self:flex-start}.msg.manager{align-self:flex-end}
@@ -407,7 +416,8 @@ def nav_html(active: str, request: Request) -> str:
       <div class="sidebar-footer">
         <div class="bot-status"><div class="dot {'dot-green' if b1 else 'dot-red'}"></div><span>{b1_name}</span></div>
         <div class="bot-status"><div class="dot {'dot-green' if b2 else 'dot-red'}"></div><span>{b2_name}</span></div>
-        <div class="bot-status"><div class="dot {wa_dot}"></div><span>WhatsApp {'✓' if wa_status == 'ready' else ('QR...' if wa_status == 'qr' else '✗')}</span></div>
+        <div class="bot-status"><div class="dot {wa_dot}"></div><span id="nav-wa-status">WhatsApp {'✓' if wa_status == 'ready' else ('QR...' if wa_status == 'qr' else '✗')}</span></div>
+        <div class="bot-status"><div class="dot {'dot-green' if db.get_setting('tg_account_status') == 'connected' else 'dot-red'}" id="nav-tg-dot"></div><span id="nav-tg-status">TG {'✓' if db.get_setting('tg_account_status') == 'connected' else '✗'}</span></div>
         <a href="/logout"><div style="padding:6px 8px;margin-top:4px;font-size:.73rem;color:var(--text3);cursor:pointer;border-radius:6px;transition:color .12s" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text3)'">⬅ Выйти</div></a>
       </div>
     </div>
@@ -466,6 +476,19 @@ def nav_html(active: str, request: Request) -> str:
         if(d.wa_unread > _lastWaUnread) showToast('💚 Новое сообщение', 'WhatsApp чаты', 'wa-toast', '/wa/chat');
         if(d.tga_unread > _lastTgaUnread) showToast('📱 Новое сообщение', 'TG Чаты', 'tga-toast', '/tg_account/chat');
         _lastTgUnread = d.unread || 0; _lastWaUnread = d.wa_unread || 0; _lastTgaUnread = d.tga_unread || 0;
+        // Задача 2: обновляем статус в сайдбаре
+        var waDot=document.querySelector('#nav-wa-status');
+        if(waDot && d.wa_status!==undefined){{
+          waDot.textContent=d.wa_status==='ready'?'WhatsApp ✓':(d.wa_status==='qr'?'WhatsApp QR...':'WhatsApp ✗');
+          var waDotEl=waDot.previousElementSibling;
+          if(waDotEl){{waDotEl.className='dot '+(d.wa_status==='ready'?'dot-green':'dot-red');}}
+        }}
+        var tgDot=document.querySelector('#nav-tg-dot');
+        if(tgDot && d.tg_status!==undefined){{
+          tgDot.className='dot '+(d.tg_status==='connected'?'dot-green':'dot-red');
+          var tgSt=document.querySelector('#nav-tg-status');
+          if(tgSt)tgSt.textContent=d.tg_status==='connected'?'TG ✓':'TG ✗';
+        }}
       }}catch(e){{}}
     }}
     setInterval(pollUnread, 5000);
@@ -890,8 +913,11 @@ async def analytics_staff(request: Request,
     by_day     = db.get_staff_by_day(days=days, date_from=df, date_to=dt)
     msg_day    = db.get_messages_by_day(days=days, date_from=df, date_to=dt)
     wa_day     = db.get_wa_messages_by_day(days=days, date_from=df, date_to=dt)
+    tga_day    = db.get_tga_messages_by_day(days=days, date_from=df, date_to=dt)
     msg_sum    = db.get_messages_summary(days=days, date_from=df, date_to=dt)
+    tga_sum    = db.get_tga_messages_summary(days=days, date_from=df, date_to=dt)
     wa_stats   = db.get_wa_stats()
+    tga_stats  = db.get_tga_stats()
     funnel     = db.get_staff_funnel(date_from=df, date_to=dt)
     resp_stats = db.get_staff_response_stats(days=days, date_from=df, date_to=dt)
 
@@ -985,8 +1011,11 @@ async def analytics_staff(request: Request,
       {kpi(summary['s_hired'], 'В работе', f'{conv_hire}% конверсия', '#34d399')}
       {kpi(summary['s_interview'], 'На интервью', '', '#f59e0b')}
       {kpi(summary['s_rejected'], 'Сливов', '', '#f87171')}
-      {kpi(msg_sum['total'], 'Сообщений TG', f"{msg_sum['incoming']} вх / {msg_sum['outgoing']} исх")}
-      {kpi(msg_sum['active_convos'], 'Активных TG чатов', '')}
+      {kpi(msg_sum['total'], 'Сообщений TG бот', f"{msg_sum['incoming']} вх / {msg_sum['outgoing']} исх")}
+      {kpi(msg_sum['active_convos'], 'Активных TG бот чатов', '')}
+      {kpi(tga_stats.get('total_convs', 0), 'TG аккаунт чатов', f"{tga_stats.get('open_convs',0)} открытых", '#2ca5e0')}
+      {kpi(tga_stats.get('total_msgs', 0), 'Сообщений TG акк', f"{tga_stats.get('incoming',0)} вх / {tga_stats.get('outgoing',0)} исх", '#2ca5e0')}
+      {kpi(tga_stats.get('fb_convs', 0), 'TG акк с FB', 'с fbclid', '#1877f2')}
       {kpi(wa_stats.get('total_convs', 0), 'WA чатов всего', f"{wa_stats.get('open_convs',0)} открытых", '#25d366')}
       {kpi(wa_stats.get('total_msgs', 0), 'Сообщений WA', f"{wa_stats.get('incoming',0)} вх / {wa_stats.get('outgoing',0)} исх", '#25d366')}
     </div>
@@ -997,8 +1026,12 @@ async def analytics_staff(request: Request,
         <div class="section-body">{sparkline(by_day, 'cnt', '#f97316')}</div>
       </div>
       <div class="section">
-        <div class="section-head"><h3>💬 Сообщения TG по дням</h3></div>
+        <div class="section-head"><h3>💬 Сообщения TG бот по дням</h3></div>
         <div class="section-body">{sparkline(msg_day, 'total', '#60a5fa')}</div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h3>📱 Сообщения TG аккаунт по дням</h3></div>
+        <div class="section-body">{sparkline(tga_day, 'total', '#2ca5e0')}</div>
       </div>
       <div class="section">
         <div class="section-head"><h3>💚 Сообщения WA по дням</h3></div>
@@ -1009,6 +1042,55 @@ async def analytics_staff(request: Request,
     <div class="section">
       <div class="section-head"><h3>🎯 Воронка найма</h3></div>
       <div class="section-body"><div style="display:flex;flex-direction:column;gap:12px;max-width:500px">{funnel_html}</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+      <div class="section">
+        <div class="section-head"><h3>📱 TG Аккаунт — сводка за период</h3></div>
+        <div class="section-body">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+              <span style="color:var(--text3)">Сообщений всего</span>
+              <span style="font-weight:700;color:#2ca5e0">{tga_sum['total']}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+              <span style="color:var(--text3)">Входящих</span>
+              <span style="font-weight:700">{tga_sum['incoming']}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+              <span style="color:var(--text3)">Исходящих</span>
+              <span style="font-weight:700">{tga_sum['outgoing']}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0">
+              <span style="color:var(--text3)">Активных диалогов</span>
+              <span style="font-weight:700">{tga_sum['active_convos']}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h3>💚 WhatsApp — сводка за период</h3></div>
+        <div class="section-body">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+              <span style="color:var(--text3)">Сообщений всего</span>
+              <span style="font-weight:700;color:#25d366">{wa_stats.get('total_msgs', 0)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+              <span style="color:var(--text3)">Входящих</span>
+              <span style="font-weight:700">{wa_stats.get('incoming', 0)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+              <span style="color:var(--text3)">Исходящих</span>
+              <span style="font-weight:700">{wa_stats.get('outgoing', 0)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0">
+              <span style="color:var(--text3)">Открытых чатов</span>
+              <span style="font-weight:700">{wa_stats.get('open_convs', 0)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="section">
@@ -1655,6 +1737,27 @@ async def staff_create_from_wa(request: Request, conv_id: int = 0):
         wa_conv_id=conv_id,
         name=conv.get("visitor_name","Новый"),
         wa_number=conv.get("wa_number","")
+    )
+    return RedirectResponse(f"/staff?edit={staff['id']}", 303)
+
+
+@app.get("/staff/create_from_tga")
+async def staff_create_from_tga(request: Request, conv_id: int = 0):
+    """Создать карточку сотрудника из TG аккаунт чата"""
+    user, err = require_auth(request)
+    if err: return err
+    if not conv_id:
+        return RedirectResponse("/tg_account/chat", 303)
+    conv = db.get_tg_account_conversation(conv_id)
+    if not conv:
+        return RedirectResponse("/tg_account/chat", 303)
+    existing = db.get_staff_by_tg_account_conv(conv_id)
+    if existing:
+        return RedirectResponse(f"/staff?edit={existing['id']}", 303)
+    staff = db.get_or_create_tga_staff(
+        tga_conv_id=conv_id,
+        name=conv.get("visitor_name", "Новый"),
+        username=conv.get("username", "")
     )
     return RedirectResponse(f"/staff?edit={staff['id']}", 303)
 
@@ -2697,9 +2800,11 @@ async def public_landing(request: Request, slug: str,
             contacts = db.get_landing_contacts(campaign["landing_id"]) if landing else []
             if landing:
                 chan_contacts = [{"type": "telegram", "label": b["label"], "url": b["url"]} for b in btns]
-                return HTMLResponse(_render_client_landing(landing, chan_contacts, pixel_id=pixel_id))
+                tt_pixel = db.get_setting("tiktok_pixel_id", "") or ""
+                return HTMLResponse(_render_client_landing(landing, chan_contacts, pixel_id=pixel_id, tt_pixel=tt_pixel))
 
-        return HTMLResponse(_render_campaign_landing(campaign, btns, pixel_id, fbclid))
+        tt_pixel = db.get_setting("tiktok_pixel_id", "") or ""
+        return HTMLResponse(_render_campaign_landing(campaign, btns, pixel_id, fbclid, tt_pixel))
 
     # Staff Landing slug
     landing = db.get_landing_by_slug(slug)
@@ -2775,7 +2880,7 @@ async def go_staff_redirect(request: Request, ref: str = ""):
     <div>Перенаправляем...</div></div></body></html>""")
 
 
-def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = None) -> str:
+def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = None, tt_pixel: str = "") -> str:
     """Лендинг кампании — показывает все каналы как кнопки подписки"""
     btn_html = ""
     for b in btns:
@@ -2875,6 +2980,7 @@ def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = 
       </div>
     </div>
     {pixel_js}
+    {_tiktok_pixel_js(tt_pixel)}
     <script>
     // Сохраняем fbp cookie если нет (нужен для CAPI matching)
     (function(){{
@@ -2887,7 +2993,7 @@ def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = 
     </body></html>"""
 
 
-def _render_client_landing(landing, contacts, pixel_id: str = "") -> str:
+def _render_client_landing(landing, contacts, pixel_id: str = "", tt_pixel: str = "") -> str:
     btn_html = ""
     for c in contacts:
         if c["type"] == "telegram":
@@ -2900,7 +3006,7 @@ def _render_client_landing(landing, contacts, pixel_id: str = "") -> str:
     if not btn_html:
         btn_html = '<p style="color:rgba(255,255,255,.5);text-align:center">Контакты не настроены</p>'
 
-    tt_pixel_id = db.get_setting("tt_pixel_id", "")
+    tt_pixel_id = tt_pixel or db.get_setting("tiktok_pixel_id", "") or db.get_setting("tt_pixel_id", "")
     px = _pixel_js(pixel_id) + _tiktok_pixel_js(tt_pixel_id)
 
     return f"""<!DOCTYPE html><html lang="en"><head>
@@ -3039,7 +3145,7 @@ def _render_staff_landing(landing: dict, contacts: list, pixel_id: str = "") -> 
     except:
         template = "massage_job"
 
-    tt_pixel_id = db.get_setting("tt_pixel_id", "")
+    tt_pixel_id = db.get_setting("tiktok_pixel_id", "") or db.get_setting("tt_pixel_id", "")
     px   = _pixel_js(pixel_id) + _tiktok_pixel_js(tt_pixel_id)
     year = __import__('datetime').datetime.now().year
     name = landing.get("name","HR")
@@ -3375,7 +3481,10 @@ async def api_messages(request: Request, conv_id: int, after: int = 0):
 async def api_stats(request: Request):
     user = check_session(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
-    return JSONResponse(db.get_stats())
+    stats = db.get_stats()
+    stats["wa_status"] = db.get_setting("wa_status", "disconnected")
+    stats["tg_status"] = db.get_setting("tg_account_status", "disconnected")
+    return JSONResponse(stats)
 
 
 @app.get("/api/wa_convs")
@@ -3636,17 +3745,24 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             # Карточка сотрудника для WA
             wa_staff = db.get_staff_by_wa_conv(conv_id)
             if wa_staff:
-                wa_card_link = f'<a href="/staff?edit={wa_staff["id"]}" style="color:#fbbf24;font-size:.74rem;text-decoration:none">Карточка →</a>'
+                wa_card_link = f'<a href="/staff?edit={wa_staff["id"]}" style="display:inline-flex;align-items:center;gap:4px;background:#052e16;color:#86efac;border:1px solid #166534;border-radius:6px;padding:2px 8px;font-size:.73rem;text-decoration:none">✅ В базе · {wa_staff.get("name","") or "Карточка"} →</a>'
             else:
-                wa_card_link = f'<a href="/staff/create_from_wa?conv_id={conv_id}" style="color:var(--text3);font-size:.74rem;text-decoration:none">+ Создать карточку</a>'
+                wa_card_link = f'<a href="/staff/create_from_wa?conv_id={conv_id}" style="display:inline-flex;align-items:center;gap:4px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:.73rem;text-decoration:none">+ Создать карточку</a>'
             wa_utm_tags = ""
+            _is_wa_fb = bool(active_conv.get("fbclid") or active_conv.get("utm_source") in ("facebook", "fb"))
             utm_parts = []
-            if active_conv.get("fbclid"):
+            if _is_wa_fb:
                 utm_parts.append('<span style="background:#1e3a5f;color:#60a5fa;padding:2px 8px;border-radius:5px;font-size:.72rem">🔵 Facebook</span>')
             elif active_conv.get("utm_source"):
                 utm_parts.append(f'<span style="background:var(--border);color:var(--text2);padding:2px 8px;border-radius:5px;font-size:.72rem">{active_conv["utm_source"]}</span>')
             if active_conv.get("utm_campaign"):
-                utm_parts.append(f'<span style="background:var(--border);color:var(--text2);padding:2px 8px;border-radius:5px;font-size:.72rem">🎯 {active_conv["utm_campaign"][:25]}</span>')
+                utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {active_conv["utm_campaign"][:25]}</span>')
+            if active_conv.get("utm_content"):
+                utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 {active_conv["utm_content"][:20]}</span>')
+            if active_conv.get("utm_term"):
+                utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {active_conv["utm_term"][:20]}</span>')
+            if active_conv.get("fbclid"):
+                utm_parts.append('<span class="utm-tag badge-green">fbclid ✓</span>')
             if utm_parts:
                 wa_utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">' + "".join(utm_parts) + '</div>'
 
@@ -3666,6 +3782,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
               </div>
             </div>"""
     conv_items = ""
+    wa_in_staff = db.get_wa_conv_ids_in_staff()
     for c in convs:
         cls = "conv-item active" if c["id"] == conv_id else "conv-item"
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T"," ")
@@ -3677,13 +3794,19 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             src_badge = f'<span class="source-badge source-tg">{c["utm_source"][:12]}</span>'
         else:
             src_badge = '<span class="source-badge source-organic">organic</span>'
+        _wa_is_fb = bool(c.get("fbclid") or c.get("utm_source") in ("facebook", "fb"))
         wa_utm_parts = []
-        if c.get("utm_campaign"):  wa_utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {c["utm_campaign"][:30]}</span>')
-        if c.get("utm_content"):   wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 {c["utm_content"][:20]}</span>')
-        if c.get("utm_term"):      wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {c["utm_term"][:20]}</span>')
+        if _wa_is_fb:  # Задача 14: UTM только если не органика
+            if c.get("utm_campaign"):  wa_utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {c["utm_campaign"][:30]}</span>')
+            if c.get("utm_content"):   wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 {c["utm_content"][:20]}</span>')
+            if c.get("utm_term"):      wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {c["utm_term"][:20]}</span>')
         utm_line = '<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">' + "".join(wa_utm_parts) + '</div>' if wa_utm_parts else ""
+        # Задача 5: отметка "уже в базе"
+        wa_staff_info = wa_in_staff.get(c["id"])
+        wa_in_base = f'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>' if wa_staff_info else ""
+        wa_display_name = c.get('username') if (c.get('visitor_name','') or '').isdigit() and c.get('username') else c.get('visitor_name') or c.get('username') or c.get('tg_chat_id','')
         conv_items += f"""<a href="/wa/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}" data-conv-id="{c['id']}">
-          <div class="conv-name"><span>{dot} {c.get('username') if (c.get('visitor_name','') or '').isdigit() and c.get('username') else c.get('visitor_name') or c.get('username') or c.get('tg_chat_id','')}</span>{ucount}</div>
+          <div class="conv-name"><span>{dot} {wa_display_name}</span>{ucount}{wa_in_base}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
           <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +{c['wa_number'][:10]} · {t[-5:]} {src_badge}</div>
           {utm_line}</div></a>"""
@@ -4120,23 +4243,32 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
     tabs_html = f'<div style="display:flex;gap:4px;margin-bottom:8px">{tab("open","Открытые")}{tab("closed","Закрытые")}{tab("all","Все")}</div>'
 
     conv_items = ""
+    tga_in_staff = db.get_tga_conv_ids_in_staff()
     for c in convs:
         cls = "conv-item active" if c["id"] == conv_id else "conv-item"
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T", " ")
         ucount = f'<span class="unread-num">{c["unread_count"]}</span>' if c.get("unread_count", 0) > 0 else ""
         dot = "🟢" if c["status"] == "open" else "⚫"
-        src_badge = '<span class="source-badge source-fb">🔵 FB</span>' if c.get("fbclid") else '<span class="source-badge source-organic">organic</span>'
+        # Задача 3: FB только если fbclid или utm_source=facebook
+        is_fb = bool(c.get("fbclid") or c.get("utm_source") in ("facebook", "fb"))
+        src_badge = '<span class="source-badge source-fb">🔵 FB</span>' if is_fb else '<span class="source-badge source-organic">organic</span>'
+        # Задача 14: UTM только если не органика
         utm_parts = []
-        if c.get("utm_campaign"): utm_parts.append(f'<span class="utm-tag">🎯 {c["utm_campaign"][:25]}</span>')
-        if c.get("utm_content"):  utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac">📌 {c["utm_content"][:20]}</span>')
-        if c.get("utm_term"):     utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc">📂 {c["utm_term"][:20]}</span>')
+        if is_fb:
+            if c.get("utm_campaign"): utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {c["utm_campaign"][:25]}</span>')
+            if c.get("utm_content"):  utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 {c["utm_content"][:20]}</span>')
+            if c.get("utm_term"):     utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {c["utm_term"][:20]}</span>')
         utm_line = '<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">' + "".join(utm_parts) + '</div>' if utm_parts else ""
-        conv_items += f"""<a href="/tg_account/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}" data-conv-id="{c['id']}">
-          <div class="conv-name"><span>{dot} {c['visitor_name']}</span>{ucount}</div>
-          <div style="font-size:.75rem;color:var(--text3)">@{c.get('username') or '—'}</div>
-          <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
-          <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">{t[-5:]} {src_badge}</div>
-          {utm_line}</div></a>"""
+        tg_uname = c.get("username") or ""
+        uname_str = ("@" + tg_uname) if tg_uname else str(c.get("tg_user_id", ""))
+        # Задача 5: отметка "уже в базе" если сотрудник добавлен
+        staff_info = tga_in_staff.get(c["id"])
+        if staff_info:
+            in_base_badge = f'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>'
+        else:
+            in_base_badge = ""
+        # Задача 6: порядок как в WA — имя, превью, контакт+время+источник, UTM
+        conv_items += (f'<a href="/tg_account/chat?conv_id={c["id"]}&status_filter={status_filter}">' + f'<div class="{cls}" data-conv-id="{c["id"]}">' + f'<div class="conv-name"><span>{dot} {c["visitor_name"]}</span>{ucount}{in_base_badge}</div>' + f'<div class="conv-preview">{(c.get("last_message") or "Нет сообщений")[:50]}</div>' + f'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 {uname_str} · {t[-5:]} {src_badge}</div>' + utm_line + '</div></a>')
 
     if not conv_items:
         conv_items = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Нет диалогов</div>'
@@ -4161,6 +4293,12 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 messages_html += f'<div class="msg {m["sender_type"]}" data-id="{m["id"]}">{sl}<div class="msg-bubble">{ch}</div><div class="msg-time">{t}</div></div>'
 
             uname = f"@{active_conv['username']}" if active_conv.get("username") else active_conv.get("tg_user_id", "")
+            # Задача 7: Карточка сотрудника для TG
+            tga_staff = db.get_staff_by_tg_account_conv(conv_id)
+            if tga_staff:
+                tga_card_link = f'<a href="/staff?edit={tga_staff["id"]}" style="display:inline-flex;align-items:center;gap:4px;background:#052e16;color:#86efac;border:1px solid #166534;border-radius:6px;padding:2px 8px;font-size:.73rem;text-decoration:none">✅ В базе · {tga_staff.get("name","") or "Карточка"} →</a>'
+            else:
+                tga_card_link = f'<a href="/staff/create_from_tga?conv_id={conv_id}" style="display:inline-flex;align-items:center;gap:4px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:.73rem;text-decoration:none">+ Создать карточку</a>'
             fb_sent = active_conv.get("fb_event_sent")
             lead_btn = '<span class="badge-green">✅ Lead отправлен</span>' if fb_sent else \
                        f'<form method="post" action="/tg_account/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
@@ -4176,12 +4314,15 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             if active_conv.get("utm_term"): tags.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc">📂 {active_conv["utm_term"][:20]}</span>')
             if active_conv.get("fbclid"): tags.append('<span class="utm-tag badge-green">fbclid ✓</span>')
             utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' + "".join(tags) + '</div>' if tags else ""
-
             _tga_photo = active_conv.get("photo_url") or ""
-            _tga_onerr = "this.style.display:none"
             if _tga_photo:
-                _tga_avatar = ("<img src=\"" + _tga_photo + "\" style=\"width:42px;height:42px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #f97316\" />")
+                _tga_avatar = (
+                    '<div class="tga-avatar-wrap">'
+                    + '<img src="' + _tga_photo + '" style="width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid var(--orange)" />'
+                    + '<div class="tga-avatar-zoom"><img src="' + _tga_photo + '" /></div>'
+                    + '</div>')
             else:
+                _tga_avatar = '<div class="avatar">T</div>'
                 _tga_avatar = '<div class="avatar">T</div>'
             chat_area = f"""
             <div class="chat-header">
@@ -4189,7 +4330,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 {_tga_avatar}
                 <div style="flex:1">
                   <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.72rem">●</span></div>
-                  <div style="font-size:.78rem;color:var(--text3)">{uname}</div>
+                  <div style="font-size:.78rem;color:var(--text3)">{uname} · {tga_card_link}</div>
                   <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">
                     {lead_btn}
                     <a href="{call_url}" target="_blank" class="btn-gray btn-sm" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;font-size:.74rem;border:1px solid var(--border);text-decoration:none">📞 Открыть в TG</a>
@@ -4265,6 +4406,13 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               }}catch(e){{alert('Ошибка: '+e.message);if(btn){{btn.textContent='Удалить';btn.disabled=false;}}}}
             }}
             setInterval(loadNewTgAccMsgs,3000);
+            function filterTgConvs(q){{
+              var items=document.querySelectorAll('#tg-conv-items .conv-item');
+              items.forEach(function(el){{
+                var txt=(el.textContent||'').toLowerCase();
+                el.parentElement.style.display=txt.includes(q.toLowerCase())?'':'none';
+              }});
+            }}
             var ACTIVE_TGA_CONV_ID={conv_id};
             var _knownTgIds=new Set([{','.join(str(c['id']) for c in convs)}]);
             setInterval(async function(){{
@@ -4294,13 +4442,22 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                     var active=c.id===ACTIVE_TGA_CONV_ID?' active':'';
                     var dot=c.status==='open'?'🟢':'⚫';
                     var bdg=c.unread_count>0?'<span class="unread-num unread-badge">'+c.unread_count+'</span>':'';
-                    var src=c.fbclid?'<span class="source-badge source-fb">FB</span>':'<span class="source-badge source-organic">organic</span>';
+                    var inBase=c.in_staff?'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>':'';
+                    var isFb=c.fbclid||c.utm_source==='facebook'||c.utm_source==='fb';
+                    var src=isFb?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
+                    var uname=c.username?'@'+escTga(c.username):'';
+                    var utm='';
+                    if(isFb){{
+                      if(c.utm_campaign)utm+='<span class="utm-tag" title="Кампания">🎯 '+escTga(c.utm_campaign.substring(0,25))+'</span>';
+                      if(c.utm_content)utm+='<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 '+escTga(c.utm_content.substring(0,20))+'</span>';
+                      if(c.utm_term)utm+='<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 '+escTga(c.utm_term.substring(0,20))+'</span>';
+                    }}
+                    var utmLine=utm?'<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">'+utm+'</div>':'';
                     return '<a href="/tg_account/chat?conv_id='+c.id+'"><div class="conv-item'+active+'" data-conv-id="'+c.id+'">'
-                      +'<div class="conv-name"><span>'+dot+' '+escTga(c.visitor_name)+'</span>'+bdg+'</div>'
-                      +'<div style="font-size:.75rem;color:var(--text3)">@'+escTga(c.username)+'</div>'
-                      +'<div class="conv-preview">'+escTga(c.last_message||'Нет сообщений')+'</div>'
-                      +'<div class="conv-time">'+c.last_message_at.substring(11,16)+' '+src+'</div>'
-                      +'</div></a>';
+                      +'<div class="conv-name"><span>'+dot+' '+escTga(c.visitor_name)+'</span>'+bdg+inBase+'</div>'
+                      +'<div class="conv-preview">'+escTga((c.last_message||'Нет сообщений').substring(0,50))+'</div>'
+                      +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 '+uname+' · '+c.last_message_at.substring(11,16)+' '+src+'</div>'
+                      +utmLine+'</div></a>';
                   }}).join('')||'<div style="padding:20px;text-align:center;color:var(--text3)">Нет диалогов</div>';
                   if(ACTIVE_TGA_CONV_ID===0&&data.convs.length>0){{
                     window.location.href='/tg_account/chat?conv_id='+data.convs[0].id;
@@ -4312,7 +4469,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
 
     content_html = f"""<div class="chat-layout">
       <div class="conv-list">
-        <div class="conv-search">{conn_badge}{tabs_html}</div>
+        <div class="conv-search">{conn_badge}{tabs_html}<input type="text" placeholder="🔍 Поиск..." oninput="filterTgConvs(this.value)" style="width:100%;margin-top:6px"/></div>
         <div id="tg-conv-items" style="overflow-y:auto;flex:1">{conv_items}</div>
       </div>
       <div class="chat-window">{chat_area}</div>
@@ -4661,6 +4818,7 @@ async def api_tg_account_convs(request: Request):
     user = check_session(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
     convs = db.get_tg_account_conversations()
+    tga_in_staff = db.get_tga_conv_ids_in_staff()
     return JSONResponse({"convs": [
         {
             "id": c["id"],
@@ -4674,5 +4832,6 @@ async def api_tg_account_convs(request: Request):
             "utm_content":  c.get("utm_content") or "",
             "utm_term":     c.get("utm_term") or "",
             "fbclid":       bool(c.get("fbclid")),
+            "in_staff":     bool(tga_in_staff.get(c["id"])),
         } for c in convs
     ]})

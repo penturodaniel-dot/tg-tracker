@@ -204,6 +204,7 @@ class Database:
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_url TEXT",
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type TEXT",
                     "ALTER TABLE staff ADD COLUMN IF NOT EXISTS wa_conv_id INTEGER DEFAULT NULL",
+                    "ALTER TABLE staff ADD COLUMN IF NOT EXISTS tga_conv_id INTEGER DEFAULT NULL",
                     "ALTER TABLE staff ALTER COLUMN tg_chat_id DROP NOT NULL",
                     # Профиль пользователей TG/WA
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS photo_url TEXT",
@@ -818,6 +819,27 @@ class Database:
                 cur.execute("SELECT * FROM staff WHERE id=%s", (staff_id,))
                 r = cur.fetchone(); return dict(r) if r else None
 
+    def get_staff_by_tg_account_conv(self, tga_conv_id):
+        """Находит сотрудника по ID TG аккаунт диалога"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM staff WHERE tga_conv_id=%s LIMIT 1", (tga_conv_id,))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def get_tga_conv_ids_in_staff(self):
+        """Возвращает set всех tga_conv_id которые уже добавлены в базу сотрудников"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT tga_conv_id, id as staff_id, name FROM staff WHERE tga_conv_id IS NOT NULL")
+                return {r["tga_conv_id"]: {"staff_id": r["staff_id"], "name": r["name"]} for r in cur.fetchall()}
+
+    def get_wa_conv_ids_in_staff(self):
+        """Возвращает dict всех wa_conv_id которые уже добавлены в базу сотрудников"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT wa_conv_id, id as staff_id, name FROM staff WHERE wa_conv_id IS NOT NULL")
+                return {r["wa_conv_id"]: {"staff_id": r["staff_id"], "name": r["name"]} for r in cur.fetchall()}
+
     def get_staff_by_wa_conv(self, wa_conv_id):
         with self._conn() as conn:
             with conn.cursor() as cur:
@@ -833,6 +855,20 @@ class Database:
                 cur.execute("""INSERT INTO staff (wa_conv_id, name, username, created_at)
                     VALUES (%s,%s,%s,%s) RETURNING *""",
                     (wa_conv_id, name, wa_number, datetime.utcnow().isoformat()))
+                r = cur.fetchone()
+            conn.commit(); return dict(r)
+
+    def get_or_create_tga_staff(self, tga_conv_id, name, username=""):
+        """Создать/найти сотрудника по TG аккаунт диалогу"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM staff WHERE tga_conv_id=%s", (tga_conv_id,))
+                r = cur.fetchone()
+                if r: return dict(r)
+                tg_handle = ("@" + username) if username else ""
+                cur.execute("""INSERT INTO staff (tga_conv_id, name, username, created_at)
+                    VALUES (%s,%s,%s,%s) RETURNING *""",
+                    (tga_conv_id, name, tg_handle, datetime.utcnow().isoformat()))
                 r = cur.fetchone()
             conn.commit(); return dict(r)
 
@@ -1212,6 +1248,45 @@ class Database:
                     SUM(CASE WHEN sender_type='manager' THEN 1 ELSE 0 END) as outgoing
                     FROM wa_messages {where} GROUP BY day ORDER BY day""", params)
                 return [dict(r) for r in cur.fetchall()]
+
+    def get_tga_messages_by_day(self, date_from=None, date_to=None, days=30):
+        """Сообщения TG аккаунт чатов по дням"""
+        where, params = self._date_filter("created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT DATE(created_at::timestamp) as day,
+                    COUNT(*) as total,
+                    SUM(CASE WHEN sender_type='visitor' THEN 1 ELSE 0 END) as incoming,
+                    SUM(CASE WHEN sender_type='manager' THEN 1 ELSE 0 END) as outgoing
+                    FROM tg_account_messages {where} GROUP BY day ORDER BY day""", params)
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_tga_messages_summary(self, date_from=None, date_to=None, days=30):
+        """Сводка по сообщениям TG аккаунт чатов"""
+        where, params = self._date_filter("created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""SELECT COUNT(*) as total,
+                    SUM(CASE WHEN sender_type='visitor' THEN 1 ELSE 0 END) as incoming,
+                    SUM(CASE WHEN sender_type='manager' THEN 1 ELSE 0 END) as outgoing,
+                    COUNT(DISTINCT conversation_id) as active_convos
+                    FROM tg_account_messages {where}""", params)
+                return dict(cur.fetchone())
+
+    def get_tga_stats(self):
+        """Общая статистика TG аккаунт чатов"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                def cnt(q): cur.execute(q); return cur.fetchone()["c"]
+                return {
+                    "total_convs": cnt("SELECT COUNT(*) as c FROM tg_account_conversations"),
+                    "open_convs":  cnt("SELECT COUNT(*) as c FROM tg_account_conversations WHERE status='open'"),
+                    "unread":      cnt("SELECT COALESCE(SUM(unread_count),0) as c FROM tg_account_conversations"),
+                    "total_msgs":  cnt("SELECT COUNT(*) as c FROM tg_account_messages"),
+                    "incoming":    cnt("SELECT COUNT(*) as c FROM tg_account_messages WHERE sender_type='visitor'"),
+                    "outgoing":    cnt("SELECT COUNT(*) as c FROM tg_account_messages WHERE sender_type='manager'"),
+                    "fb_convs":    cnt("SELECT COUNT(*) as c FROM tg_account_conversations WHERE fbclid IS NOT NULL AND fbclid != ''"),
+                }
 
     def get_staff_funnel(self, date_from=None, date_to=None):
         """Воронка + конверсия"""

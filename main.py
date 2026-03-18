@@ -526,7 +526,6 @@ def nav_html(active: str, request: Request) -> str:
         var popup = wrap.querySelector('.staff-photo-popup');
         if(!popup) return;
         if(_hideTimer){{ clearTimeout(_hideTimer); _hideTimer = null; }}
-        // Позиционируем по центру экрана
         popup.style.top = '0';
         popup.style.left = '0';
         popup.style.width = '100vw';
@@ -536,23 +535,39 @@ def nav_html(active: str, request: Request) -> str:
         _popup = popup;
       }}
 
+      function hidePopupNow(popup){{
+        if(!popup) return;
+        if(_hideTimer){{ clearTimeout(_hideTimer); _hideTimer = null; }}
+        popup.classList.remove('visible');
+        if(_popup === popup) _popup = null;
+      }}
+
       function hidePopup(popup){{
         if(!popup) return;
         _hideTimer = setTimeout(function(){{
           popup.classList.remove('visible');
-          _popup = null;
+          if(_popup === popup) _popup = null;
           _hideTimer = null;
-        }}, 120);
+        }}, 80);
       }}
+
+      // Закрытие по клику на фон или крестик
+      document.addEventListener('click', function(e){{
+        if(!_popup) return;
+        var onClose = e.target.closest('.spp-close');
+        if(onClose) {{ hidePopupNow(_popup); return; }}
+        var onImg  = e.target.closest('.staff-photo-popup img');
+        var onBtns = e.target.closest('.staff-photo-popup-btns');
+        if(onImg || onBtns) return;
+        if(_popup.classList.contains('visible')) hidePopupNow(_popup);
+      }});
 
       document.addEventListener('mouseover', function(e){{
         var wrap = e.target.closest('.staff-photo-wrap');
         if(wrap){{ showPopup(wrap); return; }}
         var popup = e.target.closest('.staff-photo-popup');
         if(popup){{ if(_hideTimer){{ clearTimeout(_hideTimer); _hideTimer = null; }} return; }}
-        // мышь ушла со всего
         if(_popup && !_popup.contains(e.target)){{
-          // проверяем что мышь не на wrap
           var onWrap = e.target.closest('.staff-photo-wrap');
           if(!onWrap) hidePopup(_popup);
         }}
@@ -565,6 +580,11 @@ def nav_html(active: str, request: Request) -> str:
         var onWrap  = to.closest('.staff-photo-wrap');
         var onPopup = to.closest('.staff-photo-popup');
         if(!onWrap && !onPopup) hidePopup(_popup);
+      }});
+
+      // Escape закрывает
+      document.addEventListener('keydown', function(e){{
+        if(e.key === 'Escape' && _popup) hidePopupNow(_popup);
       }});
     }})();
     </script>"""
@@ -1649,6 +1669,7 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                     f'<div class="staff-photo-wrap" id="edit-photo-wrap">'
                     f'<img src="{_purl}" style="width:200px;height:200px;border-radius:12px;object-fit:cover;border:2px solid var(--border);display:block" />'
                     f'<div class="staff-photo-popup">'
+                    f'<button class="spp-close" title="Закрыть" style="position:absolute;top:16px;right:20px;background:rgba(255,255,255,0.12);border:none;color:#fff;font-size:1.4rem;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s" onmouseover="this.style.background=\'rgba(255,255,255,0.25)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.12)\'">✕</button>'
                     f'<img src="{_purl}" />'
                     f'<div class="staff-photo-popup-btns">'
                     f'<a href="{_purl}" download="photo_{_pid}.jpg">⬇ Скачать</a>'
@@ -1788,6 +1809,7 @@ async function deleteGalleryPhoto(photoId, staffId) {{
                 f'<div class="staff-photo-wrap">'
                 f'<img src="{_photo}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;display:block" />'
                 f'<div class="staff-photo-popup">'
+                f'<button class="spp-close" title="Закрыть" style="position:absolute;top:16px;right:20px;background:rgba(255,255,255,0.12);border:none;color:#fff;font-size:1.4rem;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s" onmouseover="this.style.background=\'rgba(255,255,255,0.25)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.12)\'">✕</button>'
                 f'<img src="{_photo}" />'
                 f'<div class="staff-photo-popup-btns">'
                 f'<a href="{_photo}" download="photo_{_sid}.jpg">⬇ Скачать</a>'

@@ -5201,6 +5201,47 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 banner.style.display=(d.tg_status==='connected')?'none':'flex';
               }}catch(e){{}}
             }},5000);
+            // ── SPA навигация по чатам ──────────────────────────────────────
+            var _tgaChatLoading = false;
+            async function loadTgaChat(convId, sfParam) {{
+              if(_tgaChatLoading) return;
+              _tgaChatLoading = true;
+              var chatWin = document.querySelector('.chat-window') || document.getElementById('tg-chat-area');
+              if(chatWin) chatWin.style.opacity = '0.5';
+              try {{
+                var url = '/api/tga_chat_panel?conv_id=' + convId + '&status_filter=' + (sfParam||'open');
+                var r = await fetch(url);
+                if(!r.ok) throw new Error(r.status);
+                var html = await r.text();
+                if(chatWin) {{ chatWin.innerHTML = html; chatWin.style.opacity = '1'; }}
+                // Обновляем активный элемент в списке
+                document.querySelectorAll('#tg-conv-items .conv-item').forEach(function(el){{
+                  var isActive = el.dataset.convId == String(convId);
+                  el.classList.toggle('active', isActive);
+                  // Мгновенно убираем бейдж непрочитанных на активном чате
+                  if(isActive) {{
+                    var badge = el.querySelector('.unread-num');
+                    if(badge) badge.remove();
+                  }}
+                }});
+                // Обновляем URL без перезагрузки
+                history.pushState(null, '', '/tg_account/chat?conv_id=' + convId + '&status_filter=' + (sfParam||'open'));
+                // Обновляем глобальные переменные для polling
+                if(typeof TGA_CONV_ID !== 'undefined') window.TGA_CONV_ID = convId;
+                ACTIVE_TGA_CONV_ID = convId;
+              }} catch(e) {{ if(chatWin) chatWin.style.opacity = '1'; }}
+              _tgaChatLoading = false;
+            }}
+            // Перехватываем клики по чатам в списке
+            document.getElementById('tg-conv-items').addEventListener('click', function(e) {{
+              var link = e.target.closest('a[href*="/tg_account/chat?conv_id="]');
+              if(!link) return;
+              e.preventDefault();
+              var url = new URL(link.href);
+              var cid = parseInt(url.searchParams.get('conv_id'));
+              var sf  = url.searchParams.get('status_filter') || 'open';
+              if(cid) loadTgaChat(cid, sf);
+            }});
             function filterTgConvs(q){{
               var items=document.querySelectorAll('#tg-conv-items .conv-item');
               items.forEach(function(el){{
@@ -5605,6 +5646,108 @@ async def api_tg_account_messages(request: Request, conv_id: int, after: int = 0
     if err: return JSONResponse({"error": "unauthorized"}, 401)
     msgs = db.get_new_tg_account_messages(conv_id, after)
     return JSONResponse({"messages": msgs})
+
+
+@app.get("/api/tga_chat_panel", response_class=HTMLResponse)
+async def api_tga_chat_panel(request: Request, conv_id: int = 0, status_filter: str = "open"):
+    """SPA: возвращает только HTML правой панели TGA чата"""
+    user, err = require_auth(request)
+    if err: return HTMLResponse("<div style='padding:20px;color:var(--red)'>Нет доступа</div>", 401)
+    if not conv_id:
+        return HTMLResponse('<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:.9rem">Выберите диалог</div>')
+    # Переиспользуем логику из tg_account_chat_page — только active_conv часть
+    tg_status = db.get_setting("tg_account_status", "disconnected")
+    active_conv = db.get_tg_account_conversation(conv_id)
+    if not active_conv:
+        return HTMLResponse('<div style="padding:20px;color:var(--text3)">Диалог не найден</div>')
+    db.mark_tg_account_conv_read(conv_id)
+    msgs = db.get_tg_account_messages(conv_id)
+    messages_html = ""
+    for m in msgs:
+        t = m["created_at"][11:16]
+        if m.get("media_url") and (m.get("media_type") or "").startswith("image/"):
+            ch = f'<img src="{m["media_url"]}" style="max-width:220px;max-height:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)" />'
+        elif m.get("media_url"):
+            ch = f'<a href="{m["media_url"]}" target="_blank" style="color:#60a5fa">📎 Открыть файл</a>'
+        else:
+            ch = (m["content"] or "").replace("<", "&lt;")
+        sl = f'<div style="font-size:.68rem;color:var(--orange);margin-bottom:2px;text-align:right;opacity:.8">{m["sender_name"]}</div>' if m.get("sender_name") and m["sender_type"] == "manager" else ""
+        messages_html += f'<div class="msg {m["sender_type"]}" data-id="{m["id"]}">{sl}<div class="msg-bubble">{ch}</div><div class="msg-time">{t}</div></div>'
+    uname = f"@{active_conv['username']}" if active_conv.get("username") else active_conv.get("tg_user_id", "")
+    tga_staff = db.get_staff_by_tg_account_conv(conv_id)
+    if tga_staff:
+        tga_card_link = f'<a href="/staff?edit={tga_staff["id"]}" style="display:inline-flex;align-items:center;gap:4px;background:#052e16;color:#86efac;border:1px solid #166534;border-radius:6px;padding:2px 8px;font-size:.73rem;text-decoration:none">✅ В базе · {tga_staff.get("name","") or "Карточка"} →</a>'
+    else:
+        tga_card_link = f'<a href="/staff/create_from_tga?conv_id={conv_id}" style="display:inline-flex;align-items:center;gap:4px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:.73rem;text-decoration:none">+ Создать карточку</a>'
+    all_tags     = db.get_all_tags()
+    active_ctags = db.get_conv_tags("tga", conv_id)
+    active_tag_ids = {tg["id"] for tg in active_ctags}
+    tga_tags_html = _render_conv_tags_picker(active_ctags, all_tags, active_tag_ids, "tga", conv_id)
+    fb_sent = active_conv.get("fb_event_sent")
+    lead_btn = '<span class="badge-green">✅ Lead отправлен</span>' if fb_sent else \
+               f'<form method="post" action="/tg_account/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
+    status_color = "#34d399" if active_conv["status"] == "open" else "#ef4444"
+    close_btn = f'<form method="post" action="/tg_account/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>' if active_conv["status"] == "open" else \
+                f'<form method="post" action="/tg_account/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-orange btn-sm">↺ Открыть</button></form>'
+    delete_btn = f'<button class="btn-gray btn-sm" style="color:#fff;background:#7f1d1d;border-color:#7f1d1d;font-size:.78rem;padding:5px 10px" onclick="deleteTgAccConv({conv_id})" title="Удалить диалог">🗑 Удалить</button>' if user and user.get("role") == "admin" else ""
+    call_url = f"https://t.me/{active_conv['username']}" if active_conv.get("username") else f"tg://user?id={active_conv.get('tg_user_id','')}"
+    tags = []
+    if active_conv.get("fbclid"): tags.append('<span class="utm-tag" style="background:#1e3a5f;color:#60a5fa">🔵 Facebook</span>')
+    if active_conv.get("utm_campaign"): tags.append(f'<span class="utm-tag">🎯 {active_conv["utm_campaign"][:25]}</span>')
+    if active_conv.get("utm_content"): tags.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac">📌 {active_conv["utm_content"][:20]}</span>')
+    if active_conv.get("utm_term"): tags.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc">📂 {active_conv["utm_term"][:20]}</span>')
+    if active_conv.get("fbclid"): tags.append('<span class="utm-tag badge-green">fbclid ✓</span>')
+    utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' + "".join(tags) + '</div>' if tags else ""
+    _tga_photo = active_conv.get("photo_url") or ""
+    if _tga_photo:
+        _tga_avatar = '<div class="tga-avatar-wrap"><img src="' + _tga_photo + '" style="width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid var(--orange)" /><div class="tga-avatar-zoom"><img src="' + _tga_photo + '" /></div></div>'
+    else:
+        _tga_avatar = '<div class="avatar">T</div>'
+    return HTMLResponse(f"""
+    <div class="chat-header">
+      <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
+        {_tga_avatar}
+        <div style="flex:1">
+          <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.72rem">●</span></div>
+          <div style="font-size:.78rem;color:var(--text3)">{uname} · {tga_card_link}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">
+            {lead_btn}
+            <a href="{call_url}" target="_blank" class="btn-gray btn-sm" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;font-size:.74rem;border:1px solid var(--border);text-decoration:none">📞 Открыть в TG</a>
+          </div>
+          {utm_tags}{tga_tags_html}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">{close_btn} {delete_btn}</div>
+    </div>
+    <div class="chat-messages" id="tga-msgs">{messages_html}</div>
+    <div id="tga-send-error" style="display:none;padding:8px 18px;background:#2d0a0a;border-top:1px solid #7f1d1d;font-size:.8rem;color:#fca5a5;align-items:center;justify-content:space-between;gap:8px">
+      <span id="tga-send-error-text"></span>
+      <button onclick="document.getElementById('tga-send-error').style.display='none'" style="background:none;border:none;color:#fca5a5;cursor:pointer;font-size:1rem">✕</button>
+    </div>
+    <div class="chat-input">
+      <div id="tga-disconnected-banner" style="display:{'none' if tg_status == 'connected' else 'flex'};align-items:center;justify-content:space-between;padding:8px 12px;background:#1c1a00;border:1px solid #713f12;border-radius:8px;margin-bottom:8px;font-size:.8rem;color:#fde047;gap:8px">
+        <span>⚠️ TG аккаунт не подключён — сообщения не будут доставлены</span>
+        <a href="/tg_account/setup" style="color:#fde047;font-weight:600;white-space:nowrap;text-decoration:underline">Подключить →</a>
+      </div>
+      <div class="chat-input-row">
+        <div style="position:relative;flex:1">
+          <textarea id="tga-inp" placeholder="Написать в Telegram... (Enter — отправить)"
+            style="width:100%;resize:none;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 44px 10px 14px;color:var(--text);font-size:.9rem;font-family:inherit;min-height:44px;max-height:120px"
+            rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){{event.preventDefault();sendTgAccMsg()}}"></textarea>
+          <label style="position:absolute;right:10px;bottom:10px;cursor:pointer;opacity:.6">
+            📎<input type="file" id="tga-file" style="display:none" onchange="sendTgAccFile(this)"/>
+          </label>
+        </div>
+        <button class="btn-orange" onclick="sendTgAccMsg()" style="height:44px;padding:0 18px;flex-shrink:0">Отправить</button>
+      </div>
+    </div>
+    <script>
+    var TGA_CONV_ID={conv_id};
+    var TGA_SF='{status_filter}';
+    var tgaMsgBox=document.getElementById('tga-msgs');
+    if(tgaMsgBox) tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
+    var lastTgAId=(function(){{var m=document.querySelectorAll('#tga-msgs .msg[data-id]');return m.length?m[m.length-1].dataset.id:0;}})();
+    </script>""")
 
 
 @app.get("/api/tg_account_convs")

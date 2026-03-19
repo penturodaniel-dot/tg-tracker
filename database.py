@@ -2,12 +2,41 @@ import os
 import logging
 import hashlib
 import secrets
+import time
 from datetime import datetime
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 log = logging.getLogger(__name__)
 DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+
+# ── Простой in-memory TTL кэш ─────────────────────────────────────────────────
+class _TTLCache:
+    """Потокобезопасный TTL кэш. key → (value, expires_at)"""
+    def __init__(self):
+        self._store: dict = {}
+
+    def get(self, key: str):
+        entry = self._store.get(key)
+        if entry and time.monotonic() < entry[1]:
+            return entry[0]
+        self._store.pop(key, None)
+        return None
+
+    def set(self, key: str, value, ttl: float = 4.0):
+        self._store[key] = (value, time.monotonic() + ttl)
+
+    def invalidate(self, *keys: str):
+        for k in keys:
+            self._store.pop(k, None)
+
+    def invalidate_prefix(self, prefix: str):
+        to_del = [k for k in self._store if k.startswith(prefix)]
+        for k in to_del:
+            self._store.pop(k, None)
+
+_cache = _TTLCache()
 
 
 class Database:
@@ -810,6 +839,7 @@ class Database:
                 cur.execute("UPDATE staff SET name=%s,phone=%s,email=%s,position=%s,status=%s,notes=%s,tags=%s,manager_name=%s WHERE id=%s",
                             (name,phone,email,position,status,notes,tags,manager_name or "",staff_id))
             conn.commit()
+        _cache.invalidate('tga_in_staff', 'wa_in_staff')
 
     def delete_staff_full(self, staff_id):
         """Полное удаление сотрудника со всей связанной информацией"""
@@ -828,6 +858,7 @@ class Database:
                         cur.execute("DELETE FROM wa_conversations WHERE id=%s", (r["wa_conv_id"],))
                 cur.execute("DELETE FROM staff WHERE id=%s", (staff_id,))
             conn.commit()
+        _cache.invalidate('tga_in_staff', 'wa_in_staff')
 
     def get_staff_by_conv(self, conv_id):
         with self._conn() as conn:
@@ -871,10 +902,15 @@ class Database:
 
     def get_all_tags(self) -> list:
         """Все теги справочника"""
+        cached = _cache.get('all_tags')
+        if cached is not None:
+            return cached
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM tags ORDER BY name")
-                return [dict(r) for r in cur.fetchall()]
+                result = [dict(r) for r in cur.fetchall()]
+        _cache.set('all_tags', result, ttl=10.0)
+        return result
 
     def create_tag(self, name: str, color: str = "#6366f1") -> dict:
         """Создать новый тег"""
@@ -886,7 +922,9 @@ class Database:
                 )
                 r = cur.fetchone()
             conn.commit()
-            return dict(r)
+        _cache.invalidate('all_tags')
+        _cache.invalidate_prefix('conv_tags_map:')
+        return dict(r)
 
     def update_tag(self, tag_id: int, name: str, color: str) -> bool:
         with self._conn() as conn:
@@ -897,7 +935,9 @@ class Database:
                     cur.execute("UPDATE tags SET color=%s WHERE id=%s", (color, tag_id))
                 ok = cur.rowcount > 0
             conn.commit()
-            return ok
+        _cache.invalidate('all_tags')
+        _cache.invalidate_prefix('conv_tags_map:')
+        return ok
 
     def delete_tag(self, tag_id: int) -> bool:
         """Удалить тег (conv_tags удалятся каскадно)"""
@@ -906,10 +946,16 @@ class Database:
                 cur.execute("DELETE FROM tags WHERE id=%s", (tag_id,))
                 ok = cur.rowcount > 0
             conn.commit()
-            return ok
+        _cache.invalidate('all_tags')
+        _cache.invalidate_prefix('conv_tags_map:')
+        return ok
 
     def get_conv_tags(self, conv_type: str, conv_id: int) -> list:
         """Теги конкретного чата"""
+        cache_key = f"conv_tags:{conv_type}:{conv_id}"
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return cached
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -918,7 +964,9 @@ class Database:
                     WHERE ct.conv_type=%s AND ct.conv_id=%s
                     ORDER BY t.name
                 """, (conv_type, conv_id))
-                return [dict(r) for r in cur.fetchall()]
+                result = [dict(r) for r in cur.fetchall()]
+        _cache.set(cache_key, result, ttl=5.0)
+        return result
 
     def add_conv_tag(self, conv_type: str, conv_id: int, tag_id: int) -> bool:
         """Привязать тег к чату"""
@@ -933,7 +981,9 @@ class Database:
                 except Exception:
                     ok = False
             conn.commit()
-            return ok
+        _cache.invalidate(f"conv_tags:{conv_type}:{conv_id}")
+        _cache.invalidate_prefix(f"conv_tags_map:{conv_type}")
+        return ok
 
     def remove_conv_tag(self, conv_type: str, conv_id: int, tag_id: int) -> bool:
         """Отвязать тег от чата"""
@@ -945,10 +995,16 @@ class Database:
                 )
                 ok = cur.rowcount > 0
             conn.commit()
-            return ok
+        _cache.invalidate(f"conv_tags:{conv_type}:{conv_id}")
+        _cache.invalidate_prefix(f"conv_tags_map:{conv_type}")
+        return ok
 
     def get_all_conv_tags_map(self, conv_type: str) -> dict:
         """Возвращает {conv_id: [tag, ...]} для всех чатов заданного типа — одним запросом"""
+        cache_key = f"conv_tags_map:{conv_type}"
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return cached
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -959,7 +1015,8 @@ class Database:
                 result: dict = {}
                 for r in cur.fetchall():
                     result.setdefault(r["conv_id"], []).append({"id": r["id"], "name": r["name"], "color": r["color"]})
-                return result
+        _cache.set(cache_key, result, ttl=5.0)
+        return result
 
     def get_convs_by_tag(self, conv_type: str, tag_id: int) -> list:
         """Все conv_id чатов с данным тегом"""
@@ -986,17 +1043,27 @@ class Database:
 
     def get_tga_conv_ids_in_staff(self):
         """Возвращает set всех tga_conv_id которые уже добавлены в базу сотрудников"""
+        cached = _cache.get('tga_in_staff')
+        if cached is not None:
+            return cached
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT tga_conv_id, id as staff_id, name FROM staff WHERE tga_conv_id IS NOT NULL")
-                return {r["tga_conv_id"]: {"staff_id": r["staff_id"], "name": r["name"]} for r in cur.fetchall()}
+                result = {r["tga_conv_id"]: {"staff_id": r["staff_id"], "name": r["name"]} for r in cur.fetchall()}
+        _cache.set('tga_in_staff', result, ttl=8.0)
+        return result
 
     def get_wa_conv_ids_in_staff(self):
         """Возвращает dict всех wa_conv_id которые уже добавлены в базу сотрудников"""
+        cached = _cache.get('wa_in_staff')
+        if cached is not None:
+            return cached
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT wa_conv_id, id as staff_id, name FROM staff WHERE wa_conv_id IS NOT NULL")
-                return {r["wa_conv_id"]: {"staff_id": r["staff_id"], "name": r["name"]} for r in cur.fetchall()}
+                result = {r["wa_conv_id"]: {"staff_id": r["staff_id"], "name": r["name"]} for r in cur.fetchall()}
+        _cache.set('wa_in_staff', result, ttl=8.0)
+        return result
 
     def get_staff_by_wa_conv(self, wa_conv_id):
         with self._conn() as conn:
@@ -1028,7 +1095,9 @@ class Database:
                     VALUES (%s,%s,%s,%s) RETURNING *""",
                     (tga_conv_id, name, tg_handle, datetime.utcnow().isoformat()))
                 r = cur.fetchone()
-            conn.commit(); return dict(r)
+            conn.commit()
+        _cache.invalidate('tga_in_staff')
+        return dict(r)
 
     def set_staff_fb_event(self, staff_id, event):
         with self._conn() as conn:
@@ -1123,13 +1192,19 @@ class Database:
             conn.commit(); return dict(r)
 
     def get_wa_conversations(self, status=None):
+        cache_key = f"wa_convs:{status or 'all'}"
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return cached
         with self._conn() as conn:
             with conn.cursor() as cur:
                 if status:
                     cur.execute("SELECT * FROM wa_conversations WHERE status=%s ORDER BY COALESCE(last_message_at,created_at) DESC", (status,))
                 else:
                     cur.execute("SELECT * FROM wa_conversations ORDER BY COALESCE(last_message_at,created_at) DESC")
-                return [dict(r) for r in cur.fetchall()]
+                result = [dict(r) for r in cur.fetchall()]
+        _cache.set(cache_key, result, ttl=4.0)
+        return result
 
     def delete_wa_conversation(self, conv_id):
         with self._conn() as conn:
@@ -1138,6 +1213,7 @@ class Database:
                 cur.execute("DELETE FROM staff WHERE wa_conv_id=%s", (conv_id,))
                 cur.execute("DELETE FROM wa_conversations WHERE id=%s", (conv_id,))
             conn.commit()
+        _cache.invalidate_prefix('wa_convs:')
 
     def get_wa_conversation(self, conv_id):
         with self._conn() as conn:
@@ -1181,6 +1257,7 @@ class Database:
                     cur.execute("UPDATE wa_conversations SET last_message=%s,last_message_at=%s WHERE wa_chat_id=%s",
                                 (safe_text, datetime.utcnow().isoformat(), wa_chat_id))
             conn.commit()
+        _cache.invalidate_prefix('wa_convs:')
 
     def mark_wa_read(self, conv_id):
         with self._conn() as conn:
@@ -1188,18 +1265,22 @@ class Database:
                 cur.execute("UPDATE wa_conversations SET unread_count=0 WHERE id=%s", (conv_id,))
                 cur.execute("UPDATE wa_messages SET read_by_manager=1 WHERE conversation_id=%s AND sender_type='visitor'", (conv_id,))
             conn.commit()
+        _cache.invalidate_prefix('wa_convs:')
+        _cache.invalidate('stats')
 
     def close_wa_conversation(self, conv_id):
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("UPDATE wa_conversations SET status='closed' WHERE id=%s", (conv_id,))
             conn.commit()
+        _cache.invalidate_prefix('wa_convs:')
 
     def reopen_wa_conversation(self, conv_id):
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("UPDATE wa_conversations SET status='open' WHERE id=%s", (conv_id,))
             conn.commit()
+        _cache.invalidate_prefix('wa_convs:')
 
     def set_wa_fb_event(self, conv_id, event):
         with self._conn() as conn:
@@ -1222,11 +1303,14 @@ class Database:
 
     # ── Stats ─────────────────────────────────────────────────────────────────
     def get_stats(self):
+        cached = _cache.get('stats')
+        if cached is not None:
+            return cached
         with self._conn() as conn:
             with conn.cursor() as cur:
                 def cnt(q, p=None):
                     cur.execute(q, p); return cur.fetchone()["c"]
-                return {
+                result = {
                     "total":       cnt("SELECT COUNT(*) as c FROM joins"),
                     "from_ads":    cnt("SELECT COUNT(*) as c FROM joins WHERE campaign_name!='organic'"),
                     "organic":     cnt("SELECT COUNT(*) as c FROM joins WHERE campaign_name='organic'"),
@@ -1239,6 +1323,8 @@ class Database:
                     "wa_unread":   cnt("SELECT COALESCE(SUM(unread_count),0) as c FROM wa_conversations"),
                     "tga_unread":  cnt("SELECT COALESCE(SUM(unread_count),0) as c FROM tg_account_conversations"),
                 }
+        _cache.set('stats', result, ttl=3.0)
+        return result
 
     # ══════════════════════════════════════════════════════════════════════════
     # КЛИЕНТЫ — аналитика подписок
@@ -1579,13 +1665,19 @@ class Database:
 
     def get_tg_account_conversations(self, status=None):
         self._init_tg_account_tables()
+        cache_key = f"tga_convs:{status or 'all'}"
+        cached = _cache.get(cache_key)
+        if cached is not None:
+            return cached
         with self._conn() as conn:
             with conn.cursor() as cur:
                 if status:
                     cur.execute("SELECT * FROM tg_account_conversations WHERE status=%s ORDER BY COALESCE(last_message_at,created_at) DESC", (status,))
                 else:
                     cur.execute("SELECT * FROM tg_account_conversations ORDER BY COALESCE(last_message_at,created_at) DESC")
-                return [dict(r) for r in cur.fetchall()]
+                result = [dict(r) for r in cur.fetchall()]
+        _cache.set(cache_key, result, ttl=4.0)
+        return result
 
     def save_tg_account_message(self, conv_id, tg_user_id, sender_type, content,
                                  media_url=None, media_type=None, sender_name=None):
@@ -1623,6 +1715,8 @@ class Database:
                     cur.execute("UPDATE tg_account_conversations SET last_message=%s,last_message_at=%s WHERE tg_user_id=%s",
                                 (text[:100],datetime.utcnow().isoformat(),tg_user_id))
             conn.commit()
+        _cache.invalidate_prefix('tga_convs:')
+        _cache.invalidate('stats')
 
     def mark_tg_account_conv_read(self, conv_id):
         self._init_tg_account_tables()
@@ -1630,6 +1724,7 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("UPDATE tg_account_conversations SET unread_count=0 WHERE id=%s", (conv_id,))
             conn.commit()
+        _cache.invalidate_prefix('tga_convs:')
 
     def apply_utm_to_tg_account_conv(self, conv_id, fbclid=None, fbp=None, utm_source=None,
                                       utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None):
@@ -1642,6 +1737,7 @@ class Database:
                     WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
                     (fbclid, fbp, utm_source, utm_medium, utm_campaign, utm_content, utm_term, conv_id))
             conn.commit()
+        _cache.invalidate_prefix('tga_convs:')
 
     def set_tg_account_fb_event(self, conv_id, event):
         self._init_tg_account_tables()
@@ -1656,6 +1752,7 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("UPDATE tg_account_conversations SET status='closed' WHERE id=%s", (conv_id,))
             conn.commit()
+        _cache.invalidate_prefix('tga_convs:')
 
     def reopen_tg_account_conv(self, conv_id):
         self._init_tg_account_tables()
@@ -1663,6 +1760,7 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("UPDATE tg_account_conversations SET status='open' WHERE id=%s", (conv_id,))
             conn.commit()
+        _cache.invalidate_prefix('tga_convs:')
 
     def update_tg_account_contact_info(self, conv_id, photo_url=None, about=None):
         with self._conn() as conn:
@@ -1678,3 +1776,4 @@ class Database:
                 cur.execute("DELETE FROM tg_account_messages WHERE conversation_id=%s", (conv_id,))
                 cur.execute("DELETE FROM tg_account_conversations WHERE id=%s", (conv_id,))
             conn.commit()
+        _cache.invalidate_prefix('tga_convs:')

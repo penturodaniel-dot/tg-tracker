@@ -4323,12 +4323,125 @@ async def api_stats(request: Request):
     return JSONResponse(stats)
 
 
+@app.get("/api/wa_chat_panel", response_class=HTMLResponse)
+async def api_wa_chat_panel(request: Request, conv_id: int = 0, status_filter: str = "open"):
+    """SPA: возвращает только HTML правой панели WA чата"""
+    user, err = require_auth(request)
+    if err: return HTMLResponse("<div style='padding:20px;color:var(--red)'>Нет доступа</div>", 401)
+    if not conv_id:
+        return HTMLResponse('<div class="no-conv"><div style="font-size:2.5rem">💚</div><div>Выбери диалог WhatsApp</div></div>')
+    active_conv = db.get_wa_conversation(conv_id)
+    if not active_conv:
+        return HTMLResponse('<div style="padding:20px;color:var(--text3)">Диалог не найден</div>')
+    db.mark_wa_read(conv_id)
+    msgs = db.get_wa_messages(conv_id)
+    wa_status = db.get_setting("wa_status", "disconnected")
+    messages_html = ""
+    for m in msgs:
+        t = m["created_at"][11:16]
+        if m.get("media_url") and (m.get("media_type") or "").startswith("image/"):
+            content_html = f'<img src="{m["media_url"]}" style="max-width:220px;max-height:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)" />'
+            if m.get("content") and m["content"] not in ("[фото]","[медиафайл]"):
+                content_html += f'<div style="margin-top:4px">{(m["content"] or "").replace("<","&lt;")}</div>'
+        elif m.get("media_url"):
+            content_html = f'<a href="{m["media_url"]}" target="_blank" style="color:#60a5fa">📎 Открыть файл</a>'
+        else:
+            content_html = (m.get("content") or "").replace("<", "&lt;")
+        wa_sender_label = ""
+        if m.get("sender_name") and m["sender_type"] == "manager":
+            wa_sender_label = f'<div style="font-size:.68rem;color:var(--orange);margin-bottom:2px;text-align:right;opacity:.8">{m["sender_name"]}</div>'
+        messages_html += f'<div class="msg {m["sender_type"]}" data-id="{m["id"]}">{wa_sender_label}<div class="msg-bubble">{content_html}</div><div class="msg-time">{t}</div></div>'
+    # Карточка
+    wa_staff = db.get_staff_by_wa_conv(conv_id)
+    if wa_staff:
+        wa_card_link = f'<a href="/staff?edit={wa_staff["id"]}" style="display:inline-flex;align-items:center;gap:4px;background:#052e16;color:#86efac;border:1px solid #166534;border-radius:6px;padding:2px 8px;font-size:.73rem;text-decoration:none">✅ В базе · {wa_staff.get("name","") or "Карточка"} →</a>'
+    else:
+        wa_card_link = f'<a href="/staff/create_from_wa?conv_id={conv_id}" style="display:inline-flex;align-items:center;gap:4px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:.73rem;text-decoration:none">+ Создать карточку</a>'
+    # UTM теги
+    _is_fb = bool(active_conv.get("fbclid") or active_conv.get("utm_source") in ("facebook","fb"))
+    utm_parts = []
+    if _is_fb:
+        utm_parts.append('<span style="background:#1e3a5f;color:#60a5fa;padding:2px 8px;border-radius:5px;font-size:.72rem">🔵 Facebook</span>')
+    elif active_conv.get("utm_source"):
+        utm_parts.append(f'<span style="background:var(--border);color:var(--text2);padding:2px 8px;border-radius:5px;font-size:.72rem">{active_conv["utm_source"]}</span>')
+    if active_conv.get("utm_campaign"): utm_parts.append(f'<span class="utm-tag">🎯 {active_conv["utm_campaign"][:25]}</span>')
+    if active_conv.get("utm_content"):  utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac">📌 {active_conv["utm_content"][:20]}</span>')
+    if active_conv.get("utm_term"):     utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc">📂 {active_conv["utm_term"][:20]}</span>')
+    if active_conv.get("fbclid"):       utm_parts.append('<span class="utm-tag badge-green">fbclid ✓</span>')
+    wa_utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">' + "".join(utm_parts) + '</div>' if utm_parts else ""
+    # Теги
+    all_tags_wa      = db.get_all_tags()
+    active_wa_ctags  = db.get_conv_tags("wa", conv_id)
+    active_wa_tag_ids = {tg["id"] for tg in active_wa_ctags}
+    wa_tags_html = _render_conv_tags_picker(active_wa_ctags, all_tags_wa, active_wa_tag_ids, "wa", conv_id)
+    # Кнопки
+    fb_sent = active_conv.get("fb_event_sent")
+    fb_btn = '<span class="badge-green">✅ Lead отправлен</span>' if fb_sent else \
+             f'<form method="post" action="/wa/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
+    status_color = "#34d399" if active_conv["status"] == "open" else "#ef4444"
+    close_btn = f'<form method="post" action="/wa/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>' if active_conv["status"] == "open" else \
+                f'<form method="post" action="/wa/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-green btn-sm">↺ Открыть</button></form>'
+    delete_wa_btn = f'<button class="btn-gray btn-sm" style="color:var(--red);border-color:#7f1d1d" onclick="deleteWaConv({conv_id})">🗑</button>' if user and user.get("role") == "admin" else ""
+    # Аватар
+    wa_photo = active_conv.get("photo_url","")
+    if wa_photo:
+        wa_avatar = (f'<div class="staff-photo-wrap">'
+                     f'<img src="{wa_photo}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #25d366;display:block"/>'
+                     f'<div class="staff-photo-popup"><img src="{wa_photo}"/>'
+                     f'<div class="staff-photo-popup-btns"><a href="{wa_photo}" download>⬇ Скачать</a></div></div></div>')
+    else:
+        wa_avatar = '<div class="avatar" style="background:#052e16;color:#86efac">W</div>'
+
+    return HTMLResponse(f"""
+    <div class="chat-header">
+      <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
+        {wa_avatar}
+        <div style="flex:1">
+          <div style="font-weight:700;color:#fff">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.74rem">●</span></div>
+          <div style="font-size:.79rem;color:var(--text3)">+{active_conv['wa_number']} · {wa_card_link}</div>
+          <div style="margin-top:6px">{fb_btn}</div>
+          {wa_utm_tags}
+          {wa_tags_html}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn-gray btn-sm" title="Обновить профиль" onclick="fetchWaProfile({conv_id})" style="font-size:.8rem">🔄</button>
+        {close_btn} {delete_wa_btn}
+      </div>
+    </div>
+    <div class="chat-messages" id="wa-msgs">{messages_html}</div>
+    <div id="wa-send-error" style="display:none;padding:8px 18px;background:#2d0a0a;border-top:1px solid #7f1d1d;font-size:.8rem;color:#fca5a5;align-items:center;justify-content:space-between;gap:8px">
+      <span id="wa-send-error-text"></span>
+      <button onclick="document.getElementById('wa-send-error').style.display='none'" style="background:none;border:none;color:#fca5a5;cursor:pointer;font-size:1rem">✕</button>
+    </div>
+    <div class="chat-input">
+      <div id="wa-disconnected-banner" style="display:{'none' if wa_status == 'ready' else 'flex'};align-items:center;justify-content:space-between;padding:8px 12px;background:#1c1a00;border:1px solid #713f12;border-radius:8px;margin-bottom:8px;font-size:.8rem;color:#fde047;gap:8px">
+        <span>⚠️ WhatsApp не подключён — сообщения не будут доставлены</span>
+        <a href="/wa/setup" style="color:#fde047;font-weight:600;white-space:nowrap;text-decoration:underline">Подключить →</a>
+      </div>
+      <div class="chat-input-row">
+        <input type="file" id="wa-file-input" accept="image/*" style="display:none" onchange="sendWaFile(this)"/>
+        <button class="send-btn-green" style="background:#374151;padding:10px 13px;font-size:1.1rem" onclick="document.getElementById('wa-file-input').click()" title="Отправить фото">📎</button>
+        <textarea id="wa-reply" placeholder="Написать в WhatsApp… (Enter — отправить)" rows="1" onkeydown="handleWaKey(event)"></textarea>
+        <button class="send-btn-green" onclick="sendWaMsg()">Отправить</button>
+      </div>
+    </div>
+    <script>
+    window.ACTIVE_CONV_ID = {conv_id};
+    const msgsEl = document.getElementById('wa-msgs');
+    if(msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight;
+    </script>""")
+
+
 @app.get("/api/wa_convs")
-async def api_wa_convs(request: Request):
+async def api_wa_convs(request: Request, status: str = "open"):
     """Список WA диалогов для авто-обновления"""
     user = check_session(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
-    convs = db.get_wa_conversations()
+    status_arg = status if status != "all" else None
+    convs = db.get_wa_conversations(status=status_arg)
+    wa_in_staff = db.get_wa_conv_ids_in_staff()
+    wa_tags_map = db.get_all_conv_tags_map("wa")
     return JSONResponse({"convs": [
         {
             "id": c["id"],
@@ -4338,6 +4451,13 @@ async def api_wa_convs(request: Request):
             "last_message_at": (c.get("last_message_at") or c["created_at"])[:16].replace("T"," "),
             "unread_count": c.get("unread_count", 0),
             "status": c.get("status", "open"),
+            "utm_source":   c.get("utm_source") or "",
+            "utm_campaign": c.get("utm_campaign") or "",
+            "utm_content":  c.get("utm_content") or "",
+            "utm_term":     c.get("utm_term") or "",
+            "fbclid":       bool(c.get("fbclid")),
+            "in_staff":     bool(wa_in_staff.get(c["id"])),
+            "tags":         wa_tags_map.get(c["id"], []),
         } for c in convs
     ]})
 
@@ -4797,20 +4917,20 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     }}
 
     // Авто-обновление списка диалогов каждые 4 сек
+    var WA_SF = '{status_filter}';
     let _knownConvIds = new Set([{','.join(str(c['id']) for c in (db.get_wa_conversations() if True else []))}]);
     setInterval(async function(){{
       try {{
-        const res = await fetch('/api/wa_convs');
+        const res = await fetch('/api/wa_convs?status='+encodeURIComponent(WA_SF));
         const data = await res.json();
         if(!data.convs) return;
         const list = document.getElementById('conv-items');
         if(!list) return;
 
-        // Если появился новый диалог — перерисовываем список
         const newIds = new Set(data.convs.map(c=>c.id));
         const hasNew = [...newIds].some(id=>!_knownConvIds.has(id));
 
-        // Обновляем счётчики непрочитанных всегда
+        // Обновляем существующие элементы (badge + preview)
         data.convs.forEach(c=>{{
           const item = list.querySelector('[data-conv-id="'+c.id+'"]');
           if(item){{
@@ -4826,20 +4946,69 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
 
         if(hasNew){{
           _knownConvIds = newIds;
-          // Перерисовываем весь список
-          list.innerHTML = data.convs.map(c=>{{
-            const active = c.id===ACTIVE_CONV_ID ? ' active' : '';
-            const dot = c.status==='open' ? '🟢' : '⚫';
-            const badge = c.unread_count>0 ? '<span class="unread-num unread-badge" style="background:#25d366">'+c.unread_count+'</span>' : '';
-            return '<a href="/wa/chat?conv_id='+c.id+'"><div class="conv-item'+active+'" data-conv-id="'+c.id+'">'
-              +'<div class="conv-name"><span>'+dot+' '+esc(c.visitor_name)+'</span>'+badge+'</div>'
+          // Добавляем только новые чаты — не перерисовываем весь список
+          data.convs.forEach(c=>{{
+            if(list.querySelector('[data-conv-id="'+c.id+'"]')) return;
+            const isFb=!!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));
+            const srcBadge=isFb?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
+            const inBase=c.in_staff?'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>':'';
+            const bdg=c.unread_count>0?'<span class="unread-num unread-badge" style="background:#25d366">'+c.unread_count+'</span>':'';
+            let utmHtml='';
+            if(isFb){{
+              if(c.utm_campaign)utmHtml+='<span class="utm-tag">🎯 '+esc(c.utm_campaign.substring(0,25))+'</span>';
+              if(c.utm_content)utmHtml+='<span class="utm-tag" style="background:#1a2a1a;color:#86efac">📌 '+esc(c.utm_content.substring(0,20))+'</span>';
+              if(c.utm_term)utmHtml+='<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc">📂 '+esc(c.utm_term.substring(0,20))+'</span>';
+            }}
+            const utmLine=utmHtml?'<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">'+utmHtml+'</div>':'';
+            let tagsHtml='';
+            if(c.tags&&c.tags.length){{c.tags.forEach(function(tg){{tagsHtml+='<span class="conv-tag" style="background:'+tg.color+'22;color:'+tg.color+';border-color:'+tg.color+'55">'+esc(tg.name)+'</span>';}});}}
+            const tagsLine=tagsHtml?'<div class="tags-row">'+tagsHtml+'</div>':'';
+            const dot=c.status==='open'?'🟢':'⚫';
+            const el=document.createElement('div');
+            el.innerHTML='<a href="/wa/chat?conv_id='+c.id+'&status_filter='+WA_SF+'"><div class="conv-item" data-conv-id="'+c.id+'">'
+              +'<div class="conv-name"><span>'+dot+' '+esc(c.visitor_name)+'</span>'+bdg+inBase+'</div>'
               +'<div class="conv-preview">'+esc(c.last_message||'Нет сообщений')+'</div>'
-              +'<div class="conv-time">💚 +'+c.wa_number+' · '+c.last_message_at+'</div>'
+              +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +'+c.wa_number.substring(0,10)+' · '+c.last_message_at.substring(11,16)+' '+srcBadge+'</div>'
+              +utmLine+tagsLine
               +'</div></a>';
-          }}).join('') || '<div class="empty" style="padding:36px 14px">Нет WA диалогов.</div>';
+            list.insertBefore(el.firstChild, list.firstChild);
+          }});
         }}
       }} catch(e){{}}
     }}, 4000);
+
+    // SPA навигация для WA чатов
+    var _waPageLoading = false;
+    document.getElementById('conv-items')?.addEventListener('click', function(e){{
+      const link = e.target.closest('a[href*="/wa/chat?conv_id="]');
+      if(!link) return;
+      e.preventDefault();
+      const url = new URL(link.href);
+      const cid = parseInt(url.searchParams.get('conv_id'));
+      const sf  = url.searchParams.get('status_filter') || WA_SF;
+      if(cid) loadWaChat(cid, sf);
+    }});
+    async function loadWaChat(convId, sfParam){{
+      if(_waPageLoading) return;
+      _waPageLoading = true;
+      const chatWin = document.querySelector('.chat-window');
+      if(chatWin) chatWin.style.opacity='0.5';
+      try{{
+        const r = await fetch('/api/wa_chat_panel?conv_id='+convId+'&status_filter='+(sfParam||WA_SF));
+        if(!r.ok) throw new Error(r.status);
+        const html = await r.text();
+        if(chatWin){{ chatWin.innerHTML=html; chatWin.style.opacity='1'; }}
+        document.querySelectorAll('#conv-items .conv-item').forEach(function(el){{
+          const isActive = el.dataset.convId == String(convId);
+          el.classList.toggle('active', isActive);
+          if(isActive){{ const b=el.querySelector('.unread-badge'); if(b) b.remove(); }}
+        }});
+        history.pushState(null,'','/wa/chat?conv_id='+convId+'&status_filter='+(sfParam||WA_SF));
+        window.ACTIVE_CONV_ID = convId;
+        WA_SF = sfParam || WA_SF;
+      }}catch(e){{ if(chatWin) chatWin.style.opacity='1'; }}
+      _waPageLoading = false;
+    }}
 
     function esc(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>');}}
     function filterConvs(q){{document.querySelectorAll('.conv-item').forEach(el=>{{

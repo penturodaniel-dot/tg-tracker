@@ -809,6 +809,7 @@ wa_setup(
     WA_URL, WA_SECRET, WA_WH_SECRET,
     TG_SVC_URL, TG_SVC_SECRET,
     check_session, require_auth, base, nav_html, _render_conv_tags_picker,
+    _css=CSS,
 )
 app.include_router(wa_router)
 

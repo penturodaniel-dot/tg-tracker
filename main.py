@@ -708,7 +708,7 @@ def _render_conv_tags_picker(active_tags: list, all_tags: list, active_ids: set,
 
     picker_html = (
         f'<div class="tag-picker" id="tag-picker-{conv_type}-{conv_id}">'
-        f'<button class="tag-picker-btn" onclick="toggleTagPicker(\'{conv_type}\',{conv_id})">＋ Тег</button>'
+        f'<button class="tag-picker-btn" onclick="event.stopPropagation();toggleTagPicker(\'{conv_type}\',{conv_id})">＋ Тег</button>'
         f'<div class="tag-picker-dropdown" id="tpd-{conv_type}-{conv_id}">'
         f'{picker_items}'
         f'{manage_link}'
@@ -732,7 +732,11 @@ def base(content: str, active: str, request: Request) -> str:
 function toggleTagPicker(ct, cid) {{
   var dd = document.getElementById('tpd-' + ct + '-' + cid);
   if (!dd) return;
-  dd.classList.toggle('open');
+  var isOpen = dd.classList.contains('open');
+  // Закрываем все открытые пикеры
+  document.querySelectorAll('.tag-picker-dropdown.open').forEach(function(d) {{ d.classList.remove('open'); }});
+  // Открываем текущий если он был закрыт
+  if (!isOpen) dd.classList.add('open');
 }}
 document.addEventListener('click', function(e) {{
   if (!e.target.closest('.tag-picker')) {{

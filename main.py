@@ -1774,6 +1774,18 @@ async def go_staff_redirect(request: Request, ref: str = ""):
     if not click:
         return HTMLResponse("<h2>Link expired</h2>", 404)
 
+    # Читаем fbp из cookie — к этому моменту пиксель уже успел его установить
+    cookie_fbp = request.cookies.get("_fbp", "")
+    if cookie_fbp and not click.get("fbp"):
+        try:
+            with db._conn() as _conn:
+                with _conn.cursor() as _cur:
+                    _cur.execute("UPDATE staff_clicks SET fbp=%s WHERE ref_id=%s", (cookie_fbp, ref))
+                _conn.commit()
+            log.info(f"[/go-staff] fbp сохранён для ref={ref}")
+        except Exception as _e:
+            log.warning(f"[/go-staff] fbp update error: {_e}")
+
     target_url = click.get("target_url", "")
     target_type = click.get("target_type", "wa")
 

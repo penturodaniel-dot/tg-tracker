@@ -276,6 +276,10 @@ class Database:
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_name TEXT DEFAULT ''",
                     "ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS sender_name TEXT DEFAULT ''",
                     "ALTER TABLE landings ADD COLUMN IF NOT EXISTS custom_domain TEXT DEFAULT ''",
+                    "ALTER TABLE landings ADD COLUMN IF NOT EXISTS project_id INTEGER DEFAULT NULL",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_id INTEGER DEFAULT NULL",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS project_id INTEGER DEFAULT NULL",
+                    "ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS project_id INTEGER DEFAULT NULL",
                 ]
                 # Таблица галереи фото сотрудников
                 cur.execute("""
@@ -305,11 +309,26 @@ class Database:
                         UNIQUE(tag_id, conv_type, conv_id)
                     )
                 """)
+
                 for m in migrations:
                     try:
                         cur.execute(m)
                     except Exception as ex:
                         log.warning(f"Migration skipped: {ex}")
+                # Проекты — группируют пиксели и utm кампании
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS projects (
+                        id           SERIAL PRIMARY KEY,
+                        name         TEXT NOT NULL UNIQUE,
+                        fb_pixel_id  TEXT DEFAULT '',
+                        fb_token     TEXT DEFAULT '',
+                        tt_pixel_id  TEXT DEFAULT '',
+                        tt_token     TEXT DEFAULT '',
+                        utm_campaigns TEXT DEFAULT '',
+                        created_at   TEXT NOT NULL
+                    )
+                """)
+                # Привязка лендинга к проекту
 
                 # Заполняем slug для старых кампаний где он NULL
                 cur.execute("UPDATE campaigns SET slug = LOWER(REPLACE(name, ' ', '-')) || '-' || id WHERE slug IS NULL OR slug = ''")
@@ -1801,3 +1820,73 @@ class Database:
                 cur.execute("DELETE FROM tg_account_conversations WHERE id=%s", (conv_id,))
             conn.commit()
         _cache.invalidate_prefix('tga_convs:')
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # PROJECTS — мультипиксельные проекты
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def get_projects(self) -> list:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM projects ORDER BY created_at")
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_project(self, project_id: int) -> dict | None:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM projects WHERE id=%s", (project_id,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def create_project(self, name: str) -> int:
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO projects (name, created_at) VALUES (%s, %s) RETURNING id",
+                    (name.strip(), datetime.utcnow().isoformat())
+                )
+                return cur.fetchone()["id"]
+            conn.commit()
+
+    def update_project(self, project_id: int, name: str = None,
+                       fb_pixel_id: str = None, fb_token: str = None,
+                       tt_pixel_id: str = None, tt_token: str = None,
+                       utm_campaigns: str = None):
+        fields, vals = [], []
+        if name         is not None: fields.append("name=%s");          vals.append(name.strip())
+        if fb_pixel_id  is not None: fields.append("fb_pixel_id=%s");   vals.append(fb_pixel_id.strip())
+        if fb_token     is not None: fields.append("fb_token=%s");      vals.append(fb_token.strip())
+        if tt_pixel_id  is not None: fields.append("tt_pixel_id=%s");   vals.append(tt_pixel_id.strip())
+        if tt_token     is not None: fields.append("tt_token=%s");      vals.append(tt_token.strip())
+        if utm_campaigns is not None: fields.append("utm_campaigns=%s"); vals.append(utm_campaigns.strip())
+        if not fields: return
+        vals.append(project_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"UPDATE projects SET {', '.join(fields)} WHERE id=%s", vals)
+            conn.commit()
+
+    def delete_project(self, project_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM projects WHERE id=%s", (project_id,))
+            conn.commit()
+
+    def get_project_by_utm(self, utm_campaign: str) -> dict | None:
+        """Найти проект по utm_campaign — ищем совпадение в comma-separated utm_campaigns."""
+        if not utm_campaign:
+            return None
+        projects = self.get_projects()
+        utm_lower = utm_campaign.strip().lower()
+        for p in projects:
+            campaigns = [c.strip().lower() for c in (p.get("utm_campaigns") or "").split(",") if c.strip()]
+            if utm_lower in campaigns:
+                return p
+        return None
+
+    def set_landing_project(self, landing_id: int, project_id: int | None):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE landings SET project_id=%s WHERE id=%s", (project_id, landing_id))
+            conn.commit()

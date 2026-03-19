@@ -37,6 +37,7 @@ from routers.staff       import router as staff_router,     setup as staff_setup
 from routers.users_tags  import router as users_tags_router, setup as users_tags_setup
 from routers.settings    import router as settings_router,  setup as settings_setup
 from routers.channels    import router as channels_router,  setup as channels_setup
+from routers.projects    import router as projects_router,  setup as projects_setup
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -516,6 +517,7 @@ def nav_html(active: str, request: Request) -> str:
         <div class="nav-divider"></div>
         {item("🏷️", "Теги", "tags", "blue")}
         {item("🔐", "Пользователи", "users", "blue")}
+        {item("🎯", "Проекты", "projects", "blue")}
         {item("⚙️", "Настройки", "settings", "blue")}"""
 
     wa_dot = "dot-green" if wa_status == "ready" else ("dot-yellow" if wa_status == "qr" else "dot-red")
@@ -818,6 +820,9 @@ app.include_router(settings_router)
 
 channels_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, bot_manager)
 app.include_router(channels_router)
+
+projects_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker)
+app.include_router(projects_router)
 
 wa_setup(
     db, log, bot_manager, meta_capi,

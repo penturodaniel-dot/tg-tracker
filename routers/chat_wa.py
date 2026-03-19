@@ -12,7 +12,7 @@ routers/chat_wa.py — WhatsApp чат роуты
 
 import httpx
 from fastapi import APIRouter, Request, Form, File, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 router = APIRouter()
 
@@ -31,16 +31,18 @@ require_auth          = None
 base                  = None
 nav_html              = None
 _render_conv_tags_picker = None
+CSS                   = ""
 
 
 def setup(_db, _log, _bot_manager, _meta_capi,
           _wa_url, _wa_secret, _wa_wh_secret,
           _tg_svc_url, _tg_svc_secret,
-          _check_session, _require_auth, _base, _nav_html, _render_conv_tags_picker_fn):
+          _check_session, _require_auth, _base, _nav_html, _render_conv_tags_picker_fn,
+          _css=""):
     global db, log, bot_manager, meta_capi
     global WA_URL, WA_SECRET, WA_WH_SECRET
     global TG_SVC_URL, TG_SVC_SECRET
-    global check_session, require_auth, base, nav_html, _render_conv_tags_picker
+    global check_session, require_auth, base, nav_html, _render_conv_tags_picker, CSS
     db             = _db
     log            = _log
     bot_manager    = _bot_manager
@@ -55,6 +57,7 @@ def setup(_db, _log, _bot_manager, _meta_capi,
     base           = _base
     nav_html       = _nav_html
     _render_conv_tags_picker = _render_conv_tags_picker_fn
+    CSS                  = _css
 
 async def wa_api(method: str, path: str, **kwargs) -> dict:
     if not WA_URL:
@@ -856,3 +859,5 @@ async def api_wa_messages(request: Request, conv_id: int, after: int = 0):
     user = check_session(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
     return JSONResponse({"messages": db.get_new_wa_messages(conv_id, after)})
+
+

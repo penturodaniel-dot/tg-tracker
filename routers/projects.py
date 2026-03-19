@@ -103,6 +103,17 @@ def _project_card(p: dict, msg: str = "", err: str = "") -> str:
             </div>
           </div>
 
+          <div style="font-size:.72rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin:14px 0 8px">
+            🧪 Тестирование
+          </div>
+          <div class="form-row" style="flex-wrap:wrap;gap:12px">
+            <div class="field-group" style="flex:1;min-width:200px">
+              <div class="field-label">Facebook Test Event Code <span style="color:var(--text3);font-weight:400">(пусто = отключено)</span></div>
+              <input type="text" name="test_event_code" value="{p.get('test_event_code','')}" placeholder="TEST12345"/>
+              <div style="font-size:.72rem;color:var(--text3);margin-top:4px">Найди в Events Manager → Test Events → скопируй код</div>
+            </div>
+          </div>
+
           <div style="margin-top:14px">
             <button class="btn">💾 Сохранить</button>
           </div>
@@ -179,7 +190,8 @@ async def projects_update(request: Request,
                           fb_token: str = Form(""),
                           tt_pixel_id: str = Form(""),
                           tt_token: str = Form(""),
-                          utm_campaigns: str = Form("")):
+                          utm_campaigns: str = Form(""),
+                          test_event_code: str = Form("")):
     user, e = require_auth(request, role="admin")
     if e: return e
     kwargs = dict(
@@ -187,6 +199,7 @@ async def projects_update(request: Request,
         fb_pixel_id=fb_pixel_id,
         tt_pixel_id=tt_pixel_id,
         utm_campaigns=utm_campaigns,
+        test_event_code=test_event_code,
     )
     if fb_token.strip():  kwargs["fb_token"]  = fb_token.strip()
     if tt_token.strip():  kwargs["tt_token"]  = tt_token.strip()

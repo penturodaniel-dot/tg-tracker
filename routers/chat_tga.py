@@ -97,7 +97,7 @@ def _resolve_pixels(conv: dict) -> dict:
         "fb_token":        fb_token,
         "tt_pixel":        tt_pixel,
         "tt_token":        tt_token,
-        "test_event_code": db.get_setting("test_event_code") or None,
+        "test_event_code": project.get("test_event_code") or db.get_setting("test_event_code") or None,
         "project_name":    proj_name,
     }
 

@@ -4765,29 +4765,35 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     // Обновление сообщений в открытом чате
     {"setInterval(loadNewWaMsgs, 3000);" if active_conv else ""}
 
+    var _waLoadingMsgs=false;
     async function loadNewWaMsgs(){{
-      const msgs=document.querySelectorAll('#wa-msgs .msg[data-id]');
-      const lastId=msgs.length?msgs[msgs.length-1].dataset.id:0;
-      const res=await fetch('/api/wa_messages/{conv_id}?after='+lastId);
-      const data=await res.json();
-      if(data.messages&&data.messages.length>0){{
-        const c=document.getElementById('wa-msgs');
-        data.messages.forEach(m=>{{
-          const d=document.createElement('div');
-          d.className='msg '+m.sender_type;
-          d.dataset.id=m.id;
-          let contentHtml='';
-          if(m.media_url && m.media_type && m.media_type.startsWith('image/')){{
-            contentHtml='<img src="'+m.media_url+'" style="max-width:220px;max-height:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)"/>';
-            if(m.content && m.content!='[фото]' && m.content!='[медиафайл]') contentHtml+='<div style="margin-top:4px">'+esc(m.content)+'</div>';
-          }} else if(m.media_url) {{
-            contentHtml='<a href="'+m.media_url+'" target="_blank" style="color:#60a5fa">📎 Открыть файл</a>';
-          }} else {{
-            contentHtml=esc(m.content);
-          }}
-          d.innerHTML='<div class="msg-bubble">'+contentHtml+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
-          c.appendChild(d);
-        }});c.scrollTop=c.scrollHeight;}}
+      if(_waLoadingMsgs)return;
+      _waLoadingMsgs=true;
+      try{{
+        const msgs=document.querySelectorAll('#wa-msgs .msg[data-id]');
+        const lastId=msgs.length?msgs[msgs.length-1].dataset.id:0;
+        const res=await fetch('/api/wa_messages/{conv_id}?after='+lastId);
+        const data=await res.json();
+        if(data.messages&&data.messages.length>0){{
+          const c=document.getElementById('wa-msgs');
+          data.messages.forEach(m=>{{
+            if(c.querySelector('[data-id="'+m.id+'"]'))return;
+            const d=document.createElement('div');
+            d.className='msg '+m.sender_type;
+            d.dataset.id=m.id;
+            let contentHtml='';
+            if(m.media_url && m.media_type && m.media_type.startsWith('image/')){{
+              contentHtml='<img src="'+m.media_url+'" style="max-width:220px;max-height:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)"/>';
+              if(m.content && m.content!='[фото]' && m.content!='[медиафайл]') contentHtml+='<div style="margin-top:4px">'+esc(m.content)+'</div>';
+            }} else if(m.media_url) {{
+              contentHtml='<a href="'+m.media_url+'" target="_blank" style="color:#60a5fa">📎 Открыть файл</a>';
+            }} else {{
+              contentHtml=esc(m.content);
+            }}
+            d.innerHTML='<div class="msg-bubble">'+contentHtml+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
+            c.appendChild(d);
+          }});c.scrollTop=c.scrollHeight;}}
+      }}catch(e){{}}finally{{_waLoadingMsgs=false;}}
     }}
 
     // Авто-обновление списка диалогов каждые 4 сек

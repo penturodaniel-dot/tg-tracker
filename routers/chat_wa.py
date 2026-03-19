@@ -11,6 +11,7 @@ routers/chat_wa.py — WhatsApp чат роуты
 """
 
 import httpx
+from datetime import datetime
 from fastapi import APIRouter, Request, Form, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
@@ -849,6 +850,15 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
     fbclid    = conv.get("fbclid")
     fbp       = conv.get("fbp")
     log.info(f"[Lead/WA] pixel={px['fb_pixel'][:8] if px['fb_pixel'] else 'NONE'} project={px['project_name'] or 'global'} utm={campaign} test_code={px['test_event_code'] or 'NONE'} fbp={'✓' if fbp else '—'} fbc={'✓' if fbclid else '—'}")
+    # Передаём время первого контакта — Facebook лучше атрибутирует к рекламному клику
+    _created_at = conv.get("created_at", "")
+    _event_time = None
+    if _created_at:
+        try:
+            from datetime import timezone
+            _event_time = int(datetime.fromisoformat(_created_at.replace("Z","")).replace(tzinfo=timezone.utc).timestamp())
+        except Exception:
+            _event_time = None
     sent = await meta_capi.send_lead_event(
         px["fb_pixel"], px["fb_token"],
         user_id=wa_number, campaign=campaign,
@@ -856,6 +866,7 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
         utm_source=utm_src, utm_campaign=campaign,
         test_event_code=px["test_event_code"],
         event_source_url=f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/",
+        event_time=_event_time,
     )
     if sent:
         db.set_wa_fb_event(conv_id, "Lead")

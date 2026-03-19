@@ -1518,6 +1518,37 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
           </div>
         </div>"""
 
+    # Блок привязки проекта
+    projects = db.get_projects()
+    cur_project_id = landing.get("project_id")
+    proj_opts = '<option value="">— Глобальные пиксели (из Настроек) —</option>'
+    for p in projects:
+        sel = " selected" if cur_project_id and int(cur_project_id) == p["id"] else ""
+        fb_ok = "✓ FB" if p.get("fb_pixel_id") else "✗ FB"
+        tt_ok = "✓ TT" if p.get("tt_pixel_id") else ""
+        badges = f" [{fb_ok}{', ' + tt_ok if tt_ok else ''}]"
+        proj_opts += f'<option value="{p["id"]}"{sel}>{p["name"]}{badges}</option>'
+    cur_proj_name = next((p["name"] for p in projects if cur_project_id and int(cur_project_id) == p["id"]), None)
+    proj_status = f'<span style="color:#34d399;font-size:.8rem">● {cur_proj_name}</span>' if cur_proj_name else '<span style="color:var(--text3);font-size:.8rem">глобальные пиксели</span>'
+
+    project_block = f"""
+    <div class="section" style="border-left:3px solid #6366f1">
+      <div class="section-head"><h3>🎯 Проект (пиксели)</h3>{proj_status}</div>
+      <div class="section-body">
+        <form method="post" action="/landings/set_project" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <input type="hidden" name="landing_id" value="{id}"/>
+          <div class="field-group" style="flex:1;min-width:220px">
+            <div class="field-label">Привязать к проекту</div>
+            <select name="project_id">{proj_opts}</select>
+          </div>
+          <button class="btn">💾 Сохранить</button>
+        </form>
+        <div style="margin-top:8px;font-size:.76rem;color:var(--text3)">
+          Пиксель этого проекта будет использоваться на лендинге и при отправке Lead из чата
+        </div>
+      </div>
+    </div>"""
+
     content = f"""<div class="page-wrap">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
       <a href="{back}" class="btn-gray btn-sm">← Назад</a>
@@ -1532,6 +1563,7 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
     {tpl_block}
     {texts_block}
     {domain_block}
+    {project_block}
     <div class="section"><div class="section-head"><h3>Добавить кнопку</h3><small style="color:var(--text3)">Кнопки появятся на лендинге</small></div>
     <div class="section-body"><form method="post" action="/landings/contact/add"><input type="hidden" name="landing_id" value="{id}"/>
     <div class="form-row">
@@ -1563,6 +1595,16 @@ async def landings_set_domain(request: Request, landing_id: int = Form(...), cus
         domain = domain[4:]
     db.set_landing_custom_domain(landing_id, domain)
     msg = f"Домен {'сохранён: ' + domain if domain else 'очищен'}"
+    return RedirectResponse(f"/landings/edit?id={landing_id}&msg={msg}", 303)
+
+
+@app.post("/landings/set_project")
+async def landings_set_project(request: Request, landing_id: int = Form(...), project_id: str = Form("")):
+    user, err = require_auth(request)
+    if err: return err
+    pid = int(project_id) if project_id.strip() else None
+    db.set_landing_project(landing_id, pid)
+    msg = "Проект привязан" if pid else "Проект отвязан"
     return RedirectResponse(f"/landings/edit?id={landing_id}&msg={msg}", 303)
 
 

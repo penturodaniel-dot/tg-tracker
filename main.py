@@ -816,7 +816,7 @@ app.include_router(analytics_router)
 chat_bot_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, bot_manager, meta_capi)
 app.include_router(chat_bot_router)
 
-staff_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker)
+staff_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, STAFF_STATUSES)
 app.include_router(staff_router)
 
 users_tags_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, check_session)

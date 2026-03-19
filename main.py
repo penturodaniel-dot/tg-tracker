@@ -3248,6 +3248,150 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
     _domain_prefix = cur_domain.split(".")[0] if "." in cur_domain else "@"
     _domain_or_placeholder = cur_domain or "твой-домен.com"
 
+    # Тексты из content
+    import json as _json
+    try:
+        _lcontent = _json.loads(landing.get("content","{}"))
+    except:
+        _lcontent = {}
+    _texts = _lcontent.get("texts", {})
+
+    def _tf(key, placeholder="", label="", textarea=False, rows=2):
+        """Хелпер поля текста с placeholder из дефолтного значения"""
+        val = _texts.get(key, "")
+        _esc = val.replace('"', '&quot;')
+        if textarea:
+            return (f'<div class="field-group"><div class="field-label">{label}</div>'
+                    f'<textarea name="txt_{key}" rows="{rows}" placeholder="{placeholder}" '
+                    f'style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;'
+                    f'padding:8px 10px;color:var(--text);font-size:.83rem;font-family:inherit;resize:vertical">'
+                    f'{_esc}</textarea></div>')
+        return (f'<div class="field-group"><div class="field-label">{label}</div>'
+                f'<input type="text" name="txt_{key}" value="{_esc}" placeholder="{placeholder}" /></div>')
+
+    # Строим блок текстов в зависимости от шаблона
+    _texts_fields = ""
+    if cur_tpl in ("dark_hr", "light_clean", "bold_cta", "tiktok_spa"):
+        # Общие поля для всех шаблонов
+        _hero_fields = (
+            _tf("hero_title",    "Заголовок героя",         "Заголовок героя") +
+            _tf("hero_subtitle", "Подзаголовок / описание", "Подзаголовок", textarea=True, rows=2)
+        )
+        # Преимущества (6 карточек)
+        _ben_fields = "".join(
+            f'<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">'
+            f'<div style="font-size:.75rem;color:var(--orange);font-weight:600;margin-bottom:6px">Карточка {i+1}</div>'
+            + _tf(f"ben_{i}_title", f"Преимущество {i+1}", "Заголовок")
+            + _tf(f"ben_{i}_text", f"Описание преимущества {i+1}", "Описание")
+            + '</div>'
+            for i in range(6)
+        )
+        # Шаги (3 шага)
+        _steps_fields = "".join(
+            f'<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">'
+            f'<div style="font-size:.75rem;color:var(--orange);font-weight:600;margin-bottom:6px">Шаг {i+1}</div>'
+            + _tf(f"step_{i}_title", f"Шаг {i+1} заголовок", "Заголовок шага")
+            + _tf(f"step_{i}_text", f"Шаг {i+1} описание", "Описание шага")
+            + '</div>'
+            for i in range(3)
+        )
+        # Отзывы (4 отзыва)
+        _rev_fields = "".join(
+            f'<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">'
+            f'<div style="font-size:.75rem;color:var(--orange);font-weight:600;margin-bottom:6px">Отзыв {i+1}</div>'
+            + _tf(f"rev_{i}_name", f"Имя, например: Анна", "Имя")
+            + _tf(f"rev_{i}_from", f"Откуда, например: из Украины", "Откуда")
+            + _tf(f"rev_{i}_earn", f"+$35,000", "Заработок")
+            + _tf(f"rev_{i}_text", f"Текст отзыва", "Отзыв", textarea=True, rows=2)
+            + '</div>'
+            for i in range(4)
+        )
+        # FAQ (5 вопросов)
+        _faq_fields = "".join(
+            f'<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">'
+            f'<div style="font-size:.75rem;color:var(--orange);font-weight:600;margin-bottom:6px">Вопрос {i+1}</div>'
+            + _tf(f"faq_{i}_q", f"Вопрос {i+1}", "Вопрос")
+            + _tf(f"faq_{i}_a", f"Ответ на вопрос {i+1}", "Ответ", textarea=True, rows=2)
+            + '</div>'
+            for i in range(5)
+        )
+        # CTA и badge
+        _cta_fields = (
+            _tf("cta_title",   "Заголовок CTA секции",  "Заголовок CTA") +
+            _tf("cta_subtitle","Подзаголовок CTA",       "Подзаголовок CTA") +
+            _tf("badge_text",  "Текст badge (например: Элитный СПА)", "Badge текст")
+        )
+        # Цифры доверия (только для tiktok_spa и bold_cta)
+        _trust_fields = ""
+        if cur_tpl in ("tiktok_spa", "bold_cta"):
+            _trust_fields = (
+                '<div style="font-size:.78rem;font-weight:600;color:var(--text2);margin:8px 0 4px">Цифры доверия</div>' +
+                _tf("trust_0_val", "500+",         "Цифра 1") +
+                _tf("trust_0_lbl", "девушек работают", "Подпись 1") +
+                _tf("trust_1_val", "$1500",        "Цифра 2") +
+                _tf("trust_1_lbl", "средний доход в день", "Подпись 2") +
+                _tf("trust_2_val", "50+",          "Цифра 3") +
+                _tf("trust_2_lbl", "городов по всей США",  "Подпись 3")
+            )
+
+        def _tab_btn(tab_id, label, active=False):
+            _a = "background:var(--orange);color:#fff" if active else "background:var(--bg3);color:var(--text3)"
+            return f'<button type="button" onclick="showTab(\'{tab_id}\')" id="tab-btn-{tab_id}" style="{_a};border:none;padding:6px 14px;border-radius:7px;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit">{label}</button>'
+
+        def _tab_div(tab_id, content, active=False):
+            _d = "block" if active else "none"
+            return f'<div id="tab-{tab_id}" style="display:{_d};margin-top:14px">{content}</div>'
+
+        _has_steps = cur_tpl == "tiktok_spa"
+        _step_btn  = _tab_btn("steps", "👣 Шаги") if _has_steps else ""
+        _step_div  = _tab_div("steps", _steps_fields) if _has_steps else ""
+        _texts_fields = f"""
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+          {_tab_btn("hero",  "🎯 Герой",        True)}
+          {_tab_btn("ben",   "✨ Преимущества")}
+          {_step_btn}
+          {_tab_btn("rev",   "⭐ Отзывы")}
+          {_tab_btn("faq",   "❓ FAQ")}
+          {_tab_btn("cta",   "🔔 CTA")}
+          {''+_tab_btn("trust","🔢 Цифры") if _trust_fields else ''}
+        </div>
+        {_tab_div("hero",  _hero_fields,  True)}
+        {_tab_div("ben",   _ben_fields)}
+        {_step_div}
+        {_tab_div("rev",   _rev_fields)}
+        {_tab_div("faq",   _faq_fields)}
+        {_tab_div("cta",   _cta_fields)}
+        {_tab_div("trust", _trust_fields) if _trust_fields else ''}
+        <script>
+        function showTab(id) {{
+          ['hero','ben','steps','rev','faq','cta','trust'].forEach(function(t) {{
+            var d=document.getElementById('tab-'+t);
+            var b=document.getElementById('tab-btn-'+t);
+            if(d) d.style.display=(t===id)?'block':'none';
+            if(b) b.style.cssText=b.style.cssText.replace(/(background:[^;]+)/,t===id?'background:var(--orange)':'background:var(--bg3)').replace(/(color:[^;]+)/,t===id?'color:#fff':'color:var(--text3)');
+          }});
+        }}
+        </script>"""
+
+    texts_block = ""
+    if _texts_fields:
+        texts_block = f"""
+    <div class="section" style="margin-bottom:18px">
+      <div class="section-head"><h3>✏️ Тексты лендинга</h3>
+        <small style="color:var(--text3);font-size:.72rem">Оставь поле пустым — элемент скроется на лендинге</small>
+      </div>
+      <div class="section-body">
+        <form method="post" action="/landings/save_texts">
+          <input type="hidden" name="landing_id" value="{id}"/>
+          {_texts_fields}
+          <div style="margin-top:16px;display:flex;gap:8px">
+            <button class="btn-orange">💾 Сохранить тексты</button>
+            <a href="{public_url}" target="_blank" class="btn-gray btn-sm" style="display:inline-flex;align-items:center">👁 Предпросмотр</a>
+          </div>
+        </form>
+      </div>
+    </div>"""
+
     # Блок кастомного домена
     domain_status = ""
     if cur_domain:
@@ -3323,6 +3467,7 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
       <a href="{public_url}" target="_blank" class="btn btn-sm" style="margin-top:10px;display:inline-flex">Открыть →</a>
     </div></div>
     {tpl_block}
+    {texts_block}
     {domain_block}
     <div class="section"><div class="section-head"><h3>Добавить кнопку</h3><small style="color:var(--text3)">Кнопки появятся на лендинге</small></div>
     <div class="section-body"><form method="post" action="/landings/contact/add"><input type="hidden" name="landing_id" value="{id}"/>
@@ -3372,6 +3517,34 @@ async def landings_set_template(request: Request, landing_id: int = Form(...), t
     lcontent["template"] = template
     db.update_landing_content(landing_id, _json.dumps(lcontent))
     return RedirectResponse(f"/landings/edit?id={landing_id}&msg=Шаблон+изменён", 303)
+
+
+@app.post("/landings/save_texts")
+async def landings_save_texts(request: Request):
+    """Сохранить редактируемые тексты лендинга"""
+    user, err = require_auth(request)
+    if err: return err
+    import json as _json
+    form = await request.form()
+    landing_id = int(form.get("landing_id", 0))
+    if not landing_id:
+        return RedirectResponse("/landings_staff", 303)
+    landing = db.get_landing(landing_id)
+    if not landing:
+        return RedirectResponse("/landings_staff", 303)
+    try:
+        lcontent = _json.loads(landing.get("content","{}"))
+    except:
+        lcontent = {}
+    # Собираем все поля texts из формы
+    texts = {}
+    for key, val in form.items():
+        if key.startswith("txt_"):
+            field = key[4:]  # убираем префикс txt_
+            texts[field] = val.strip()
+    lcontent["texts"] = texts
+    db.update_landing_content(landing_id, _json.dumps(lcontent, ensure_ascii=False))
+    return RedirectResponse(f"/landings/edit?id={landing_id}&msg=Тексты+сохранены", 303)
 
 
 @app.post("/landings/contact/add")
@@ -3742,6 +3915,21 @@ def _tiktok_pixel_js(pixel_id: str) -> str:
 <!-- End TikTok Pixel -->"""
 
 
+def _t(texts: dict, key: str, default: str = "") -> str:
+    """Получить текст из словаря texts. Если пустой — вернуть default."""
+    val = texts.get(key, "")
+    return val if val else default
+
+def _tshow(texts: dict, key: str, default: str, tag: str = "p", cls: str = "", style: str = "") -> str:
+    """Вернуть HTML элемент с текстом или пустую строку если пусто."""
+    val = texts.get(key, "")
+    text = val if val else default
+    if not text:
+        return ""
+    _cls = f' class="{cls}"' if cls else ""
+    _sty = f' style="{style}"' if style else ""
+    return f"<{tag}{_cls}{_sty}>{text}</{tag}>"
+
 def _build_buttons(contacts: list) -> str:
     """Универсальная генерация кнопок контактов для всех шаблонов"""
     TG_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>'
@@ -3773,22 +3961,41 @@ def _render_staff_landing(landing: dict, contacts: list, pixel_id: str = "") -> 
     year = __import__('datetime').datetime.now().year
     name = landing.get("name","HR")
 
+    import json as _json
+    try:
+        _lc = _json.loads(landing.get("content","{}"))
+        texts = _lc.get("texts", {})
+    except:
+        texts = {}
+
     if template == "light_clean":
         buttons = _build_buttons(contacts)
-        return _tpl_light_clean(name, buttons, px, year)
+        return _tpl_light_clean(name, buttons, px, year, texts)
     elif template == "bold_cta":
         buttons = _build_buttons(contacts)
-        return _tpl_bold_cta(name, buttons, px, year)
+        return _tpl_bold_cta(name, buttons, px, year, texts)
     elif template == "dark_hr":
         buttons = _build_buttons(contacts)
-        return _tpl_dark_hr(name, buttons, px, year)
+        return _tpl_dark_hr(name, buttons, px, year, texts)
     elif template == "tiktok_spa":
-        return _tpl_tiktok_spa(name, contacts, px, tt_pixel_id, year)
+        return _tpl_tiktok_spa(name, contacts, px, tt_pixel_id, year, texts)
     else:  # massage_job — default
         return _tpl_massage_job(name, contacts, px, year)
 
 
-def _tpl_dark_hr(name: str, buttons: str, pixel_js: str, year: int) -> str:
+def _tpl_dark_hr(name: str, buttons: str, pixel_js: str, year: int, texts: dict = None) -> str:
+    if texts is None: texts = {}
+    _h1   = texts.get("hero_title")    or name
+    _sub  = texts.get("hero_subtitle","")
+    _sub_html  = f'<p>{_sub}</p>' if _sub else ""
+    _ben_items = ""
+    for i in range(6):
+        _bt = texts.get(f"ben_{i}_title",""); _bd = texts.get(f"ben_{i}_text","")
+        if _bt or _bd: _ben_items += f'<li><strong>{_bt}</strong> {_bd}</li>'
+    _cta_h = texts.get("cta_title","")
+    _cta_s = texts.get("cta_subtitle","")
+    _cta_h_html = f'<h2>{_cta_h}</h2>' if _cta_h else ""
+    _cta_s_html = f'<p>{_cta_s}</p>' if _cta_s else ""
     return f"""<!DOCTYPE html><html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{name}</title>
@@ -3830,39 +4037,32 @@ footer{{text-align:center;padding:24px 0 40px;color:#576574;font-size:.85rem}}
 @media(max-width:768px){{.grid{{grid-template-columns:1fr}}}}
 </style></head><body>
 <header class="hero"><div class="hero-inner wrap">
-  <div class="chip">Работа за рубежом</div>
-  <h1>{name}</h1>
-  <p>Высокооплачиваемая работа с обучением, жильём и гибким графиком. Присоединяйся и начни зарабатывать с первого дня.</p>
+  <h1>{_h1}</h1>
+  {_sub_html}
 </div></header>
-<section class="section"><div class="wrap"><div class="grid">
-  <div class="card">
-    <h2>Описание вакансии</h2>
-    <p class="lead">Мы ищем активных и целеустремлённых сотрудников!</p>
-    <ul>
-      <li><strong>Высокий доход</strong> с первого рабочего дня</li>
-      <li><strong>Обучение</strong> и постоянная поддержка команды</li>
-      <li><strong>Жильё</strong> предоставляет компания</li>
-      <li><strong>Документы и язык</strong> — не требуются</li>
-      <li><strong>Гибкий график</strong> — выбираешь смены сам(а)</li>
-      <li><strong>Множество локаций</strong> в крупных городах</li>
-    </ul>
-    <p class="note">Мы предоставляем пробную смену — оплачивается на общих основаниях 💵</p>
-  </div>
-  <div class="card" style="background:linear-gradient(135deg,rgba(38,165,228,.12),rgba(50,210,127,.12));display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:200px;gap:16px">
-    <div style="font-size:2.5rem">💼</div>
-    <p style="font-size:1.05rem;font-weight:600">Напиши нам — <br>ответим в течение часа</p>
-  </div>
-</div></div></section>
+{f'<section class="section"><div class="wrap"><div class="grid"><div class="card"><ul>{_ben_items}</ul></div></div></div></section>' if _ben_items else ""}
 <section class="cta-section"><div class="wrap">
-  <h2>Связаться с HR-менеджером</h2>
-  <p>Выберите удобный канал связи — ответим быстро.</p>
+  {_cta_h_html}
+  {_cta_s_html}
   <div class="btns">{buttons}</div>
 </div></section>
 <footer>© {year} {name}. Все права защищены.</footer>
 </body></html>"""
 
 
-def _tpl_light_clean(name: str, buttons: str, pixel_js: str, year: int) -> str:
+def _tpl_light_clean(name: str, buttons: str, pixel_js: str, year: int, texts: dict = None) -> str:
+    if texts is None: texts = {}
+    _lc_h1    = texts.get("hero_title","")    or name
+    _lc_sub   = texts.get("hero_subtitle","")
+    _lc_badge = texts.get("badge_text","")
+    _lc_cta_h = texts.get("cta_title","")
+    _lc_cta_s = texts.get("cta_subtitle","")
+    _lc_perks = "".join(
+        f'<div class="perk"><div class="perk-icon">{"💰🎓🏠🗓📍🤝".split()[0] if False else ["💰","🎓","🏠","🗓","📍","🤝"][i]}</div><h3>{texts.get(f"ben_{i}_title","")}</h3><p>{texts.get(f"ben_{i}_text","")}</p></div>'
+        for i in range(6)
+        if texts.get(f"ben_{i}_title","") or texts.get(f"ben_{i}_text","")
+    )
+    _lc_perks_sec = f'<section class="perks"><div class="wrap"><div class="perks-grid">'+_lc_perks+'</div></div></section>' if _lc_perks else ""
     return f"""<!DOCTYPE html><html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{name}</title>
@@ -3908,31 +4108,38 @@ footer{{background:var(--bg);border-top:1px solid var(--border);text-align:cente
   <a href="#contact" class="nav-cta">Откликнуться →</a>
 </div></nav>
 <section class="hero"><div>
-  <div class="badge">Открытый набор</div>
-  <h1>Работа, которая <span>меняет жизнь</span></h1>
-  <p>Стабильный доход, поддержка команды и карьерный рост. Узнай об условиях прямо сейчас.</p>
+  {f'<div class="badge">{_lc_badge}</div>' if _lc_badge else ""}
+  <h1>{_lc_h1}</h1>
+  {f'<p>{_lc_sub}</p>' if _lc_sub else ""}
   <a href="#contact" class="hr-btn hr-btn-tg" style="display:inline-flex;width:auto;margin:0 auto">Узнать подробности →</a>
 </div></section>
-<section class="perks"><div class="wrap">
-  <div class="perks-grid">
-    <div class="perk"><div class="perk-icon">💰</div><h3>Высокий доход</h3><p>Конкурентная оплата с первого рабочего дня. Бонусы и премии.</p></div>
-    <div class="perk"><div class="perk-icon">🎓</div><h3>Обучение</h3><p>Полная подготовка без опыта. Поддержка наставника на старте.</p></div>
-    <div class="perk"><div class="perk-icon">🏠</div><h3>Жильё</h3><p>Компания предоставляет жильё или компенсирует расходы.</p></div>
-    <div class="perk"><div class="perk-icon">🗓</div><h3>Гибкий график</h3><p>Выбираешь смены самостоятельно. Удобный режим работы.</p></div>
-    <div class="perk"><div class="perk-icon">📍</div><h3>Множество локаций</h3><p>Работай в крупных городах — выбирай ближайший.</p></div>
-    <div class="perk"><div class="perk-icon">🤝</div><h3>Простой старт</h3><p>Не требуем опыта, знания языка и специальных документов.</p></div>
-  </div>
-</div></section>
+{_lc_perks_sec}
 <section class="cta-section" id="contact"><div>
-  <h2>Готов(а) к новой жизни?</h2>
-  <p>Напиши нам — HR-менеджер ответит в течение часа и расскажет все детали.</p>
+  {f'<h2>{_lc_cta_h}</h2>' if _lc_cta_h else ""}
+  {f'<p>{_lc_cta_s}</p>' if _lc_cta_s else ""}
   <div class="btns">{buttons}</div>
 </div></section>
 <footer>© {year} {name}. Все права защищены.</footer>
 </body></html>"""
 
 
-def _tpl_bold_cta(name: str, buttons: str, pixel_js: str, year: int) -> str:
+def _tpl_bold_cta(name: str, buttons: str, pixel_js: str, year: int, texts: dict = None) -> str:
+    if texts is None: texts = {}
+    _bc_h1    = texts.get("hero_title","")    or name
+    _bc_sub   = texts.get("hero_subtitle","")
+    _bc_badge = texts.get("badge_text","")
+    _bc_cta_h = texts.get("cta_title","")
+    _bc_cta_s = texts.get("cta_subtitle","")
+    _bc_stats = "".join(
+        f'<div class="stat"><div class="stat-v">{texts.get(f"trust_{i}_val","")}</div><div class="stat-l">{texts.get(f"trust_{i}_lbl","")}</div></div>'
+        for i in range(3) if texts.get(f"trust_{i}_val","")
+    )
+    _bc_icons = ["💰","📚","🏠","🗓","🌍","✅"]
+    _bc_feats = "".join(
+        f'<div class="feat"><div class="feat-icon">{_bc_icons[i]}</div><h3>{texts.get(f"ben_{i}_title","")}</h3><p>{texts.get(f"ben_{i}_text","")}</p></div>'
+        for i in range(6) if texts.get(f"ben_{i}_title","") or texts.get(f"ben_{i}_text","")
+    )
+    _bc_feats_sec = f'<section class="features"><div class="wrap"><div class="features-grid">'+_bc_feats+'</div></div></section>' if _bc_feats else ""
     return f"""<!DOCTYPE html><html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{name}</title>
@@ -3975,30 +4182,16 @@ footer{{text-align:center;padding:24px 0 40px;color:#3d3460;font-size:.83rem}}
 @media(max-width:600px){{.stats{{gap:18px}}}}
 </style></head><body>
 <section class="hero"><div class="hero-inner">
-  <div class="badge">Горячая вакансия</div>
-  <h1>Работа, которую ты <span>искал(а)</span></h1>
-  <p class="sub">Стабильный доход, дружная команда, жильё и обучение. Начни новую главу своей жизни уже сейчас.</p>
-  <div class="stats">
-    <div class="stat"><div class="stat-v">400$+</div><div class="stat-l">доход в день</div></div>
-    <div class="stat"><div class="stat-v">100%</div><div class="stat-l">оформление</div></div>
-    <div class="stat"><div class="stat-v">24/7</div><div class="stat-l">поддержка</div></div>
-    <div class="stat"><div class="stat-v">1 час</div><div class="stat-l">ответ HR</div></div>
-  </div>
+  {f'<div class="badge">{_bc_badge}</div>' if _bc_badge else ""}
+  <h1>{_bc_h1}</h1>
+  {f'<p class="sub">{_bc_sub}</p>' if _bc_sub else ""}
+  {f'<div class="stats">{_bc_stats}</div>' if _bc_stats else ""}
   <div class="btns">{buttons}</div>
 </div></section>
-<section class="features"><div class="wrap">
-  <div class="features-grid">
-    <div class="feat"><div class="feat-icon">💰</div><h3>Высокий доход</h3><p>Зарабатывай конкурентно с первого дня без задержек.</p></div>
-    <div class="feat"><div class="feat-icon">📚</div><h3>Обучение включено</h3><p>Полная подготовка под руководством наставника.</p></div>
-    <div class="feat"><div class="feat-icon">🏠</div><h3>Жильё</h3><p>Компания обеспечивает жильём или компенсирует расходы.</p></div>
-    <div class="feat"><div class="feat-icon">🗓</div><h3>Гибкий график</h3><p>Сам(а) составляешь расписание смен.</p></div>
-    <div class="feat"><div class="feat-icon">🌍</div><h3>Работа за рубежом</h3><p>Множество локаций в крупнейших городах.</p></div>
-    <div class="feat"><div class="feat-icon">✅</div><h3>Простой старт</h3><p>Без опыта, без языка, без сложных требований.</p></div>
-  </div>
-</div></section>
+{_bc_feats_sec}
 <section class="cta2" id="contact"><div class="wrap">
-  <h2>Напиши нам прямо сейчас</h2>
-  <p>HR-менеджер ответит в течение часа и расскажет все детали по вакансии.</p>
+  {f'<h2>{_bc_cta_h}</h2>' if _bc_cta_h else ""}
+  {f'<p>{_bc_cta_s}</p>' if _bc_cta_s else ""}
   <div class="btns">{buttons}</div>
 </div></section>
 <footer>© {year} {name}. Все права защищены.</footer>
@@ -4093,7 +4286,30 @@ def _tpl_massage_job(name: str, contacts: list, pixel_js: str, year: int) -> str
     )
 
 
-def _tpl_tiktok_spa(name: str, contacts: list, pixel_js: str, tt_pixel_id: str, year: int) -> str:
+def _tpl_tiktok_spa(name: str, contacts: list, pixel_js: str, tt_pixel_id: str, year: int, texts: dict = None) -> str:
+    if texts is None: texts = {}
+    _tt_h1    = texts.get("hero_title","")    or name
+    _tt_sub   = texts.get("hero_subtitle","")
+    _tt_badge = texts.get("badge_text","")
+    _tt_cta_h = texts.get("cta_title","")
+    _tt_cta_s = texts.get("cta_subtitle","")
+    _tt_icons = ["💵","🏠","🎓","🛡","🕐","👁"]
+    _tt_bens_html = "".join(
+        f'<div class="tt-card"><div class="tt-card-icon">{_tt_icons[i]}</div><div><div class="tt-card-title">{texts.get(f"ben_{i}_title","")}</div><div class="tt-card-desc">{texts.get(f"ben_{i}_text","")}</div></div></div>'
+        for i in range(6) if texts.get(f"ben_{i}_title","") or texts.get(f"ben_{i}_text","")
+    )
+    _tt_steps_html = "".join(
+        f'<div class="tt-step"><div class="tt-step-num">{i+1}</div><div class="tt-step-body"><div class="tt-step-title">{texts.get(f"step_{i}_title","")}</div><div class="tt-step-desc">{texts.get(f"step_{i}_text","")}</div></div></div>'
+        for i in range(3) if texts.get(f"step_{i}_title","")
+    )
+    _tt_trust_html = "".join(
+        f'<div class="tt-trust-item"><div class="tt-trust-num">{texts.get(f"trust_{i}_val","")}</div><div class="tt-trust-lbl">{texts.get(f"trust_{i}_lbl","")}</div></div>'
+        for i in range(3) if texts.get(f"trust_{i}_val","")
+    )
+    _tt_revs_html = "".join(
+        f'<div class="tt-review"><div class="tt-review-stars">★★★★★</div><div class="tt-review-text">«{texts.get(f"rev_{i}_text","")}»</div><div class="tt-review-meta"><div class="tt-review-name">{texts.get(f"rev_{i}_name","")}, {texts.get(f"rev_{i}_from","")}</div><div class="tt-review-earn">{texts.get(f"rev_{i}_earn","")}</div></div></div>'
+        for i in range(4) if texts.get(f"rev_{i}_name","")
+    )
     """TikTok-оптимизированная версия HR лендинга для СПА.
     Особенности: вертикальная структура (mobile-first), крупные CTA вверху,
     простой текст без сложных юридических фраз, доверие через цифры,
@@ -4198,44 +4414,29 @@ a{{text-decoration:none;color:inherit}}
 <!-- HERO -->
 <section class="tt-hero">
   <div class="wrap">
-    <div class="tt-badge">✨ Вакансия · Работа в США</div>
-    <h1 class="tt-h1">Работа в СПА<br>от $1500 в день</h1>
-    <p class="tt-sub">Массажистки зарабатывают от $500 за смену. Жильё, обучение и поддержка — всё включено.</p>
+    {f'<div class="tt-badge">{_tt_badge}</div>' if _tt_badge else ""}
+    <h1 class="tt-h1">{_tt_h1}</h1>
+    {f'<p class="tt-sub">{_tt_sub}</p>' if _tt_sub else ""}
     <div class="tt-cta-wrap" id="main-cta">
       {cta_btns}
     </div>
-    <div class="tt-trust">
-      <div class="tt-trust-item"><div class="tt-trust-num">500+</div><div class="tt-trust-lbl">девушек<br>уже работают</div></div>
-      <div class="tt-trust-item"><div class="tt-trust-num">$1500</div><div class="tt-trust-lbl">средний<br>доход в день</div></div>
-      <div class="tt-trust-item"><div class="tt-trust-num">50+</div><div class="tt-trust-lbl">городов<br>по всей США</div></div>
-    </div>
+    {f'<div class="tt-trust">{_tt_trust_html}</div>' if _tt_trust_html else ""}
   </div>
 </section>
 
 <!-- BENEFITS -->
 <section class="tt-sec">
   <div class="wrap">
-    <div class="tt-sec-title">Что ты получаешь</div>
-    <div class="tt-cards">
-      <div class="tt-card"><div class="tt-card-icon">💵</div><div><div class="tt-card-title">Оплата каждый день</div><div class="tt-card-desc">Деньги получаешь сразу после смены — никаких задержек и удержаний.</div></div></div>
-      <div class="tt-card"><div class="tt-card-icon">🏠</div><div><div class="tt-card-title">Жильё включено</div><div class="tt-card-desc">Предоставляем комфортное жильё в городе, где ты работаешь.</div></div></div>
-      <div class="tt-card"><div class="tt-card-icon">🎓</div><div><div class="tt-card-title">Обучение с нуля</div><div class="tt-card-desc">Опыт не нужен. Обучаем бесплатно — ты начнёшь зарабатывать уже в первую неделю.</div></div></div>
-      <div class="tt-card"><div class="tt-card-icon">🛡</div><div><div class="tt-card-title">Полная безопасность</div><div class="tt-card-desc">Только проверенные клиенты. Администратор и менеджер всегда на связи 24/7.</div></div></div>
-      <div class="tt-card"><div class="tt-card-icon">🕐</div><div><div class="tt-card-title">Гибкий график</div><div class="tt-card-desc">Сама выбираешь смены. Можно совмещать с другой работой или учёбой.</div></div></div>
-      <div class="tt-card"><div class="tt-card-icon">👁</div><div><div class="tt-card-title">Анонимность</div><div class="tt-card-desc">Твои личные данные под защитой. Работаешь под именем, которое выберешь сама.</div></div></div>
-    </div>
+    {f'<div class="tt-sec-title">Что ты получаешь</div>' if _tt_bens_html else ""}
+    {f'<div class="tt-cards">{_tt_bens_html}</div>' if _tt_bens_html else ""}
   </div>
 </section>
 
 <!-- HOW TO START -->
 <section class="tt-sec">
   <div class="wrap">
-    <div class="tt-sec-title">Как начать за 3 шага</div>
-    <div class="tt-steps">
-      <div class="tt-step"><div class="tt-step-num">1</div><div class="tt-step-body"><div class="tt-step-title">Напиши нам в Telegram или WhatsApp</div><div class="tt-step-desc">Наш HR-менеджер ответит в течение нескольких минут и расскажет всё подробно.</div></div></div>
-      <div class="tt-step"><div class="tt-step-num">2</div><div class="tt-step-body"><div class="tt-step-title">Заполни короткую анкету</div><div class="tt-step-desc">Имя, возраст, город где ты сейчас в США и одно фото. Документы не нужны.</div></div></div>
-      <div class="tt-step"><div class="tt-step-num">3</div><div class="tt-step-body"><div class="tt-step-title">Выходи на первую смену</div><div class="tt-step-desc">Получаешь адрес, знакомишься с командой и зарабатываешь уже в первый день.</div></div></div>
-    </div>
+    {f'<div class="tt-sec-title">Как начать за 3 шага</div>' if _tt_steps_html else ""}
+    {f'<div class="tt-steps">{_tt_steps_html}</div>' if _tt_steps_html else ""}
     <div style="margin-top:28px;display:flex;flex-direction:column;align-items:center;gap:12px">
       {cta_btns}
     </div>
@@ -4245,12 +4446,8 @@ a{{text-decoration:none;color:inherit}}
 <!-- REVIEWS -->
 <section class="tt-sec">
   <div class="wrap">
-    <div class="tt-sec-title">Девушки о работе с нами</div>
-    <div class="tt-reviews">
-      <div class="tt-review"><div class="tt-review-stars">★★★★★</div><div class="tt-review-text">«Работаю 3 месяца в Майами. Сначала было страшно, но команда поддержала с первого дня. Теперь планирую купить квартиру дома.»</div><div class="tt-review-meta"><div class="tt-review-name">Анна, из Украины</div><div class="tt-review-earn">+$35,000</div></div></div>
-      <div class="tt-review"><div class="tt-review-stars">★★★★★</div><div class="tt-review-text">«Поехала не зная языка, помогли с переводчиком. График удобный, жильё хорошее. Уже работаю 5 месяцев.»</div><div class="tt-review-meta"><div class="tt-review-name">Елена, из России</div><div class="tt-review-earn">+$55,000</div></div></div>
-      <div class="tt-review"><div class="tt-review-stars">★★★★★</div><div class="tt-review-text">«Опыта массажа не было вообще, обучили за неделю. Первую смену немного нервничала, но всё прошло хорошо.»</div><div class="tt-review-meta"><div class="tt-review-name">Мария, из Беларуси</div><div class="tt-review-earn">+$22,000</div></div></div>
-    </div>
+    {f'<div class="tt-sec-title">Девушки о работе с нами</div>' if _tt_revs_html else ""}
+    {f'<div class="tt-reviews">{_tt_revs_html}</div>' if _tt_revs_html else ""}
   </div>
 </section>
 
@@ -4258,8 +4455,8 @@ a{{text-decoration:none;color:inherit}}
 <section class="tt-bottom">
   <div class="wrap">
     <div class="tt-scroll-cta">👆 Прокрути вверх — напиши нам</div>
-    <h2 class="tt-bottom-title">Готова зарабатывать<br>от $500 в день?</h2>
-    <p class="tt-bottom-sub">Напиши прямо сейчас — менеджер ответит через несколько минут и ответит на все вопросы</p>
+    {f'<h2 class="tt-bottom-title">{_tt_cta_h}</h2>' if _tt_cta_h else ""}
+    {f'<p class="tt-bottom-sub">{_tt_cta_s}</p>' if _tt_cta_s else ""}
     <div style="display:flex;flex-direction:column;align-items:center;gap:12px">
       {cta_btns}
     </div>

@@ -18,16 +18,18 @@ require_auth   = None
 base           = None
 nav_html       = None
 _render_conv_tags_picker = None
+STAFF_STATUSES = {}
 
 
-def setup(_db, _log, _require_auth, _base, _nav_html, _render_conv_tags_picker_fn):
-    global db, log, require_auth, base, nav_html, _render_conv_tags_picker
+def setup(_db, _log, _require_auth, _base, _nav_html, _render_conv_tags_picker_fn, _staff_statuses=None):
+    global db, log, require_auth, base, nav_html, _render_conv_tags_picker, STAFF_STATUSES
     db             = _db
     log            = _log
     require_auth   = _require_auth
     base           = _base
     nav_html       = _nav_html
     _render_conv_tags_picker = _render_conv_tags_picker_fn
+    if _staff_statuses: STAFF_STATUSES = _staff_statuses
 
 
 # STAFF BASE

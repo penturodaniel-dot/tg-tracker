@@ -832,9 +832,12 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
     tt_pixel = db.get_setting("tt_pixel_id")
     tt_token = db.get_setting("tt_access_token")
     if tt_pixel and tt_token:
-        await send_tiktok_event(tt_pixel, tt_token, "SubmitForm",
-            user_id=conv.get("wa_number", ""),
-            ip=request.client.host if request.client else None)
+        try:
+            await send_tiktok_event(tt_pixel, tt_token, "SubmitForm",
+                user_id=conv.get("wa_number", ""),
+                ip=request.client.host if request.client else None)
+        except Exception as _e:
+            log.warning(f"[TikTok] send_tiktok_event not available: {_e}")
     return RedirectResponse(f"/wa/chat?conv_id={conv_id}", 303)
 
 

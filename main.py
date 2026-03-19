@@ -5624,7 +5624,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               <div style="display:flex;gap:6px;flex-shrink:0">{close_btn} {delete_btn}</div>
             </div>
             <div class="chat-messages" id="tga-msgs">{messages_html}</div>
-            <div id="tga-send-error" style="display:none;padding:8px 18px;background:#2d0a0a;border-top:1px solid #7f1d1d;font-size:.8rem;color:#fca5a5;display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div id="tga-send-error" style="display:none;padding:8px 18px;background:#2d0a0a;border-top:1px solid #7f1d1d;font-size:.8rem;color:#fca5a5;align-items:center;justify-content:space-between;gap:8px">
               <span id="tga-send-error-text"></span>
               <button onclick="document.getElementById('tga-send-error').style.display='none'" style="background:none;border:none;color:#fca5a5;cursor:pointer;font-size:1rem;line-height:1">✕</button>
             </div>

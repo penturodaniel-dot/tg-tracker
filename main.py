@@ -5297,12 +5297,16 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               }}catch(e){{showTgaError(e.message);}}
               input.value='';
             }}
+            var _tgaLoadingMsgs=false;
             async function loadNewTgAccMsgs(){{
+              if(_tgaLoadingMsgs)return;
+              _tgaLoadingMsgs=true;
               try{{
                 var res=await fetch('/api/tg_account_messages/{conv_id}?after='+lastTgAId);
-                if(!res.ok)return;var data=await res.json();
-                if(!data.messages||!data.messages.length)return;
+                if(!res.ok){{_tgaLoadingMsgs=false;return;}}var data=await res.json();
+                if(!data.messages||!data.messages.length){{_tgaLoadingMsgs=false;return;}}
                 data.messages.forEach(function(m){{
+                  if(tgaMsgBox.querySelector('[data-id="'+m.id+'"]'))return;
                   var d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
                   var inner=m.media_url&&m.media_type&&m.media_type.startsWith('image/')
                     ?'<img src="'+m.media_url+'" style="max-width:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)"/>'
@@ -5312,7 +5316,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                   tgaMsgBox.appendChild(d);lastTgAId=m.id;
                 }});
                 tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
-              }}catch(e){{}}
+              }}catch(e){{}}finally{{_tgaLoadingMsgs=false;}}
             }}
             async function deleteTgAccConv(id){{
               var btn=document.querySelector('[onclick*="deleteTgAccConv"]');

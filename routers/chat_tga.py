@@ -130,7 +130,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
     for c in convs:
         cls = "conv-item active" if c["id"] == conv_id else "conv-item"
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T", " ")
-        ucount = f'<span class="unread-num">{c["unread_count"]}</span>' if c.get("unread_count", 0) > 0 else ""
+        ucount = f'<span class="unread-num unread-badge">{c["unread_count"]}</span>' if c.get("unread_count", 0) > 0 else ""
         dot = "🟢" if c["status"] == "open" else "⚫"
         # Задача 3: FB только если fbclid или utm_source=facebook
         is_fb = bool(c.get("fbclid") or c.get("utm_source") in ("facebook", "fb"))
@@ -641,10 +641,16 @@ async def tg_account_webhook(request: Request):
                         mime = media_type or "image/jpeg"
                         result = cloudinary.uploader.upload(f"data:{mime};base64,{media_b64}", folder="tg_account_media", resource_type="auto")
                         media_url = result.get("secure_url")
-                    elif media_type and media_type.startswith("image/"):
-                        media_url = f"data:{media_type};base64,{media_b64}"
+                    else:
+                        # Fallback: data URL для всех типов медиа
+                        mime = media_type or "application/octet-stream"
+                        media_url = f"data:{mime};base64,{media_b64}"
                 except Exception as e:
                     log.error(f"[TG webhook] media upload error: {e}")
+                    # Последний fallback
+                    if media_b64:
+                        mime = media_type or "application/octet-stream"
+                        media_url = f"data:{mime};base64,{media_b64}"
 
             if not raw_text and has_media:
                 raw_text = "[фото]" if (media_type or "").startswith("image/") else "[файл]"

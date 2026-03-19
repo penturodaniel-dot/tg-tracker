@@ -378,7 +378,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     for c in convs:
         cls = "conv-item active" if c["id"] == conv_id else "conv-item"
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T"," ")
-        ucount = f'<span class="unread-num" style="background:#25d366">{c["unread_count"]}</span>' if c["unread_count"] > 0 else ""
+        ucount = f'<span class="unread-num unread-badge" style="background:#25d366">{c["unread_count"]}</span>' if c["unread_count"] > 0 else ""
         dot = "🟢" if c["status"] == "open" else "⚫"
         if c.get("fbclid"):
             src_badge = '<span class="source-badge source-fb">🔵 FB</span>'

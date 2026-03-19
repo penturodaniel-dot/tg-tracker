@@ -40,7 +40,6 @@ async def settings_page(request: Request, msg: str = ""):
     user, err = require_auth(request, role="admin")
     if err: return err
 
-    b1_info = await bot_manager.get_bot_info(bot_manager.get_tracker_bot())
     b2_info = await bot_manager.get_bot_info(bot_manager.get_staff_bot())
     # Раздельные пиксели
     pixel_clients   = db.get_setting("pixel_id_clients",   db.get_setting("pixel_id", ""))
@@ -74,7 +73,6 @@ async def settings_page(request: Request, msg: str = ""):
     {alert}
 
     <div class="section-head" style="padding:0;margin-bottom:12px"><h3 style="font-size:.78rem;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.08em">🤖 Управление ботами</h3></div>
-    {bot_card("🔵 Бот 1 — Трекер (Клиенты)", "blue", b1_info, "bot1_token", "settings/bot1")}
     {bot_card("🟠 Бот 2 — Уведомления (авторизация)", "orange", b2_info, "bot2_token", "settings/bot2")}
 
     <div class="section" style="border-left:3px solid #25d366">
@@ -180,17 +178,6 @@ async def settings_page(request: Request, msg: str = ""):
     </div></div>"""
     return HTMLResponse(base(content, "settings", request))
 
-
-@router.post("/settings/bot1")
-async def settings_bot1(request: Request, bot1_token: str = Form("")):
-    user, err = require_auth(request, role="admin")
-    if err: return err
-    if bot1_token.strip():
-        db.set_setting("bot1_token", bot1_token.strip())
-        await bot_manager.start_tracker_bot(bot1_token.strip())
-        info = await bot_manager.get_bot_info(bot_manager.get_tracker_bot())
-        if info.get("username"): db.set_setting("bot1_name", f"@{info['username']}")
-    return RedirectResponse("/settings?msg=Бот+1+обновлён", 303)
 
 
 @router.post("/settings/bot2")

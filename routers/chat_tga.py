@@ -20,6 +20,7 @@ db             = None
 log            = None
 bot_manager    = None
 meta_capi      = None
+tiktok_capi    = None
 TG_WH_SECRET   = ""
 TG_SVC_URL     = ""
 TG_SVC_SECRET  = ""
@@ -32,8 +33,9 @@ _render_conv_tags_picker = None
 
 def setup(_db, _log, _bot_manager, _meta_capi,
           _tg_wh_secret, _tg_svc_url, _tg_svc_secret,
-          _check_session, _require_auth, _base, _nav_html, _render_conv_tags_picker_fn):
-    global db, log, bot_manager, meta_capi
+          _check_session, _require_auth, _base, _nav_html, _render_conv_tags_picker_fn,
+          _tiktok_capi=None):
+    global db, log, bot_manager, meta_capi, tiktok_capi
     global TG_WH_SECRET, TG_SVC_URL, TG_SVC_SECRET
     global check_session, require_auth, base, nav_html, _render_conv_tags_picker
     db             = _db
@@ -48,6 +50,7 @@ def setup(_db, _log, _bot_manager, _meta_capi,
     base           = _base
     nav_html       = _nav_html
     _render_conv_tags_picker = _render_conv_tags_picker_fn
+    tiktok_capi    = _tiktok_capi
 
 
 # ── Хелпер вызова TG аккаунт сервиса ─────────────────────────────────────────
@@ -712,6 +715,19 @@ async def tg_account_send_lead(request: Request, conv_id: int = Form(...)):
     )
     if sent:
         db.set_tg_account_fb_event(conv_id, "Lead")
+    # TikTok Lead (аналогично FB CAPI)
+    tt_pixel = db.get_setting("tt_pixel_id")
+    tt_token = db.get_setting("tt_access_token")
+    if tt_pixel and tt_token and tiktok_capi:
+        await tiktok_capi.send_lead_event(
+            tt_pixel, tt_token,
+            user_id=conv.get("tg_user_id", ""),
+            ip=request.client.host if request.client else None,
+            utm_source=conv.get("utm_source") or "telegram",
+            utm_campaign=conv.get("utm_campaign") or "",
+            ttclid=conv.get("ttclid") or conv.get("fbclid") or None,
+            event_source_url="https://t.me/",
+        )
     return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
 
 

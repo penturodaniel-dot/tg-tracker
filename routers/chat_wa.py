@@ -21,6 +21,7 @@ db             = None
 log            = None
 bot_manager    = None
 meta_capi      = None
+tiktok_capi    = None
 WA_URL         = ""
 WA_SECRET      = ""
 WA_WH_SECRET   = ""
@@ -38,11 +39,11 @@ def setup(_db, _log, _bot_manager, _meta_capi,
           _wa_url, _wa_secret, _wa_wh_secret,
           _tg_svc_url, _tg_svc_secret,
           _check_session, _require_auth, _base, _nav_html, _render_conv_tags_picker_fn,
-          _css=""):
+          _css="", _tiktok_capi=None):
     global db, log, bot_manager, meta_capi
     global WA_URL, WA_SECRET, WA_WH_SECRET
     global TG_SVC_URL, TG_SVC_SECRET
-    global check_session, require_auth, base, nav_html, _render_conv_tags_picker, CSS
+    global check_session, require_auth, base, nav_html, _render_conv_tags_picker, CSS, tiktok_capi
     db             = _db
     log            = _log
     bot_manager    = _bot_manager
@@ -58,6 +59,7 @@ def setup(_db, _log, _bot_manager, _meta_capi,
     nav_html       = _nav_html
     _render_conv_tags_picker = _render_conv_tags_picker_fn
     CSS                  = _css
+    tiktok_capi          = _tiktok_capi
 
 async def wa_api(method: str, path: str, **kwargs) -> dict:
     if not WA_URL:
@@ -828,16 +830,20 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
     )
     if sent:
         db.set_wa_fb_event(conv_id, "Lead")
-    # TikTok Lead
+    # TikTok Lead (аналогично FB CAPI)
     tt_pixel = db.get_setting("tt_pixel_id")
     tt_token = db.get_setting("tt_access_token")
-    if tt_pixel and tt_token:
-        try:
-            await send_tiktok_event(tt_pixel, tt_token, "SubmitForm",
-                user_id=conv.get("wa_number", ""),
-                ip=request.client.host if request.client else None)
-        except Exception as _e:
-            log.warning(f"[TikTok] send_tiktok_event not available: {_e}")
+    if tt_pixel and tt_token and tiktok_capi:
+        wa_number = conv.get("wa_number", "")
+        await tiktok_capi.send_lead_event(
+            tt_pixel, tt_token,
+            user_id=wa_number,
+            ip=request.client.host if request.client else None,
+            utm_source=conv.get("utm_source") or "whatsapp",
+            utm_campaign=conv.get("utm_campaign") or "",
+            ttclid=conv.get("ttclid") or conv.get("fbclid") or None,
+            event_source_url=f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/",
+        )
     return RedirectResponse(f"/wa/chat?conv_id={conv_id}", 303)
 
 

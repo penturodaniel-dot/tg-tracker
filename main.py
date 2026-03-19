@@ -500,7 +500,6 @@ def nav_html(active: str, request: Request) -> str:
     wa_status  = db.get_setting("wa_status", "disconnected")
     role = user["role"] if user else "manager"
 
-    # Разрешённые вкладки для менеджера
     perms_str = (user.get("permissions", "") or "") if user else ""
     allowed_tabs = [p.strip() for p in perms_str.split(",") if p.strip()]
     def can(tab):
@@ -517,14 +516,54 @@ def nav_html(active: str, request: Request) -> str:
         bdg  = f'<span class="badge-count"{bid}{hide}>{badge_count if badge_count else ""}</span>'
         return f'<a href="{href}"><div class="{cls}"><span class="nav-label">{icon} {label}</span>{bdg}</div></a>'
 
-    admin_section = ""
+    # Определяем какой аккордеон активен
+    clients_pages  = ["channels","campaigns","landings","analytics_clients"]
+    staff_pages    = ["tg_account_chat","wa_chat","staff","landings_staff","analytics_staff"]
+    settings_pages = ["tags","users","projects","settings"]
+    is_clients  = active in clients_pages or (active and any(active.startswith(p) for p in clients_pages))
+    is_staff    = active in staff_pages   or (active and any(active.startswith(p) for p in staff_pages))
+    is_settings = active in settings_pages
+
+    # Аккордеон-секция
+    def accordion(section_id, icon, title, color, items_html, open_by_default=False):
+        is_open = open_by_default
+        arrow_style = "transform:rotate(0deg)" if is_open else "transform:rotate(-90deg)"
+        body_style  = "" if is_open else "display:none"
+        return f"""
+        <div class="acc-section" id="acc-{section_id}">
+          <div class="acc-header" onclick="toggleAcc('{section_id}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px 6px;cursor:pointer;user-select:none">
+            <span style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)">{icon} {title}</span>
+            <span id="acc-arrow-{section_id}" style="font-size:.6rem;color:var(--text3);transition:transform .2s;{arrow_style}">▼</span>
+          </div>
+          <div id="acc-body-{section_id}" style="{body_style}">{items_html}</div>
+        </div>"""
+
+    # Блок Клиенты
+    clients_items = (
+        item("📡", "Каналы",      "channels",          "blue") +
+        item("🔗", "Кампании",    "campaigns",         "blue") +
+        item("🎨", "Шаблоны",     "landings",          "blue") +
+        item("📈", "Статистика",  "analytics_clients", "blue", url="/analytics/clients")
+    )
+
+    # Блок Сотрудники
+    staff_items = (
+        item("📱", "TG Чаты",     "tg_account_chat", "orange", badge_count=tga_unread, url="/tg_account/chat", badge_id="nav-tga-badge") +
+        item("💚", "WA Чаты",     "wa_chat",         "orange", badge_count=wa_unread,  url="/wa/chat",         badge_id="nav-wa-badge") +
+        item("🗂",  "База",        "staff",            "orange") +
+        item("🌐", "Лендинги HR", "landings_staff",   "orange") +
+        item("📊", "Статистика",  "analytics_staff",  "orange", url="/analytics/staff")
+    )
+
+    # Блок Настройки (только admin)
+    settings_items = ""
     if role == "admin":
-        admin_section = f"""
-        <div class="nav-divider"></div>
-        {item("🏷️", "Теги", "tags", "blue")}
-        {item("🔐", "Пользователи", "users", "blue")}
-        {item("🎯", "Проекты", "projects", "blue")}
-        {item("⚙️", "Настройки", "settings", "blue")}"""
+        settings_items = (
+            item("🏷️", "Теги",         "tags",      "blue") +
+            item("🔐", "Пользователи", "users",     "blue") +
+            item("🎯", "Проекты",      "projects",  "blue") +
+            item("⚙️", "Настройки",   "settings",  "blue")
+        )
 
     wa_dot = "dot-green" if wa_status == "ready" else ("dot-yellow" if wa_status == "qr" else "dot-red")
 
@@ -539,21 +578,12 @@ def nav_html(active: str, request: Request) -> str:
           <div class="theme-toggle" onclick="toggleTheme()" title="Тема" id="theme-btn">☀️</div>
         </div>
       </div>
-      {item("📊", "Обзор", "overview", "blue")}
+
+      {accordion("clients",  "📋", "Клиенты",     "blue",   clients_items,  open_by_default=is_clients)}
       <div class="nav-divider"></div>
-      <div class="nav-section">Клиенты</div>
-      {item("📡", "Каналы", "channels", "blue")}
-      {item("🔗", "Кампании", "campaigns", "blue")}
-      {item("🎨", "Шаблоны", "landings", "blue")}
-      {item("📈", "Статистика", "analytics_clients", "blue", url="/analytics/clients")}
-      <div class="nav-divider"></div>
-      <div class="nav-section">Сотрудники</div>
-      {item("📱", "TG Чаты", "tg_account_chat", "orange", badge_count=tga_unread, url="/tg_account/chat", badge_id="nav-tga-badge")}
-      {item("💚", "WA Чаты", "wa_chat", "orange", badge_count=wa_unread, url="/wa/chat", badge_id="nav-wa-badge")}
-      {item("🗂", "База", "staff", "orange")}
-      {item("🌐", "Лендинги HR", "landings_staff", "orange")}
-      {item("📊", "Статистика", "analytics_staff", "orange", url="/analytics/staff")}
-      {admin_section}
+      {accordion("staff",    "👥", "Сотрудники",  "orange", staff_items,    open_by_default=True)}
+      {'<div class="nav-divider"></div>' + accordion("settings", "⚙️", "Настройки", "blue", settings_items, open_by_default=is_settings) if role == "admin" and settings_items else ''}
+
       <div class="sidebar-footer">
         <div class="bot-status"><div class="dot {'dot-green' if b2 else 'dot-red'}"></div><span>{b2_name}</span></div>
         <div class="bot-status"><div class="dot {wa_dot}"></div><span id="nav-wa-status">WhatsApp {'✓' if wa_status == 'ready' else ('QR...' if wa_status == 'qr' else '✗')}</span></div>
@@ -563,6 +593,28 @@ def nav_html(active: str, request: Request) -> str:
     </div>
     <div id="toast-container"></div>
     <script>
+    function toggleAcc(id){{
+      var body  = document.getElementById('acc-body-' + id);
+      var arrow = document.getElementById('acc-arrow-' + id);
+      if(!body) return;
+      var isOpen = body.style.display !== 'none';
+      body.style.display  = isOpen ? 'none' : '';
+      if(arrow) arrow.style.transform = isOpen ? 'rotate(-90deg)' : 'rotate(0deg)';
+      try{{ localStorage.setItem('acc_' + id, isOpen ? '0' : '1'); }}catch(e){{}}
+    }}
+    // Восстанавливаем состояние аккордеонов из localStorage
+    (function(){{
+      ['clients','settings'].forEach(function(id){{
+        var saved = localStorage.getItem('acc_' + id);
+        if(saved === null) return; // не трогаем — управляется сервером
+        var body  = document.getElementById('acc-body-' + id);
+        var arrow = document.getElementById('acc-arrow-' + id);
+        if(!body) return;
+        var open = saved === '1';
+        body.style.display  = open ? '' : 'none';
+        if(arrow) arrow.style.transform = open ? 'rotate(0deg)' : 'rotate(-90deg)';
+      }});
+    }})();
     (function(){{
       const t = localStorage.getItem('theme') || 'dark';
       const btn = document.getElementById('theme-btn');
@@ -614,7 +666,6 @@ def nav_html(active: str, request: Request) -> str:
         if(d.wa_unread > _lastWaUnread) showToast('💚 Новое сообщение', 'WhatsApp чаты', 'wa-toast', '/wa/chat');
         if(d.tga_unread > _lastTgaUnread) showToast('📱 Новое сообщение', 'TG Чаты', 'tga-toast', '/tg_account/chat');
         _lastWaUnread = d.wa_unread || 0; _lastTgaUnread = d.tga_unread || 0;
-        // Задача 2: обновляем статус в сайдбаре
         var waDot=document.querySelector('#nav-wa-status');
         if(waDot && d.wa_status!==undefined){{
           waDot.textContent=d.wa_status==='ready'?'WhatsApp ✓':(d.wa_status==='qr'?'WhatsApp QR...':'WhatsApp ✗');
@@ -630,118 +681,7 @@ def nav_html(active: str, request: Request) -> str:
       }}catch(e){{}}
     }}
     setInterval(pollUnread, 5000);
-
-    // ── Staff photo hover popup ──────────────────────────────────────────────
-    (function(){{
-      var _popup = null;
-      var _hideTimer = null;
-
-      function showPopup(wrap){{
-        var popup = wrap.querySelector('.staff-photo-popup');
-        if(!popup) return;
-        if(_hideTimer){{ clearTimeout(_hideTimer); _hideTimer = null; }}
-        popup.style.top = '0';
-        popup.style.left = '0';
-        popup.style.width = '100vw';
-        popup.style.height = '100vh';
-        popup.style.background = 'rgba(0,0,0,0.78)';
-        popup.classList.add('visible');
-        _popup = popup;
-      }}
-
-      function hidePopupNow(popup){{
-        if(!popup) return;
-        if(_hideTimer){{ clearTimeout(_hideTimer); _hideTimer = null; }}
-        popup.classList.remove('visible');
-        if(_popup === popup) _popup = null;
-      }}
-
-      function hidePopup(popup){{
-        if(!popup) return;
-        _hideTimer = setTimeout(function(){{
-          popup.classList.remove('visible');
-          if(_popup === popup) _popup = null;
-          _hideTimer = null;
-        }}, 80);
-      }}
-
-      // Закрытие по клику на фон или крестик
-      document.addEventListener('click', function(e){{
-        if(!_popup) return;
-        var onClose = e.target.closest('.spp-close');
-        if(onClose) {{ hidePopupNow(_popup); return; }}
-        var onImg  = e.target.closest('.staff-photo-popup img');
-        var onBtns = e.target.closest('.staff-photo-popup-btns');
-        if(onImg || onBtns) return;
-        if(_popup.classList.contains('visible')) hidePopupNow(_popup);
-      }});
-
-      document.addEventListener('mouseover', function(e){{
-        var wrap = e.target.closest('.staff-photo-wrap');
-        if(wrap){{ showPopup(wrap); return; }}
-        var popup = e.target.closest('.staff-photo-popup');
-        if(popup){{ if(_hideTimer){{ clearTimeout(_hideTimer); _hideTimer = null; }} return; }}
-        if(_popup && !_popup.contains(e.target)){{
-          var onWrap = e.target.closest('.staff-photo-wrap');
-          if(!onWrap) hidePopup(_popup);
-        }}
-      }});
-
-      document.addEventListener('mouseout', function(e){{
-        if(!_popup) return;
-        var to = e.relatedTarget;
-        if(!to) {{ hidePopup(_popup); return; }}
-        var onWrap  = to.closest('.staff-photo-wrap');
-        var onPopup = to.closest('.staff-photo-popup');
-        if(!onWrap && !onPopup) hidePopup(_popup);
-      }});
-
-      // Escape закрывает
-      document.addEventListener('keydown', function(e){{
-        if(e.key === 'Escape' && _popup) hidePopupNow(_popup);
-      }});
-    }})();
-    </script>"""
-
-
-def _render_conv_tags_picker(active_tags: list, all_tags: list, active_ids: set, conv_type: str, conv_id: int) -> str:
-    """Рендерит строку тегов + кнопку пикера для открытого чата"""
-    # Активные теги с кнопкой удаления
-    tags_html = ""
-    for tg in active_tags:
-        tags_html += (
-            f'<span class="conv-tag" style="background:{tg["color"]}22;color:{tg["color"]};border-color:{tg["color"]}55" data-tag-id="{tg["id"]}">'
-            f'{tg["name"]}'
-            f'<button class="conv-tag-del" onclick="removeConvTag(\'{conv_type}\',{conv_id},{tg["id"]},this)" title="Убрать тег">✕</button>'
-            f'</span>'
-        )
-    # Пикер — список доступных тегов (которые ещё не добавлены)
-    picker_items = ""
-    available = [t for t in all_tags if t["id"] not in active_ids]
-    if available:
-        for tg in available:
-            picker_items += (
-                f'<div class="tag-picker-item" onclick="addConvTag(\'{conv_type}\',{conv_id},{tg["id"]},this)">'
-                f'<span class="tag-picker-dot" style="background:{tg["color"]}"></span>'
-                f'{tg["name"]}'
-                f'</div>'
-            )
-    else:
-        picker_items = '<div class="tag-picker-empty">Все теги добавлены</div>'
-
-    manage_link = '<a href="/tags" style="display:block;padding:6px 8px;font-size:.74rem;color:var(--text3);text-decoration:none;border-top:1px solid var(--border);margin-top:4px" onmouseover="this.style.color=\'var(--orange)\'" onmouseout="this.style.color=\'var(--text3)\'">⚙️ Управление тегами</a>'
-
-    picker_html = (
-        f'<div class="tag-picker" id="tag-picker-{conv_type}-{conv_id}">'
-        f'<button class="tag-picker-btn" onclick="event.stopPropagation();toggleTagPicker(\'{conv_type}\',{conv_id})">＋ Тег</button>'
-        f'<div class="tag-picker-dropdown" id="tpd-{conv_type}-{conv_id}">'
-        f'{picker_items}'
-        f'{manage_link}'
-        f'</div></div>'
-    )
-
-    return f'<div class="tags-row" id="tags-row-{conv_type}-{conv_id}" style="margin-top:6px">{tags_html}{picker_html}</div>'
-
+"""
 
 def base(content: str, active: str, request: Request) -> str:
     return f'''<!DOCTYPE html><html lang="ru"><head>
@@ -1010,6 +950,10 @@ async def go_redirect(
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/", response_class=HTMLResponse)
+async def root_redirect(request: Request):
+    return RedirectResponse("/tg_account/chat", 303)
+
+
 @app.get("/overview", response_class=HTMLResponse)
 async def overview(request: Request):
     user, err = require_auth(request)

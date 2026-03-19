@@ -312,6 +312,21 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
 .gallery-lightbox-btns{display:flex;gap:10px;align-items:center}
 .gallery-lightbox-close{position:absolute;top:20px;right:24px;color:#fff;font-size:1.6rem;cursor:pointer;opacity:.7;line-height:1}
 .gallery-lightbox-close:hover{opacity:1}
+
+/* ── CONV TAGS ─────────────────────────────────────── */
+.conv-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:.68rem;font-weight:600;cursor:default;white-space:nowrap;border:1px solid transparent}
+.conv-tag-del{background:none;border:none;color:inherit;cursor:pointer;padding:0;font-size:.75rem;opacity:.6;line-height:1;margin-left:2px}
+.conv-tag-del:hover{opacity:1}
+.tags-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.tag-picker{position:relative;display:inline-block}
+.tag-picker-btn{background:var(--bg3);border:1px dashed var(--border2);border-radius:99px;padding:2px 10px;font-size:.7rem;color:var(--text3);cursor:pointer;transition:all .15s}
+.tag-picker-btn:hover{border-color:var(--orange);color:var(--orange)}
+.tag-picker-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:500;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:6px;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:260px;overflow-y:auto}
+.tag-picker-dropdown.open{display:block}
+.tag-picker-item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;cursor:pointer;font-size:.8rem;transition:background .1s}
+.tag-picker-item:hover{background:var(--bg3)}
+.tag-picker-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.tag-picker-empty{padding:8px;color:var(--text3);font-size:.78rem;text-align:center}
 .chat-messages{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
 .msg{max-width:68%;word-break:break-word}
 .msg.visitor{align-self:flex-start}.msg.manager{align-self:flex-end}
@@ -406,6 +421,7 @@ def nav_html(active: str, request: Request) -> str:
     if role == "admin":
         admin_section = f"""
         <div class="nav-divider"></div>
+        {item("🏷️", "Теги", "tags", "blue")}
         {item("🔐", "Пользователи", "users", "blue")}
         {item("⚙️", "Настройки", "settings", "blue")}"""
 
@@ -590,6 +606,45 @@ def nav_html(active: str, request: Request) -> str:
     </script>"""
 
 
+def _render_conv_tags_picker(active_tags: list, all_tags: list, active_ids: set, conv_type: str, conv_id: int) -> str:
+    """Рендерит строку тегов + кнопку пикера для открытого чата"""
+    # Активные теги с кнопкой удаления
+    tags_html = ""
+    for tg in active_tags:
+        tags_html += (
+            f'<span class="conv-tag" style="background:{tg["color"]}22;color:{tg["color"]};border-color:{tg["color"]}55" data-tag-id="{tg["id"]}">'
+            f'{tg["name"]}'
+            f'<button class="conv-tag-del" onclick="removeConvTag(\'{conv_type}\',{conv_id},{tg["id"]},this)" title="Убрать тег">✕</button>'
+            f'</span>'
+        )
+    # Пикер — список доступных тегов (которые ещё не добавлены)
+    picker_items = ""
+    available = [t for t in all_tags if t["id"] not in active_ids]
+    if available:
+        for tg in available:
+            picker_items += (
+                f'<div class="tag-picker-item" onclick="addConvTag(\'{conv_type}\',{conv_id},{tg["id"]},this)">'
+                f'<span class="tag-picker-dot" style="background:{tg["color"]}"></span>'
+                f'{tg["name"]}'
+                f'</div>'
+            )
+    else:
+        picker_items = '<div class="tag-picker-empty">Все теги добавлены</div>'
+
+    manage_link = '<a href="/tags" style="display:block;padding:6px 8px;font-size:.74rem;color:var(--text3);text-decoration:none;border-top:1px solid var(--border);margin-top:4px" onmouseover="this.style.color=\'var(--orange)\'" onmouseout="this.style.color=\'var(--text3)\'">⚙️ Управление тегами</a>'
+
+    picker_html = (
+        f'<div class="tag-picker" id="tag-picker-{conv_type}-{conv_id}">'
+        f'<button class="tag-picker-btn" onclick="toggleTagPicker(\'{conv_type}\',{conv_id})">＋ Тег</button>'
+        f'<div class="tag-picker-dropdown" id="tpd-{conv_type}-{conv_id}">'
+        f'{picker_items}'
+        f'{manage_link}'
+        f'</div></div>'
+    )
+
+    return f'<div class="tags-row" id="tags-row-{conv_type}-{conv_id}" style="margin-top:6px">{tags_html}{picker_html}</div>'
+
+
 def base(content: str, active: str, request: Request) -> str:
     return f'''<!DOCTYPE html><html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -598,7 +653,52 @@ def base(content: str, active: str, request: Request) -> str:
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 {CSS}
-</head><body>{nav_html(active, request)}<div class="main">{content}</div></body></html>'''
+</head><body>{nav_html(active, request)}<div class="main">{content}</div>
+<script>
+// ── Глобальные функции пикера тегов ─────────────────────────────────────────
+function toggleTagPicker(ct, cid) {{
+  var dd = document.getElementById('tpd-' + ct + '-' + cid);
+  if (!dd) return;
+  dd.classList.toggle('open');
+}}
+document.addEventListener('click', function(e) {{
+  if (!e.target.closest('.tag-picker')) {{
+    document.querySelectorAll('.tag-picker-dropdown.open').forEach(function(d) {{ d.classList.remove('open'); }});
+  }}
+}});
+async function addConvTag(ct, cid, tagId, el) {{
+  var r = await fetch('/api/conv_tag/add', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{conv_type:ct,conv_id:cid,tag_id:tagId}})}});
+  var d = await r.json();
+  if (d.ok && d.tag) {{
+    var tg = d.tag;
+    var row = document.getElementById('tags-row-' + ct + '-' + cid);
+    var picker = document.getElementById('tag-picker-' + ct + '-' + cid);
+    if (row && picker) {{
+      var span = document.createElement('span');
+      span.className = 'conv-tag';
+      span.setAttribute('data-tag-id', tg.id);
+      span.style.cssText = 'background:' + tg.color + '22;color:' + tg.color + ';border-color:' + tg.color + '55';
+      span.innerHTML = tg.name + '<button class="conv-tag-del" onclick="removeConvTag(\\\'' + ct + '\\\',' + cid + ',' + tg.id + ',this)" title="Убрать тег">✕</button>';
+      row.insertBefore(span, picker);
+    }}
+    if (el) el.closest('.tag-picker-item').style.display = 'none';
+    document.getElementById('tpd-' + ct + '-' + cid)?.classList.remove('open');
+  }}
+}}
+async function removeConvTag(ct, cid, tagId, btn) {{
+  var r = await fetch('/api/conv_tag/remove', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{conv_type:ct,conv_id:cid,tag_id:tagId}})}});
+  var d = await r.json();
+  if (d.ok) {{
+    if (btn) btn.closest('.conv-tag').remove();
+    // Показываем тег обратно в пикере
+    var dd = document.getElementById('tpd-' + ct + '-' + cid);
+    if (dd) dd.querySelectorAll('.tag-picker-item').forEach(function(item) {{
+      if (item.getAttribute('onclick') && item.getAttribute('onclick').includes(',' + tagId + ',')) item.style.display = '';
+    }});
+  }}
+}}
+</script>
+</body></html>'''
 
 
 STAFF_STATUSES = {
@@ -2230,6 +2330,139 @@ async def users_delete(request: Request, user_id: int = Form(...)):
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SETTINGS
+# ══════════════════════════════════════════════════════════════════════════════
+# ТЕГИ
+# ══════════════════════════════════════════════════════════════════════════════
+
+TAG_COLORS = [
+    "#6366f1","#f97316","#22c55e","#ec4899","#3b82f6",
+    "#a855f7","#14b8a6","#f59e0b","#ef4444","#64748b",
+]
+
+@app.get("/tags", response_class=HTMLResponse)
+async def tags_page(request: Request, msg: str = ""):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    all_tags = db.get_all_tags()
+    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+
+    color_opts = "".join(
+        f'<span onclick="document.getElementById(\'tag-color\').value=\'{c}\';this.parentNode.querySelectorAll(\'span\').forEach(s=>s.style.outline=\'none\');this.style.outline=\'3px solid #fff\'" '
+        f'style="display:inline-block;width:22px;height:22px;border-radius:50%;background:{c};cursor:pointer;transition:outline .1s"></span>'
+        for c in TAG_COLORS
+    )
+
+    rows = ""
+    for t in all_tags:
+        _tname  = t['name']
+        _tcolor = t['color']
+        _tid    = t['id']
+        rows += f"""<tr>
+            <td><span class="conv-tag" style="background:{_tcolor}22;color:{_tcolor};border-color:{_tcolor}55">⬤ {_tname}</span></td>
+            <td><input type="color" value="{_tcolor}" onchange="updateTagColor({_tid},this.value)" style="width:32px;height:28px;border:none;background:none;cursor:pointer;padding:0"/></td>
+            <td>
+              <form method="post" action="/tags/delete" style="display:inline">
+                <input type="hidden" name="tag_id" value="{_tid}"/>
+                <button class="btn-gray btn-sm" style="color:var(--red);border-color:#7f1d1d" onclick="return confirm('Удалить тег «{_tname}»? Он отвяжется от всех чатов.')">🗑 Удалить</button>
+              </form>
+            </td></tr>"""
+    if not rows:
+        rows = '<tr><td colspan="3"><div class="empty">Тегов пока нет</div></td></tr>'
+
+    content = f"""<div class="page-wrap">
+    <div class="page-title">🏷️ Управление тегами</div>
+    <div class="page-sub">Создавай теги и добавляй их к чатам TG и WhatsApp</div>
+    {alert}
+    <div class="section" style="margin-bottom:18px">
+      <div class="section-head"><h3>➕ Создать тег</h3></div>
+      <div class="section-body">
+        <form method="post" action="/tags/create" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="field-group" style="max-width:220px">
+            <div class="field-label">Название</div>
+            <input type="text" name="name" placeholder="Например: Массаж, VIP, США..." required maxlength="32"/>
+          </div>
+          <div class="field-group">
+            <div class="field-label">Цвет</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="color" name="color" id="tag-color" value="#6366f1" style="width:36px;height:36px;border:none;background:none;cursor:pointer;padding:0"/>
+              <div style="display:flex;gap:5px;flex-wrap:wrap;max-width:200px">{color_opts}</div>
+            </div>
+          </div>
+          <button class="btn">Создать</button>
+        </form>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-head"><h3>📋 Все теги ({len(all_tags)})</h3></div>
+      <table><thead><tr><th>Тег</th><th>Цвет</th><th></th></tr></thead>
+      <tbody>{rows}</tbody></table>
+    </div>
+    </div>
+    <script>
+    async function updateTagColor(tagId, color) {{
+      await fetch('/tags/update_color', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{tag_id:tagId,color:color}})}});
+    }}
+    </script>"""
+    return HTMLResponse(base(content, "tags", request))
+
+
+@app.post("/tags/create")
+async def tags_create(request: Request, name: str = Form(""), color: str = Form("#6366f1")):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    if name.strip():
+        try:
+            db.create_tag(name.strip(), color)
+        except Exception:
+            return RedirectResponse("/tags?msg=Тег+с+таким+именем+уже+существует", 303)
+    return RedirectResponse("/tags?msg=Тег+создан", 303)
+
+
+@app.post("/tags/delete")
+async def tags_delete(request: Request, tag_id: int = Form(...)):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    db.delete_tag(tag_id)
+    return RedirectResponse("/tags?msg=Тег+удалён", 303)
+
+
+@app.post("/tags/update_color")
+async def tags_update_color(request: Request):
+    user, err = require_auth(request, role="admin")
+    if err: return JSONResponse({"ok": False})
+    body = await request.json()
+    db.update_tag(body["tag_id"], "", body["color"])  # name пустой — обновим только цвет
+    return JSONResponse({"ok": True})
+
+
+# ── API: привязать / отвязать тег от чата ────────────────────────────────────
+
+@app.post("/api/conv_tag/add")
+async def api_conv_tag_add(request: Request):
+    user = check_session(request)
+    if not user: return JSONResponse({"ok": False}, 401)
+    body = await request.json()
+    ok = db.add_conv_tag(body["conv_type"], body["conv_id"], body["tag_id"])
+    tag = next((t for t in db.get_all_tags() if t["id"] == body["tag_id"]), None)
+    return JSONResponse({"ok": ok, "tag": tag})
+
+
+@app.post("/api/conv_tag/remove")
+async def api_conv_tag_remove(request: Request):
+    user = check_session(request)
+    if not user: return JSONResponse({"ok": False}, 401)
+    body = await request.json()
+    ok = db.remove_conv_tag(body["conv_type"], body["conv_id"], body["tag_id"])
+    return JSONResponse({"ok": ok})
+
+
+@app.get("/api/tags")
+async def api_get_tags(request: Request):
+    user = check_session(request)
+    if not user: return JSONResponse({"ok": False}, 401)
+    return JSONResponse({"tags": db.get_all_tags()})
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -4008,6 +4241,11 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
                 utm_parts.append('<span class="utm-tag badge-green">fbclid ✓</span>')
             if utm_parts:
                 wa_utm_tags = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">' + "".join(utm_parts) + '</div>'
+            # Теги WA чата
+            all_tags_wa      = db.get_all_tags()
+            active_wa_ctags  = db.get_conv_tags("wa", conv_id)
+            active_wa_tag_ids = {tg["id"] for tg in active_wa_ctags}
+            wa_tags_html = _render_conv_tags_picker(active_wa_ctags, all_tags_wa, active_wa_tag_ids, "wa", conv_id)
 
             header_html = f"""<div class="chat-header">
               <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
@@ -4017,6 +4255,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
                   <div style="font-size:.79rem;color:var(--text3)">+{active_conv['wa_number']} · {wa_card_link}</div>
                   <div style="margin-top:6px">{fb_btn}</div>
                   {wa_utm_tags}
+                  {wa_tags_html}
                 </div>
               </div>
               <div style="display:flex;gap:6px;flex-shrink:0">
@@ -4025,7 +4264,8 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
               </div>
             </div>"""
     conv_items = ""
-    wa_in_staff = db.get_wa_conv_ids_in_staff()
+    wa_in_staff  = db.get_wa_conv_ids_in_staff()
+    wa_tags_map  = db.get_all_conv_tags_map("wa")
     for c in convs:
         cls = "conv-item active" if c["id"] == conv_id else "conv-item"
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T"," ")
@@ -4048,11 +4288,17 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         wa_staff_info = wa_in_staff.get(c["id"])
         wa_in_base = f'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>' if wa_staff_info else ""
         wa_display_name = c.get('username') if (c.get('visitor_name','') or '').isdigit() and c.get('username') else c.get('visitor_name') or c.get('username') or c.get('tg_chat_id','')
+        # Теги
+        wctags = wa_tags_map.get(c["id"], [])
+        wa_tags_line = ""
+        if wctags:
+            wt_html = "".join(f'<span class="conv-tag" style="background:{tg["color"]}22;color:{tg["color"]};border-color:{tg["color"]}55">{tg["name"]}</span>' for tg in wctags)
+            wa_tags_line = f'<div class="tags-row">{wt_html}</div>'
         conv_items += f"""<a href="/wa/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}" data-conv-id="{c['id']}">
           <div class="conv-name"><span>{dot} {wa_display_name}</span>{ucount}{wa_in_base}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
           <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +{c['wa_number'][:10]} · {t[-5:]} {src_badge}</div>
-          {utm_line}</div></a>"""
+          {utm_line}{wa_tags_line}</div></a>"""
     if not conv_items:
         conv_items = '<div class="empty" style="padding:36px 14px">Нет WA диалогов.<br><br>Подключи WhatsApp<br>в разделе WA Настройка</div>'
     wa_status = db.get_setting("wa_status", "disconnected")
@@ -4487,6 +4733,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
 
     conv_items = ""
     tga_in_staff = db.get_tga_conv_ids_in_staff()
+    tga_tags_map = db.get_all_conv_tags_map("tga")
     for c in convs:
         cls = "conv-item active" if c["id"] == conv_id else "conv-item"
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T", " ")
@@ -4504,14 +4751,17 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
         utm_line = '<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">' + "".join(utm_parts) + '</div>' if utm_parts else ""
         tg_uname = c.get("username") or ""
         uname_str = ("@" + tg_uname) if tg_uname else str(c.get("tg_user_id", ""))
-        # Задача 5: отметка "уже в базе" если сотрудник добавлен
+        # Задача 5: отметка "уже в базе"
         staff_info = tga_in_staff.get(c["id"])
-        if staff_info:
-            in_base_badge = f'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>'
-        else:
-            in_base_badge = ""
-        # Задача 6: порядок как в WA — имя, превью, контакт+время+источник, UTM
-        conv_items += (f'<a href="/tg_account/chat?conv_id={c["id"]}&status_filter={status_filter}">' + f'<div class="{cls}" data-conv-id="{c["id"]}">' + f'<div class="conv-name"><span>{dot} {c["visitor_name"]}</span>{ucount}{in_base_badge}</div>' + f'<div class="conv-preview">{(c.get("last_message") or "Нет сообщений")[:50]}</div>' + f'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 {uname_str} · {t[-5:]} {src_badge}</div>' + utm_line + '</div></a>')
+        in_base_badge = f'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>' if staff_info else ""
+        # Теги
+        ctags = tga_tags_map.get(c["id"], [])
+        tags_line = ""
+        if ctags:
+            tags_html = "".join(f'<span class="conv-tag" style="background:{tg["color"]}22;color:{tg["color"]};border-color:{tg["color"]}55">{tg["name"]}</span>' for tg in ctags)
+            tags_line = f'<div class="tags-row">{tags_html}</div>'
+        # Задача 6: порядок как в WA
+        conv_items += (f'<a href="/tg_account/chat?conv_id={c["id"]}&status_filter={status_filter}">' + f'<div class="{cls}" data-conv-id="{c["id"]}">' + f'<div class="conv-name"><span>{dot} {c["visitor_name"]}</span>{ucount}{in_base_badge}</div>' + f'<div class="conv-preview">{(c.get("last_message") or "Нет сообщений")[:50]}</div>' + f'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 {uname_str} · {t[-5:]} {src_badge}</div>' + utm_line + tags_line + '</div></a>')
 
     if not conv_items:
         conv_items = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Нет диалогов</div>'
@@ -4542,6 +4792,11 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 tga_card_link = f'<a href="/staff?edit={tga_staff["id"]}" style="display:inline-flex;align-items:center;gap:4px;background:#052e16;color:#86efac;border:1px solid #166534;border-radius:6px;padding:2px 8px;font-size:.73rem;text-decoration:none">✅ В базе · {tga_staff.get("name","") or "Карточка"} →</a>'
             else:
                 tga_card_link = f'<a href="/staff/create_from_tga?conv_id={conv_id}" style="display:inline-flex;align-items:center;gap:4px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:.73rem;text-decoration:none">+ Создать карточку</a>'
+            # Теги чата
+            all_tags     = db.get_all_tags()
+            active_ctags = db.get_conv_tags("tga", conv_id)
+            active_tag_ids = {tg["id"] for tg in active_ctags}
+            tga_tags_html = _render_conv_tags_picker(active_ctags, all_tags, active_tag_ids, "tga", conv_id)
             fb_sent = active_conv.get("fb_event_sent")
             lead_btn = '<span class="badge-green">✅ Lead отправлен</span>' if fb_sent else \
                        f'<form method="post" action="/tg_account/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
@@ -4579,6 +4834,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                     <a href="{call_url}" target="_blank" class="btn-gray btn-sm" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;font-size:.74rem;border:1px solid var(--border);text-decoration:none">📞 Открыть в TG</a>
                   </div>
                   {utm_tags}
+                  {tga_tags_html}
                 </div>
               </div>
               <div style="display:flex;gap:6px;flex-shrink:0">{close_btn} {delete_btn}</div>

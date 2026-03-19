@@ -257,6 +257,24 @@ class Database:
                         created_at TEXT NOT NULL
                     )
                 """)
+                # Теги для чатов
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS tags (
+                        id         SERIAL PRIMARY KEY,
+                        name       TEXT NOT NULL UNIQUE,
+                        color      TEXT NOT NULL DEFAULT '#6366f1',
+                        created_at TEXT NOT NULL
+                    )
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS conv_tags (
+                        id        SERIAL PRIMARY KEY,
+                        tag_id    INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+                        conv_type TEXT NOT NULL,
+                        conv_id   INTEGER NOT NULL,
+                        UNIQUE(tag_id, conv_type, conv_id)
+                    )
+                """)
                 for m in migrations:
                     try:
                         cur.execute(m)
@@ -848,6 +866,110 @@ class Database:
                 deleted = cur.rowcount > 0
             conn.commit()
             return deleted
+
+    # ── Теги для чатов ────────────────────────────────────────────────────────
+
+    def get_all_tags(self) -> list:
+        """Все теги справочника"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM tags ORDER BY name")
+                return [dict(r) for r in cur.fetchall()]
+
+    def create_tag(self, name: str, color: str = "#6366f1") -> dict:
+        """Создать новый тег"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO tags (name, color, created_at) VALUES (%s,%s,%s) RETURNING *",
+                    (name.strip(), color, datetime.utcnow().isoformat())
+                )
+                r = cur.fetchone()
+            conn.commit()
+            return dict(r)
+
+    def update_tag(self, tag_id: int, name: str, color: str) -> bool:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if name.strip():
+                    cur.execute("UPDATE tags SET name=%s, color=%s WHERE id=%s", (name.strip(), color, tag_id))
+                else:
+                    cur.execute("UPDATE tags SET color=%s WHERE id=%s", (color, tag_id))
+                ok = cur.rowcount > 0
+            conn.commit()
+            return ok
+
+    def delete_tag(self, tag_id: int) -> bool:
+        """Удалить тег (conv_tags удалятся каскадно)"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM tags WHERE id=%s", (tag_id,))
+                ok = cur.rowcount > 0
+            conn.commit()
+            return ok
+
+    def get_conv_tags(self, conv_type: str, conv_id: int) -> list:
+        """Теги конкретного чата"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT t.* FROM tags t
+                    JOIN conv_tags ct ON ct.tag_id = t.id
+                    WHERE ct.conv_type=%s AND ct.conv_id=%s
+                    ORDER BY t.name
+                """, (conv_type, conv_id))
+                return [dict(r) for r in cur.fetchall()]
+
+    def add_conv_tag(self, conv_type: str, conv_id: int, tag_id: int) -> bool:
+        """Привязать тег к чату"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                try:
+                    cur.execute(
+                        "INSERT INTO conv_tags (tag_id, conv_type, conv_id) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
+                        (tag_id, conv_type, conv_id)
+                    )
+                    ok = cur.rowcount > 0
+                except Exception:
+                    ok = False
+            conn.commit()
+            return ok
+
+    def remove_conv_tag(self, conv_type: str, conv_id: int, tag_id: int) -> bool:
+        """Отвязать тег от чата"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM conv_tags WHERE tag_id=%s AND conv_type=%s AND conv_id=%s",
+                    (tag_id, conv_type, conv_id)
+                )
+                ok = cur.rowcount > 0
+            conn.commit()
+            return ok
+
+    def get_all_conv_tags_map(self, conv_type: str) -> dict:
+        """Возвращает {conv_id: [tag, ...]} для всех чатов заданного типа — одним запросом"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT ct.conv_id, t.id, t.name, t.color
+                    FROM conv_tags ct JOIN tags t ON t.id = ct.tag_id
+                    WHERE ct.conv_type=%s
+                """, (conv_type,))
+                result: dict = {}
+                for r in cur.fetchall():
+                    result.setdefault(r["conv_id"], []).append({"id": r["id"], "name": r["name"], "color": r["color"]})
+                return result
+
+    def get_convs_by_tag(self, conv_type: str, tag_id: int) -> list:
+        """Все conv_id чатов с данным тегом"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT conv_id FROM conv_tags WHERE conv_type=%s AND tag_id=%s",
+                    (conv_type, tag_id)
+                )
+                return [r["conv_id"] for r in cur.fetchall()]
 
     def get_staff_by_id(self, staff_id):
         with self._conn() as conn:

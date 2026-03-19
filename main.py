@@ -3252,40 +3252,37 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
     domain_status = ""
     if cur_domain:
         domain_status = f'<div style="display:inline-flex;align-items:center;gap:6px;background:#052e16;border:1px solid #166534;border-radius:6px;padding:4px 10px;font-size:.78rem;color:#86efac;margin-top:8px">✅ Активен: <b>{cur_domain}</b></div>'
-    domain_block = f"""
-    <div class="section">
-      <div class="section-head"><h3>🌐 Кастомный домен</h3></div>
-      <div class="section-body">
-        <form method="post" action="/landings/set_domain" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-          <input type="hidden" name="landing_id" value="{id}"/>
-          <div class="field-group" style="max-width:320px">
-            <div class="field-label">Домен (без https:// и www.)</div>
-            <input type="text" name="custom_domain" value="{cur_domain}"
-              placeholder="job.example.com" style="font-family:monospace"/>
-          </div>
-          <div style="display:flex;align-items:flex-end;gap:6px">
-            <button class="btn">Сохранить</button>
-            {'<button type="submit" class="btn-gray" onclick="this.form.elements.custom_domain.value=\'\'">Очистить</button>' if cur_domain else ''}
-          </div>
-        </form>
-        {domain_status}
-        <div style="margin-top:16px;padding:14px 16px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
-          <div style="font-weight:600;font-size:.85rem;margin-bottom:10px">📋 Инструкция по подключению домена</div>
-          <div style="font-size:.82rem;color:var(--text2);line-height:1.8">
-            <b>Шаг 1.</b> Зайди в настройки DNS своего домена (Cloudflare, Namecheap, GoDaddy и др.)<br>
-            <b>Шаг 2.</b> Добавь <b>CNAME запись:</b><br>
-            <div style="margin:8px 0 8px 16px;font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:.8rem">
-              Имя: <b>{_domain_prefix}</b> &nbsp;→&nbsp; Значение: <b id="railway-host">{_app_host}</b>
-            </div>
-            <b>Шаг 3.</b> В Railway → твой сервис <b>web</b> → Settings → <b>Custom Domain</b> → добавь <b>{_domain_or_placeholder}</b><br>
-            <b>Шаг 4.</b> Подожди 5-15 минут пока DNS обновится ✅
-          </div>
-          <div style="margin-top:10px;padding:8px 12px;background:#1c1a00;border:1px solid #713f12;border-radius:6px;font-size:.78rem;color:#fde047">
-            ⚠️ Важно: кастомный домен нужно добавить в Railway иначе он не будет работать даже при правильном DNS
-          </div>
-        </div>
-      </div>
-    </div>"""
+    _clear_btn = '<button type="submit" class="btn-gray" onclick="this.form.elements.custom_domain.value=\'\'">Очистить</button>' if cur_domain else ""
+    domain_block = (
+        '<div class="section">'
+        '<div class="section-head"><h3>🌐 Кастомный домен</h3></div>'
+        '<div class="section-body">'
+        f'<form method="post" action="/landings/set_domain" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">'
+        f'<input type="hidden" name="landing_id" value="{id}"/>'
+        '<div class="field-group" style="max-width:320px">'
+        '<div class="field-label">Домен (без https:// и www.)</div>'
+        f'<input type="text" name="custom_domain" value="{cur_domain}" placeholder="job.example.com" style="font-family:monospace"/>'
+        '</div>'
+        '<div style="display:flex;align-items:flex-end;gap:6px">'
+        '<button class="btn">Сохранить</button>'
+        f'{_clear_btn}'
+        '</div></form>'
+        f'{domain_status}'
+        '<div style="margin-top:16px;padding:14px 16px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">'
+        '<div style="font-weight:600;font-size:.85rem;margin-bottom:10px">📋 Инструкция по подключению домена</div>'
+        '<div style="font-size:.82rem;color:var(--text2);line-height:1.8">'
+        '<b>Шаг 1.</b> Зайди в настройки DNS своего домена (Cloudflare, Namecheap, GoDaddy и др.)<br>'
+        '<b>Шаг 2.</b> Добавь <b>CNAME запись:</b><br>'
+        '<div style="margin:8px 0 8px 16px;font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:.8rem">'
+        f'Имя: <b>{_domain_prefix}</b> &nbsp;→&nbsp; Значение: <b>{_app_host}</b>'
+        '</div>'
+        f'<b>Шаг 3.</b> В Railway → твой сервис <b>web</b> → Settings → <b>Custom Domain</b> → добавь <b>{_domain_or_placeholder}</b><br>'
+        '<b>Шаг 4.</b> Подожди 5-15 минут пока DNS обновится ✅'
+        '</div>'
+        '<div style="margin-top:10px;padding:8px 12px;background:#1c1a00;border:1px solid #713f12;border-radius:6px;font-size:.78rem;color:#fde047">'
+        '⚠️ Важно: кастомный домен нужно добавить в Railway иначе он не будет работать даже при правильном DNS'
+        '</div></div></div></div>'
+    )
 
     # Блок смены шаблона (только для staff)
     tpl_block = ""

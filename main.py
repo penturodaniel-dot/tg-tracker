@@ -146,7 +146,13 @@ class CustomDomainMiddleware(BaseHTTPMiddleware):
                     cookie_fbp  = request.cookies.get("_fbp", "")
 
                     contacts    = db.get_landing_contacts(landing["id"])
-                    pixel_staff = db.get_setting("pixel_id_staff", "") or db.get_setting("pixel_id", "")
+                    # Пиксель из проекта лендинга или глобальный
+                    _pid = landing.get("project_id")
+                    if _pid:
+                        _proj = db.get_project(int(_pid))
+                        pixel_staff = (_proj.get("fb_pixel_id") if _proj else None) or db.get_setting("pixel_id_staff", "") or db.get_setting("pixel_id", "")
+                    else:
+                        pixel_staff = db.get_setting("pixel_id_staff", "") or db.get_setting("pixel_id", "")
                     app_url     = db.get_setting("app_url", "").rstrip("/")
 
                     # Строим tracked_contacts с UTM — как в /l/{slug}
@@ -1674,7 +1680,7 @@ async def public_landing(request: Request, slug: str,
                           fbclid: str = None, utm_source: str = None,
                           utm_medium: str = None, utm_campaign: str = None,
                           utm_content: str = None, utm_term: str = None):
-    # Пиксели по направлениям
+    # Глобальные пиксели (fallback)
     pixel_clients = db.get_setting("pixel_id_clients") or db.get_setting("pixel_id", "")
     pixel_staff   = db.get_setting("pixel_id_staff", "")
     app_url       = db.get_setting("app_url", "").rstrip("/")
@@ -1682,11 +1688,21 @@ async def public_landing(request: Request, slug: str,
     # fbp из cookie
     cookie_fbp = request.cookies.get("_fbp", "")
 
+    def _get_landing_pixels(landing: dict) -> tuple:
+        """Возвращает (fb_pixel, tt_pixel) для лендинга — из проекта или глобальные."""
+        pid = landing.get("project_id")
+        if pid:
+            project = db.get_project(int(pid))
+            if project:
+                fb = project.get("fb_pixel_id") or pixel_clients
+                tt = project.get("tt_pixel_id") or db.get_setting("tiktok_pixel_id", "") or ""
+                return fb, tt
+        return pixel_clients, db.get_setting("tiktok_pixel_id", "") or ""
+
     # Ищем как Campaign slug
     campaign = db.get_campaign_by_slug(slug)
     if campaign:
         channels = db.get_campaign_channels(campaign["id"])
-        pixel_id = pixel_clients  # Клиентские кампании
 
         # Строим /go ссылки для каждого канала
         btns = []
@@ -1701,15 +1717,21 @@ async def public_landing(request: Request, slug: str,
             contacts = db.get_landing_contacts(campaign["landing_id"]) if landing else []
             if landing:
                 chan_contacts = [{"type": "telegram", "label": b["label"], "url": b["url"]} for b in btns]
-                tt_pixel = db.get_setting("tiktok_pixel_id", "") or ""
-                return HTMLResponse(_render_client_landing(landing, chan_contacts, pixel_id=pixel_id, tt_pixel=tt_pixel, db=db))
+                fb_pixel, tt_pixel = _get_landing_pixels(landing)
+                return HTMLResponse(_render_client_landing(landing, chan_contacts, pixel_id=fb_pixel, tt_pixel=tt_pixel, db=db))
 
         tt_pixel = db.get_setting("tiktok_pixel_id", "") or ""
-        return HTMLResponse(_render_campaign_landing(campaign, btns, pixel_id, fbclid, tt_pixel))
+        return HTMLResponse(_render_campaign_landing(campaign, btns, pixel_clients, fbclid, tt_pixel))
 
     # Staff Landing slug
     landing = db.get_landing_by_slug(slug)
     if not landing: return HTMLResponse("<h2>Not found</h2>", 404)
+
+    # Пиксели из проекта лендинга или глобальные
+    fb_pixel_staff, tt_pixel_staff = _get_landing_pixels(landing)
+    # Для staff лендингов — приоритет pixel_staff если нет проекта
+    if not landing.get("project_id"):
+        fb_pixel_staff = pixel_staff or pixel_clients
 
     # Строим /go-staff ссылки — с UTM трекингом
     raw_contacts = db.get_landing_contacts(landing["id"])
@@ -1727,21 +1749,19 @@ async def public_landing(request: Request, slug: str,
         if c.get("url"):
             import urllib.parse as _up
             ref_id = __import__("secrets").token_urlsafe(10)
-            # Определяем тип контакта
             c_type = c.get("type", "")
             if not c_type:
                 if "wa.me" in c["url"] or "whatsapp" in c["url"].lower():
                     c_type = "whatsapp"
                 elif "t.me" in c["url"] or "telegram" in c["url"].lower():
                     c_type = "telegram"
-            # Сохраняем клик
             db.save_staff_click(ref_id, c["url"], c_type, slug, **{k:v for k,v in utm_params.items() if k!='landing_slug'})
             go_url = f"{app_url}/go-staff?ref={ref_id}"
             tracked_contacts.append({**c, "url": go_url, "type": c_type})
         else:
             tracked_contacts.append(c)
 
-    return HTMLResponse(_render_staff_landing(landing, tracked_contacts, pixel_id=pixel_staff, db=db))
+    return HTMLResponse(_render_staff_landing(landing, tracked_contacts, pixel_id=fb_pixel_staff, db=db))
 
 
 @app.get("/go-staff")

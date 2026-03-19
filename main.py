@@ -12,6 +12,7 @@ import uvicorn
 
 import httpx
 import meta_capi
+import tiktok_capi
 import bot_manager
 from database import Database
 from landing_templates import (
@@ -32,7 +33,6 @@ from landing_templates import (
 from routers.chat_wa     import router as wa_router,       setup as wa_setup
 from routers.chat_tga    import router as tga_router,      setup as tga_setup
 from routers.analytics   import router as analytics_router, setup as analytics_setup
-from routers.chat_bot    import router as chat_bot_router,  setup as chat_bot_setup
 from routers.staff       import router as staff_router,     setup as staff_setup
 from routers.users_tags  import router as users_tags_router, setup as users_tags_setup
 from routers.settings    import router as settings_router,  setup as settings_setup
@@ -486,13 +486,10 @@ input[type=date]:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 
 def nav_html(active: str, request: Request) -> str:
     user = check_session(request)
     stats = db.get_stats()
-    unread     = stats.get("unread", 0)
     wa_unread  = stats.get("wa_unread", 0)
     tga_unread = stats.get("tga_unread", 0)
-    b1 = bot_manager.get_tracker_bot()
     b2 = bot_manager.get_staff_bot()
-    b1_name = db.get_setting("bot1_name", "Бот трекер")
-    b2_name = db.get_setting("bot2_name", "Бот сотрудники")
+    b2_name = db.get_setting("bot2_name", "Уведомления")
     wa_status  = db.get_setting("wa_status", "disconnected")
     role = user["role"] if user else "manager"
 
@@ -550,7 +547,6 @@ def nav_html(active: str, request: Request) -> str:
       {item("📊", "Статистика", "analytics_staff", "orange", url="/analytics/staff")}
       {admin_section}
       <div class="sidebar-footer">
-        <div class="bot-status"><div class="dot {'dot-green' if b1 else 'dot-red'}"></div><span>{b1_name}</span></div>
         <div class="bot-status"><div class="dot {'dot-green' if b2 else 'dot-red'}"></div><span>{b2_name}</span></div>
         <div class="bot-status"><div class="dot {wa_dot}"></div><span id="nav-wa-status">WhatsApp {'✓' if wa_status == 'ready' else ('QR...' if wa_status == 'qr' else '✗')}</span></div>
         <div class="bot-status"><div class="dot {'dot-green' if db.get_setting('tg_account_status') == 'connected' else 'dot-red'}" id="nav-tg-dot"></div><span id="nav-tg-status">TG {'✓' if db.get_setting('tg_account_status') == 'connected' else '✗'}</span></div>
@@ -605,13 +601,11 @@ def nav_html(active: str, request: Request) -> str:
       try{{
         const r = await fetch('/api/stats');
         const d = await r.json();
-        updateBadge('nav-tg-badge', d.unread || 0);
         updateBadge('nav-wa-badge', d.wa_unread || 0);
         updateBadge('nav-tga-badge', d.tga_unread || 0);
-        if(d.unread > _lastTgUnread) showToast('💬 Новое сообщение', 'TG чаты', 'tg-toast', '/chat');
         if(d.wa_unread > _lastWaUnread) showToast('💚 Новое сообщение', 'WhatsApp чаты', 'wa-toast', '/wa/chat');
         if(d.tga_unread > _lastTgaUnread) showToast('📱 Новое сообщение', 'TG Чаты', 'tga-toast', '/tg_account/chat');
-        _lastTgUnread = d.unread || 0; _lastWaUnread = d.wa_unread || 0; _lastTgaUnread = d.tga_unread || 0;
+        _lastWaUnread = d.wa_unread || 0; _lastTgaUnread = d.tga_unread || 0;
         // Задача 2: обновляем статус в сайдбаре
         var waDot=document.querySelector('#nav-wa-status');
         if(waDot && d.wa_status!==undefined){{
@@ -813,9 +807,6 @@ STAFF_STATUSES = {
 analytics_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker)
 app.include_router(analytics_router)
 
-chat_bot_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, bot_manager, meta_capi)
-app.include_router(chat_bot_router)
-
 staff_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, STAFF_STATUSES)
 app.include_router(staff_router)
 
@@ -834,6 +825,7 @@ wa_setup(
     TG_SVC_URL, TG_SVC_SECRET,
     check_session, require_auth, base, nav_html, _render_conv_tags_picker,
     _css=CSS,
+    _tiktok_capi=tiktok_capi,
 )
 app.include_router(wa_router)
 
@@ -841,6 +833,7 @@ tga_setup(
     db, log, bot_manager, meta_capi,
     TG_WH_SECRET, TG_SVC_URL, TG_SVC_SECRET,
     check_session, require_auth, base, nav_html, _render_conv_tags_picker,
+    _tiktok_capi=tiktok_capi,
 )
 app.include_router(tga_router)
 
@@ -1049,7 +1042,6 @@ async def overview(request: Request):
     <div class="funnel">{funnel_html}</div>
     <div class="cards" style="margin-bottom:20px">
       <div class="card c-orange"><div class="val orange">{s['conversations']}</div><div class="lbl">Диалогов</div></div>
-      <div class="card c-red"><div class="val red">{s['unread']}</div><div class="lbl">Непрочитанных</div></div>
       <div class="card c-orange"><div class="val orange">{s['staff']}</div><div class="lbl">Сотрудников</div></div>
     </div>
 
@@ -1743,12 +1735,6 @@ async def go_staff_redirect(request: Request, ref: str = ""):
 
 
 # ── API ───────────────────────────────────────────────────────────────────────
-
-@app.get("/api/messages/{conv_id}")
-async def api_messages(request: Request, conv_id: int, after: int = 0):
-    user = check_session(request)
-    if not user: return JSONResponse({"error": "unauthorized"}, 401)
-    return JSONResponse({"messages": db.get_new_messages(conv_id, after)})
 
 
 @app.get("/api/stats")

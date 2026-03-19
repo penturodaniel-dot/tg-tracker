@@ -683,6 +683,45 @@ def nav_html(active: str, request: Request) -> str:
     setInterval(pollUnread, 5000);
 """
 
+def _render_conv_tags_picker(active_tags: list, all_tags: list, active_ids: set, conv_type: str, conv_id: int) -> str:
+    """Рендерит строку тегов + кнопку пикера для открытого чата"""
+    # Активные теги с кнопкой удаления
+    tags_html = ""
+    for tg in active_tags:
+        tags_html += (
+            f'<span class="conv-tag" style="background:{tg["color"]}22;color:{tg["color"]};border-color:{tg["color"]}55" data-tag-id="{tg["id"]}">'
+            f'{tg["name"]}'
+            f'<button class="conv-tag-del" onclick="removeConvTag(\'{conv_type}\',{conv_id},{tg["id"]},this)" title="Убрать тег">✕</button>'
+            f'</span>'
+        )
+    # Пикер — список доступных тегов (которые ещё не добавлены)
+    picker_items = ""
+    available = [t for t in all_tags if t["id"] not in active_ids]
+    if available:
+        for tg in available:
+            picker_items += (
+                f'<div class="tag-picker-item" onclick="addConvTag(\'{conv_type}\',{conv_id},{tg["id"]},this)">'
+                f'<span class="tag-picker-dot" style="background:{tg["color"]}"></span>'
+                f'{tg["name"]}'
+                f'</div>'
+            )
+    else:
+        picker_items = '<div class="tag-picker-empty">Все теги добавлены</div>'
+
+    manage_link = '<a href="/tags" style="display:block;padding:6px 8px;font-size:.74rem;color:var(--text3);text-decoration:none;border-top:1px solid var(--border);margin-top:4px" onmouseover="this.style.color=\'var(--orange)\'" onmouseout="this.style.color=\'var(--text3)\'">⚙️ Управление тегами</a>'
+
+    picker_html = (
+        f'<div class="tag-picker" id="tag-picker-{conv_type}-{conv_id}">'
+        f'<button class="tag-picker-btn" onclick="event.stopPropagation();toggleTagPicker(\'{conv_type}\',{conv_id})">＋ Тег</button>'
+        f'<div class="tag-picker-dropdown" id="tpd-{conv_type}-{conv_id}">'
+        f'{picker_items}'
+        f'{manage_link}'
+        f'</div></div>'
+    )
+
+    return f'<div class="tags-row" id="tags-row-{conv_type}-{conv_id}" style="margin-top:6px">{tags_html}{picker_html}</div>'
+
+
 def base(content: str, active: str, request: Request) -> str:
     return f'''<!DOCTYPE html><html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

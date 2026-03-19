@@ -1,8 +1,7 @@
 """
-bot_manager.py v5
-Бот 1 — Трекер: вступления в каналы → Meta CAPI Subscribe
-Бот 2 — Сотрудники: переписка → Meta CAPI Lead
-Уведомления менеджеру при новом сообщении
+bot_manager.py
+Бот 1 — Трекер (Клиенты): вступления в каналы → Meta CAPI Subscribe
+Бот 2 — Уведомления: авторизация в CRM + уведомления о новых сообщениях
 """
 import asyncio
 import logging
@@ -30,7 +29,7 @@ def init(db, meta_module):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# БОТ 1 — ТРЕКЕР
+# БОТ 1 — ТРЕКЕР (Клиенты)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _build_tracker_dp() -> Dispatcher:
@@ -47,7 +46,6 @@ def _build_tracker_dp() -> Dispatcher:
         campaign = _db.get_campaign_by_link(raw_link)
         campaign_name = campaign["name"] if campaign else "organic"
 
-        # Ищем click_id по invite_link если есть
         click_id = None
         if campaign:
             click_id = campaign.get("click_id")
@@ -60,7 +58,6 @@ def _build_tracker_dp() -> Dispatcher:
             click_id=click_id
         )
 
-        # Получаем UTM данные если есть click_id
         click_data = _db.get_click(click_id) if click_id else {}
         if click_data:
             _db.save_utm(click_data, join_id=join_id)
@@ -139,126 +136,24 @@ def get_tracker_bot() -> Bot | None:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# БОТ 2 — СОТРУДНИКИ
+# БОТ 2 — УВЕДОМЛЕНИЯ (авторизация + новые сообщения)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _build_staff_dp() -> Dispatcher:
     dp = Dispatcher()
-
-    @dp.message(Command("start"))
-    async def on_start(message: types.Message):
-        user = message.from_user
-        name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "Сотрудник"
-        conv = _db.get_or_create_conversation(str(user.id), name, user.username)
-        staff = _db.get_or_create_staff(str(user.id), name, user.username, conv["id"])
-
-        # Получаем фото профиля
-        try:
-            photos = await message.bot.get_user_profile_photos(user.id, limit=1)
-            if photos.total_count > 0:
-                file = await message.bot.get_file(photos.photos[0][-1].file_id)
-                photo_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file.file_path}"
-                _db.update_conv_profile(conv["id"], photo_url=photo_url)
-        except Exception as e:
-            log.warning(f"[BOT2] photo fetch error: {e}")
-
-        # Проверяем UTM из start параметра
-        start_param = message.text.split()[-1] if len(message.text.split()) > 1 else None
-        if start_param and start_param.startswith("ref_"):
-            ref_code = start_param[4:]
-            # Сначала проверяем staff_clicks (HR лендинг)
-            staff_click = _db.get_staff_click(ref_code)
-            if staff_click and not staff_click.get("used"):
-                _db.apply_utm_to_tg_conv(
-                    conv["id"],
-                    fbclid=staff_click.get("fbclid"),
-                    fbp=staff_click.get("fbp"),
-                    utm_source=staff_click.get("utm_source"),
-                    utm_medium=staff_click.get("utm_medium"),
-                    utm_campaign=staff_click.get("utm_campaign"),
-                    utm_content=staff_click.get("utm_content"),
-                    utm_term=staff_click.get("utm_term"),
-                )
-                _db.mark_staff_click_used(ref_code)
-                log.info(f"[BOT2] Staff UTM linked conv={conv['id']} ref={ref_code} utm={staff_click.get('utm_campaign')}")
-            else:
-                # Fallback: старые клиентские click_tracking
-                click_data = _db.get_click(ref_code)
-                if click_data:
-                    _db.save_utm(click_data, conversation_id=conv["id"])
-                    log.info(f"[BOT2] UTM linked conv={conv['id']} click={ref_code}")
-
-        # Lead отправляется ВРУЧНУЮ через кнопку в чате СРМки (не автоматически)
-
-        # Уведомление менеджеру
-        asyncio.create_task(_notify_manager(name, conv["id"], "start"))
-
-        welcome = _db.get_setting("staff_welcome", "Привет! Напиши своё имя и должность 👋")
-        await message.answer(welcome)
-        log.info(f"[BOT2] START user={user.id} name={name}")
-
-    @dp.message()
-    async def on_message(message: types.Message):
-        if message.chat.type != "private": return
-        user = message.from_user
-        name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "Сотрудник"
-        text = message.text or message.caption or ""
-
-        media_url  = None
-        media_type = None
-
-        # Скачиваем медиа через Telegram file API
-        file_obj = None
-        if message.photo:
-            file_obj = message.photo[-1]  # наибольшее разрешение
-            media_type = "image/jpeg"
-            if not text: text = "[фото]"
-        elif message.document:
-            file_obj = message.document
-            media_type = message.document.mime_type or "application/octet-stream"
-            if not text: text = f"[файл: {message.document.file_name or 'документ'}]"
-        elif message.video:
-            file_obj = message.video
-            media_type = "video/mp4"
-            if not text: text = "[видео]"
-        elif message.voice:
-            file_obj = message.voice
-            media_type = "audio/ogg"
-            if not text: text = "[голосовое]"
-
-        if file_obj:
-            try:
-                tg_file = await _staff_bot.get_file(file_obj.file_id)
-                # Прямая ссылка на файл через Telegram CDN
-                bot_token = _db.get_setting("bot2_token") or ""
-                if bot_token:
-                    media_url = f"https://api.telegram.org/file/bot{bot_token}/{tg_file.file_path}"
-            except Exception as e:
-                log.warning(f"[BOT2] Media download error: {e}")
-
-        if not text: text = "[сообщение]"
-
-        conv = _db.get_or_create_conversation(str(user.id), name, user.username)
-        _db.get_or_create_staff(str(user.id), name, user.username, conv["id"])
-        _db.save_message(conv["id"], str(user.id), "visitor", text, message.message_id,
-                         media_url=media_url, media_type=media_type)
-        _db.update_conversation_last_message(str(user.id), text, increment_unread=True)
-
-        # Уведомление менеджеру
-        asyncio.create_task(_notify_manager(name, conv["id"], text))
-        log.info(f"[BOT2] MSG user={user.id}: {text[:50]}")
-
+    # Бот только для отправки уведомлений — входящие сообщения игнорируем
     return dp
 
 
-async def _notify_manager(sender_name: str, conv_id: int, text: str):
+async def _notify_manager(sender_name: str, conv_id: int, text: str, chat_path: str = "tg_account/chat"):
     """Отправляет уведомление менеджеру в Telegram"""
     notify_chat = _db.get_setting("notify_chat_id")
     if not notify_chat: return
-    bot = get_tracker_bot() or get_staff_bot()
+    bot = get_staff_bot() or get_tracker_bot()
     if not bot: return
     preview = text[:80] + "..." if len(text) > 80 else text
     msg = f"💬 *Новое сообщение*\n👤 {sender_name}\n\n_{preview}_"
+    app_url = _db.get_setting("app_url", "")
     try:
         await bot.send_message(
             int(notify_chat), msg,
@@ -266,7 +161,7 @@ async def _notify_manager(sender_name: str, conv_id: int, text: str):
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
                 types.InlineKeyboardButton(
                     text="Открыть чат →",
-                    url=f"{_db.get_setting('app_url', '')}/chat?key={_db.get_setting('dashboard_password', '')}&conv_id={conv_id}"
+                    url=f"{app_url}/{chat_path}?conv_id={conv_id}"
                 )
             ]])
         )
@@ -313,19 +208,6 @@ async def stop_staff_bot():
 
 def get_staff_bot() -> Bot | None:
     return _staff_bot
-
-
-async def send_staff_message(tg_chat_id: str, text: str) -> bool:
-    bot = get_staff_bot()
-    if not bot:
-        log.error("[BOT2] Bot not running")
-        return False
-    try:
-        await bot.send_message(int(tg_chat_id), text)
-        return True
-    except Exception as e:
-        log.error(f"[BOT2] Send error: {e}")
-        return False
 
 
 async def get_bot_info(bot: Bot | None) -> dict:

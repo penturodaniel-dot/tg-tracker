@@ -5388,7 +5388,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             var _knownTgIds=new Set([{','.join(str(c['id']) for c in convs)}]);
             setInterval(async function(){{
               try{{
-                var res=await fetch('/api/tg_account_convs');
+                var res=await fetch('/api/tg_account_convs?status='+encodeURIComponent(TGA_SF));
                 var data=await res.json();
                 if(!data.convs)return;
                 var list=document.getElementById('tg-conv-items');
@@ -5414,7 +5414,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                     var dot=c.status==='open'?'🟢':'⚫';
                     var bdg=c.unread_count>0?'<span class="unread-num unread-badge">'+c.unread_count+'</span>':'';
                     var inBase=c.in_staff?'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>':'';
-                    var isFb=c.fbclid||c.utm_source==='facebook'||c.utm_source==='fb';
+                    var isFb=!!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));
                     var src=isFb?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
                     var uname=c.username?'@'+escTga(c.username):'';
                     var utm='';
@@ -5886,11 +5886,13 @@ async def api_tga_chat_panel(request: Request, conv_id: int = 0, status_filter: 
 
 
 @app.get("/api/tg_account_convs")
-async def api_tg_account_convs(request: Request):
+async def api_tg_account_convs(request: Request, status: str = "open"):
     """Список TG диалогов для авто-обновления"""
     user = check_session(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
-    convs = db.get_tg_account_conversations()
+    # Фильтруем по статусу как на странице
+    status_arg = status if status != "all" else None
+    convs = db.get_tg_account_conversations(status=status_arg)
     tga_in_staff = db.get_tga_conv_ids_in_staff()
     return JSONResponse({"convs": [
         {
@@ -5904,6 +5906,7 @@ async def api_tg_account_convs(request: Request):
             "utm_campaign": c.get("utm_campaign") or "",
             "utm_content":  c.get("utm_content") or "",
             "utm_term":     c.get("utm_term") or "",
+            "utm_source":   c.get("utm_source") or "",
             "fbclid":       bool(c.get("fbclid")),
             "in_staff":     bool(tga_in_staff.get(c["id"])),
         } for c in convs

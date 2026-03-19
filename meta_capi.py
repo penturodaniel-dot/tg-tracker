@@ -39,6 +39,7 @@ async def send_event(
     user_agent: str = None,
     test_event_code: str = None,
     event_source_url: str = None,
+    event_time: int = None,
 ) -> bool:
     if not pixel_id or not access_token:
         log.warning("Meta CAPI: pixel_id or token not set")
@@ -70,7 +71,7 @@ async def send_event(
     payload = {
         "data": [{
             "event_name": event_name,
-            "event_time": int(time.time()),
+            "event_time": event_time if event_time else int(time.time()),
             "action_source": _action_source,
             "user_data": user_data,
             "custom_data": custom_data,
@@ -86,9 +87,9 @@ async def send_event(
             resp = await client.post(f"https://graph.facebook.com/v19.0/{pixel_id}/events", json=payload)
             data = resp.json()
             if resp.status_code == 200 and data.get("events_received", 0) > 0:
-                log.info(f"Meta CAPI ✅ {event_name} user={user_id} fbp={'✓' if fbp else '—'} fbc={'✓' if fbc else '—'}")
+                log.info(f"Meta CAPI ✅ {event_name} user={user_id} fbp={'✓' if fbp else '—'} fbc={'✓' if fbc else '—'} events_received={data.get('events_received')} messages={data.get('messages_received')}")
                 return True
-            log.error(f"Meta CAPI error {resp.status_code}: {data}")
+            log.error(f"Meta CAPI ❌ {resp.status_code}: events_received={data.get('events_received',0)} error={data.get('error')} messages={data.get('messages_received')} full={data}")
             return False
     except Exception as e:
         log.error(f"Meta CAPI exception: {e}")

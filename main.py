@@ -590,7 +590,7 @@ def nav_html(active: str, request: Request) -> str:
       playPing();
       setTimeout(() => {{ d.style.animation = 'toastIn .2s ease reverse'; setTimeout(() => d.remove(), 200); }}, 5000);
     }}
-    let _lastTgUnread = {unread}, _lastWaUnread = {wa_unread}, _lastTgaUnread = {tga_unread};
+    let _lastWaUnread = {wa_unread}, _lastTgaUnread = {tga_unread};
     function updateBadge(id, count){{
       const el = document.getElementById(id);
       if(!el) return;

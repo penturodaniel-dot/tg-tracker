@@ -280,6 +280,7 @@ class Database:
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_id INTEGER DEFAULT NULL",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS project_id INTEGER DEFAULT NULL",
                     "ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS project_id INTEGER DEFAULT NULL",
+                    "ALTER TABLE projects ADD COLUMN IF NOT EXISTS test_event_code TEXT DEFAULT ''",
                 ]
                 # Таблица галереи фото сотрудников
                 cur.execute("""
@@ -318,14 +319,15 @@ class Database:
                 # Проекты — группируют пиксели и utm кампании
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS projects (
-                        id           SERIAL PRIMARY KEY,
-                        name         TEXT NOT NULL UNIQUE,
-                        fb_pixel_id  TEXT DEFAULT '',
-                        fb_token     TEXT DEFAULT '',
-                        tt_pixel_id  TEXT DEFAULT '',
-                        tt_token     TEXT DEFAULT '',
-                        utm_campaigns TEXT DEFAULT '',
-                        created_at   TEXT NOT NULL
+                        id                SERIAL PRIMARY KEY,
+                        name              TEXT NOT NULL UNIQUE,
+                        fb_pixel_id       TEXT DEFAULT '',
+                        fb_token          TEXT DEFAULT '',
+                        tt_pixel_id       TEXT DEFAULT '',
+                        tt_token          TEXT DEFAULT '',
+                        utm_campaigns     TEXT DEFAULT '',
+                        test_event_code   TEXT DEFAULT '',
+                        created_at        TEXT NOT NULL
                     )
                 """)
                 # Привязка лендинга к проекту
@@ -1852,14 +1854,15 @@ class Database:
     def update_project(self, project_id: int, name: str = None,
                        fb_pixel_id: str = None, fb_token: str = None,
                        tt_pixel_id: str = None, tt_token: str = None,
-                       utm_campaigns: str = None):
+                       utm_campaigns: str = None, test_event_code: str = None):
         fields, vals = [], []
         if name         is not None: fields.append("name=%s");          vals.append(name.strip())
         if fb_pixel_id  is not None: fields.append("fb_pixel_id=%s");   vals.append(fb_pixel_id.strip())
         if fb_token     is not None: fields.append("fb_token=%s");      vals.append(fb_token.strip())
         if tt_pixel_id  is not None: fields.append("tt_pixel_id=%s");   vals.append(tt_pixel_id.strip())
         if tt_token     is not None: fields.append("tt_token=%s");      vals.append(tt_token.strip())
-        if utm_campaigns is not None: fields.append("utm_campaigns=%s"); vals.append(utm_campaigns.strip())
+        if utm_campaigns    is not None: fields.append("utm_campaigns=%s");    vals.append(utm_campaigns.strip())
+        if test_event_code  is not None: fields.append("test_event_code=%s"); vals.append(test_event_code.strip())
         if not fields: return
         vals.append(project_id)
         with self._conn() as conn:

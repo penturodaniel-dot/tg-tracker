@@ -745,8 +745,7 @@ async def tg_account_send_lead(request: Request, conv_id: int = Form(...)):
     utm_src  = conv.get("utm_source")   or "telegram"
     fbclid   = conv.get("fbclid")
     fbp      = conv.get("fbp")
-    if px["project_name"]:
-        log.info(f"[Lead/TGA] проект: {px['project_name']} utm={campaign}")
+    log.info(f"[Lead/TGA] pixel={px['fb_pixel'][:8] if px['fb_pixel'] else 'NONE'} project={px['project_name'] or 'global'} utm={campaign} test_code={px['test_event_code'] or 'NONE'} fbp={'✓' if fbp else '—'} fbc={'✓' if fbclid else '—'}")
     sent = await meta_capi.send_lead_event(
         px["fb_pixel"], px["fb_token"],
         user_id=conv.get("tg_user_id", ""),

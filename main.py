@@ -3038,6 +3038,18 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
                 <div style="padding:6px 8px;background:var(--bg3)"><div style="font-size:.72rem;font-weight:600;color:var(--text)">Bold Purple</div><div style="font-size:.65rem;color:var(--text3)">Яркий фиолетовый</div></div>
               </div>
             </label>
+            <label style="cursor:pointer">
+              <input type="radio" name="template" value="tiktok_spa" style="display:none">
+              <div class="tpl-card" data-tpl="tiktok_spa" style="border:2px solid var(--border);border-radius:8px;overflow:hidden;transition:all .15s">
+                <div style="height:70px;background:#0d0d0d;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;position:relative;overflow:hidden">
+                  <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:100px;height:100px;background:radial-gradient(ellipse,rgba(218,39,189,.35),transparent 70%);pointer-events:none"></div>
+                  <div style="font-size:.6rem;font-weight:900;color:#fff;font-family:monospace;letter-spacing:.05em">$1500/ДЕНЬ</div>
+                  <div style="width:80px;height:20px;background:linear-gradient(135deg,#DA27BD,#9333ea);border-radius:6px;margin-top:4px"></div>
+                  <div style="font-size:.5rem;color:rgba(255,255,255,.4);margin-top:2px">📱 TikTok · Mobile-first</div>
+                </div>
+                <div style="padding:6px 8px;background:var(--bg3)"><div style="font-size:.72rem;font-weight:600;color:var(--text)">🎵 TikTok Spa</div><div style="font-size:.65rem;color:var(--text3)">Под TikTok трафик</div></div>
+              </div>
+            </label>
           </div>
         </div>
         <script>
@@ -3142,7 +3154,7 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
     except:
         cur_tpl = "dark_hr"
 
-    tpl_names = {"massage_job":"Massage Job USA","dark_hr":"Dark Spa","light_clean":"Light Clean","bold_cta":"Bold Purple"}
+    tpl_names = {"massage_job":"Massage Job USA","dark_hr":"Dark Spa","light_clean":"Light Clean","bold_cta":"Bold Purple","tiktok_spa":"🎵 TikTok Spa"}
 
     contact_rows = ""
     for c in contacts:
@@ -3635,6 +3647,8 @@ def _render_staff_landing(landing: dict, contacts: list, pixel_id: str = "") -> 
     elif template == "dark_hr":
         buttons = _build_buttons(contacts)
         return _tpl_dark_hr(name, buttons, px, year)
+    elif template == "tiktok_spa":
+        return _tpl_tiktok_spa(name, contacts, px, tt_pixel_id, year)
     else:  # massage_job — default
         return _tpl_massage_job(name, contacts, px, year)
 
@@ -3942,6 +3956,217 @@ def _tpl_massage_job(name: str, contacts: list, pixel_js: str, year: int) -> str
         btns_ftr=_make_ftr(contacts),
         year=year,
     )
+
+
+def _tpl_tiktok_spa(name: str, contacts: list, pixel_js: str, tt_pixel_id: str, year: int) -> str:
+    """TikTok-оптимизированная версия HR лендинга для СПА.
+    Особенности: вертикальная структура (mobile-first), крупные CTA вверху,
+    простой текст без сложных юридических фраз, доверие через цифры,
+    ttq.track('ViewContent') при загрузке, ttq.track('SubmitApplication') по клику CTA.
+    """
+    TG_ICO = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>'
+    WA_ICO  = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5Z"/></svg>'
+
+    def _cta_btn(c):
+        track = f"if(typeof ttq!=='undefined')ttq.track('SubmitApplication');"
+        if c["type"] == "telegram":
+            return f'<a class="tt-btn" href="{c["url"]}" target="_blank" rel="noopener" onclick="{track}">{TG_ICO} {c["label"]}</a>'
+        elif c["type"] == "whatsapp":
+            return f'<a class="tt-btn tt-btn-wa" href="{c["url"]}" target="_blank" rel="noopener" onclick="{track}">{WA_ICO} {c["label"]}</a>'
+        return f'<a class="tt-btn" href="{c["url"]}" target="_blank" rel="noopener" onclick="{track}">{c["label"]}</a>'
+
+    cta_btns = "\n".join(_cta_btn(c) for c in contacts) if contacts else '<a class="tt-btn" href="#">Написать нам</a>'
+
+    # ViewContent при загрузке — стандартное событие TikTok для лендингов
+    tt_view_event = ""
+    if tt_pixel_id:
+        tt_view_event = "<script>window.addEventListener('load',function(){if(typeof ttq!=='undefined'){ttq.track('ViewContent',{content_name:'spa_job_landing',content_type:'product'});}});</script>"
+
+    return f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>{name}</title>
+{pixel_js}
+{tt_view_event}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+html{{scroll-behavior:smooth}}
+body{{font-family:'Inter',sans-serif;background:#0d0d0d;color:#fff;min-height:100vh;overflow-x:hidden}}
+a{{text-decoration:none;color:inherit}}
+.wrap{{width:min(520px,94vw);margin:0 auto}}
+
+/* HERO */
+.tt-hero{{background:linear-gradient(160deg,#1a0a2e 0%,#0d0d0d 60%);padding:60px 0 48px;position:relative;overflow:hidden;text-align:center}}
+.tt-hero::before{{content:'';position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:500px;height:500px;background:radial-gradient(ellipse,rgba(218,39,189,.25) 0%,transparent 70%);pointer-events:none}}
+.tt-badge{{display:inline-flex;align-items:center;gap:6px;background:rgba(218,39,189,.15);border:1px solid rgba(218,39,189,.4);border-radius:99px;padding:6px 16px;font-size:.78rem;font-weight:600;color:#e879f9;margin-bottom:24px;letter-spacing:.04em}}
+.tt-h1{{font-family:'Montserrat',sans-serif;font-weight:900;font-size:clamp(2.2rem,8vw,3.2rem);line-height:1.08;margin-bottom:16px;background:linear-gradient(135deg,#fff 30%,#e879f9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
+.tt-sub{{font-size:1.05rem;color:rgba(255,255,255,.7);margin-bottom:32px;line-height:1.6;max-width:400px;margin-left:auto;margin-right:auto}}
+.tt-cta-wrap{{display:flex;flex-direction:column;gap:12px;align-items:center;margin-bottom:32px}}
+.tt-btn{{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:16px 32px;border-radius:14px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:1rem;background:linear-gradient(135deg,#DA27BD,#9333ea);color:#fff;width:100%;max-width:340px;transition:opacity .15s,transform .15s;border:none;cursor:pointer}}
+.tt-btn:hover{{opacity:.9;transform:translateY(-2px)}}
+.tt-btn-wa{{background:linear-gradient(135deg,#25D366,#128C7E)}}
+.tt-trust{{display:flex;justify-content:center;gap:24px;flex-wrap:wrap}}
+.tt-trust-item{{text-align:center}}
+.tt-trust-num{{font-family:'Montserrat',sans-serif;font-weight:900;font-size:1.5rem;background:linear-gradient(135deg,#DA27BD,#9333ea);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
+.tt-trust-lbl{{font-size:.72rem;color:rgba(255,255,255,.5);margin-top:2px}}
+
+/* BENEFITS */
+.tt-sec{{padding:48px 0;border-top:1px solid rgba(255,255,255,.06)}}
+.tt-sec-title{{font-family:'Montserrat',sans-serif;font-weight:900;font-size:1.5rem;text-align:center;margin-bottom:28px}}
+.tt-cards{{display:flex;flex-direction:column;gap:12px}}
+.tt-card{{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 20px;display:flex;align-items:flex-start;gap:14px;transition:border-color .2s}}
+.tt-card:hover{{border-color:rgba(218,39,189,.4)}}
+.tt-card-icon{{font-size:1.6rem;flex-shrink:0;margin-top:2px}}
+.tt-card-title{{font-weight:700;font-size:.95rem;margin-bottom:4px}}
+.tt-card-desc{{font-size:.83rem;color:rgba(255,255,255,.55);line-height:1.55}}
+
+/* STEPS */
+.tt-steps{{display:flex;flex-direction:column;gap:0}}
+.tt-step{{display:flex;gap:16px;padding:16px 0;position:relative}}
+.tt-step:not(:last-child)::after{{content:'';position:absolute;left:19px;top:52px;bottom:0;width:2px;background:rgba(218,39,189,.25)}}
+.tt-step-num{{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#DA27BD,#9333ea);display:flex;align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:.95rem;flex-shrink:0}}
+.tt-step-body{{padding-top:8px}}
+.tt-step-title{{font-weight:700;font-size:.95rem;margin-bottom:4px}}
+.tt-step-desc{{font-size:.83rem;color:rgba(255,255,255,.55);line-height:1.55}}
+
+/* REVIEWS */
+.tt-reviews{{display:flex;flex-direction:column;gap:12px}}
+.tt-review{{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 20px}}
+.tt-review-stars{{color:#DA27BD;font-size:.9rem;margin-bottom:8px}}
+.tt-review-text{{font-size:.85rem;color:rgba(255,255,255,.75);line-height:1.6;margin-bottom:10px;font-style:italic}}
+.tt-review-meta{{display:flex;justify-content:space-between;align-items:center}}
+.tt-review-name{{font-weight:700;font-size:.82rem}}
+.tt-review-earn{{font-family:'Montserrat',sans-serif;font-weight:900;font-size:.9rem;background:linear-gradient(135deg,#DA27BD,#9333ea);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
+
+/* BOTTOM CTA */
+.tt-bottom{{padding:48px 0 60px;text-align:center;background:linear-gradient(0deg,#1a0a2e,#0d0d0d)}}
+.tt-bottom-title{{font-family:'Montserrat',sans-serif;font-weight:900;font-size:1.6rem;margin-bottom:12px;line-height:1.2}}
+.tt-bottom-sub{{font-size:.9rem;color:rgba(255,255,255,.6);margin-bottom:28px;line-height:1.6}}
+.tt-scroll-cta{{display:inline-block;background:rgba(218,39,189,.1);border:1px dashed rgba(218,39,189,.4);border-radius:99px;padding:6px 18px;font-size:.75rem;color:#e879f9;margin-bottom:20px;animation:pulse 2s ease-in-out infinite}}
+@keyframes pulse{{0%,100%{{opacity:1}}50%{{opacity:.6}}}}
+
+/* FOOTER */
+.tt-footer{{padding:24px 0;border-top:1px solid rgba(255,255,255,.06);text-align:center;font-size:.73rem;color:rgba(255,255,255,.25)}}
+
+/* STICKY CTA bar (mobile) */
+.tt-sticky{{position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:rgba(13,13,13,.95);backdrop-filter:blur(12px);border-top:1px solid rgba(218,39,189,.25);display:flex;gap:10px;z-index:200;transform:translateY(100%);transition:transform .3s}}
+.tt-sticky.visible{{transform:translateY(0)}}
+.tt-sticky .tt-btn{{flex:1;padding:13px 16px;font-size:.88rem;max-width:none}}
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="tt-hero">
+  <div class="wrap">
+    <div class="tt-badge">✨ Вакансия · Работа в США</div>
+    <h1 class="tt-h1">Работа в СПА<br>от $1500 в день</h1>
+    <p class="tt-sub">Массажистки зарабатывают от $500 за смену. Жильё, обучение и поддержка — всё включено.</p>
+    <div class="tt-cta-wrap" id="main-cta">
+      {cta_btns}
+    </div>
+    <div class="tt-trust">
+      <div class="tt-trust-item"><div class="tt-trust-num">500+</div><div class="tt-trust-lbl">девушек<br>уже работают</div></div>
+      <div class="tt-trust-item"><div class="tt-trust-num">$1500</div><div class="tt-trust-lbl">средний<br>доход в день</div></div>
+      <div class="tt-trust-item"><div class="tt-trust-num">50+</div><div class="tt-trust-lbl">городов<br>по всей США</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- BENEFITS -->
+<section class="tt-sec">
+  <div class="wrap">
+    <div class="tt-sec-title">Что ты получаешь</div>
+    <div class="tt-cards">
+      <div class="tt-card"><div class="tt-card-icon">💵</div><div><div class="tt-card-title">Оплата каждый день</div><div class="tt-card-desc">Деньги получаешь сразу после смены — никаких задержек и удержаний.</div></div></div>
+      <div class="tt-card"><div class="tt-card-icon">🏠</div><div><div class="tt-card-title">Жильё включено</div><div class="tt-card-desc">Предоставляем комфортное жильё в городе, где ты работаешь.</div></div></div>
+      <div class="tt-card"><div class="tt-card-icon">🎓</div><div><div class="tt-card-title">Обучение с нуля</div><div class="tt-card-desc">Опыт не нужен. Обучаем бесплатно — ты начнёшь зарабатывать уже в первую неделю.</div></div></div>
+      <div class="tt-card"><div class="tt-card-icon">🛡</div><div><div class="tt-card-title">Полная безопасность</div><div class="tt-card-desc">Только проверенные клиенты. Администратор и менеджер всегда на связи 24/7.</div></div></div>
+      <div class="tt-card"><div class="tt-card-icon">🕐</div><div><div class="tt-card-title">Гибкий график</div><div class="tt-card-desc">Сама выбираешь смены. Можно совмещать с другой работой или учёбой.</div></div></div>
+      <div class="tt-card"><div class="tt-card-icon">👁</div><div><div class="tt-card-title">Анонимность</div><div class="tt-card-desc">Твои личные данные под защитой. Работаешь под именем, которое выберешь сама.</div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW TO START -->
+<section class="tt-sec">
+  <div class="wrap">
+    <div class="tt-sec-title">Как начать за 3 шага</div>
+    <div class="tt-steps">
+      <div class="tt-step"><div class="tt-step-num">1</div><div class="tt-step-body"><div class="tt-step-title">Напиши нам в Telegram или WhatsApp</div><div class="tt-step-desc">Наш HR-менеджер ответит в течение нескольких минут и расскажет всё подробно.</div></div></div>
+      <div class="tt-step"><div class="tt-step-num">2</div><div class="tt-step-body"><div class="tt-step-title">Заполни короткую анкету</div><div class="tt-step-desc">Имя, возраст, город где ты сейчас в США и одно фото. Документы не нужны.</div></div></div>
+      <div class="tt-step"><div class="tt-step-num">3</div><div class="tt-step-body"><div class="tt-step-title">Выходи на первую смену</div><div class="tt-step-desc">Получаешь адрес, знакомишься с командой и зарабатываешь уже в первый день.</div></div></div>
+    </div>
+    <div style="margin-top:28px;display:flex;flex-direction:column;align-items:center;gap:12px">
+      {cta_btns}
+    </div>
+  </div>
+</section>
+
+<!-- REVIEWS -->
+<section class="tt-sec">
+  <div class="wrap">
+    <div class="tt-sec-title">Девушки о работе с нами</div>
+    <div class="tt-reviews">
+      <div class="tt-review"><div class="tt-review-stars">★★★★★</div><div class="tt-review-text">«Работаю 3 месяца в Майами. Сначала было страшно, но команда поддержала с первого дня. Теперь планирую купить квартиру дома.»</div><div class="tt-review-meta"><div class="tt-review-name">Анна, из Украины</div><div class="tt-review-earn">+$35,000</div></div></div>
+      <div class="tt-review"><div class="tt-review-stars">★★★★★</div><div class="tt-review-text">«Поехала не зная языка, помогли с переводчиком. График удобный, жильё хорошее. Уже работаю 5 месяцев.»</div><div class="tt-review-meta"><div class="tt-review-name">Елена, из России</div><div class="tt-review-earn">+$55,000</div></div></div>
+      <div class="tt-review"><div class="tt-review-stars">★★★★★</div><div class="tt-review-text">«Опыта массажа не было вообще, обучили за неделю. Первую смену немного нервничала, но всё прошло хорошо.»</div><div class="tt-review-meta"><div class="tt-review-name">Мария, из Беларуси</div><div class="tt-review-earn">+$22,000</div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- BOTTOM CTA -->
+<section class="tt-bottom">
+  <div class="wrap">
+    <div class="tt-scroll-cta">👆 Прокрути вверх — напиши нам</div>
+    <h2 class="tt-bottom-title">Готова зарабатывать<br>от $500 в день?</h2>
+    <p class="tt-bottom-sub">Напиши прямо сейчас — менеджер ответит через несколько минут и ответит на все вопросы</p>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:12px">
+      {cta_btns}
+    </div>
+  </div>
+</section>
+
+<footer class="tt-footer">
+  <div class="wrap">© {year} Massage Job USA · Вся территория США</div>
+</footer>
+
+<!-- Sticky CTA bar — появляется при скролле вниз -->
+<div class="tt-sticky" id="tt-sticky">
+  {cta_btns}
+</div>
+
+<script>
+// Sticky bar
+(function(){{
+  var sticky = document.getElementById('tt-sticky');
+  var hero   = document.getElementById('main-cta');
+  if(!sticky || !hero) return;
+  var io = new IntersectionObserver(function(entries){{
+    sticky.classList.toggle('visible', !entries[0].isIntersecting);
+  }}, {{threshold: 0}});
+  io.observe(hero);
+}})();
+
+// TikTok: отслеживаем скролл до 50% страницы
+(function(){{
+  var fired50 = false;
+  window.addEventListener('scroll', function(){{
+    if(fired50) return;
+    var pct = window.scrollY / (document.body.scrollHeight - window.innerHeight);
+    if(pct >= 0.5){{
+      fired50 = true;
+      if(typeof ttq !== 'undefined') ttq.track('Search', {{content_name: 'spa_job_scroll_50'}});
+    }}
+  }});
+}})();
+</script>
+</body>
+</html>"""
 
 
 # ── API ───────────────────────────────────────────────────────────────────────

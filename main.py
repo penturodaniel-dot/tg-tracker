@@ -4543,12 +4543,21 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     WA_CSS = "<style>.send-btn-green{background:#25d366;color:#fff;border:none;border-radius:10px;padding:10px 18px;cursor:pointer;font-size:.87rem;font-weight:600;height:42px;flex-shrink:0}.send-btn-green:hover{background:#128c7e}.btn-green{background:#059669;color:#fff;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:.85rem;font-weight:600;white-space:nowrap}.btn-green:hover{background:#047857}</style>"
     right = f"""{header_html}
     <div class="chat-messages" id="wa-msgs">{messages_html}</div>
-    <div class="chat-input"><div class="chat-input-row">
-      <input type="file" id="wa-file-input" accept="image/*" style="display:none" onchange="sendWaFile(this)"/>
-      <button class="send-btn-green" style="background:#374151;padding:10px 13px;font-size:1.1rem" onclick="document.getElementById('wa-file-input').click()" title="Отправить фото">📎</button>
-      <textarea id="wa-reply" placeholder="Написать в WhatsApp… (Enter — отправить)" rows="1" onkeydown="handleWaKey(event)"></textarea>
-      <button class="send-btn-green" onclick="sendWaMsg()">Отправить</button>
-    </div></div>""" if active_conv and active_conv["status"] == "open" else (
+    <div id="wa-send-error" style="display:none;padding:8px 18px;background:#2d0a0a;border-top:1px solid #7f1d1d;font-size:.8rem;color:#fca5a5;align-items:center;justify-content:space-between;gap:8px">
+      <span id="wa-send-error-text"></span>
+      <button onclick="document.getElementById('wa-send-error').style.display='none'" style="background:none;border:none;color:#fca5a5;cursor:pointer;font-size:1rem;line-height:1">✕</button>
+    </div>
+    <div class="chat-input">
+      <div id="wa-disconnected-banner" style="display:{'none' if wa_status == 'ready' else 'flex'};align-items:center;justify-content:space-between;padding:8px 12px;background:#1c1a00;border:1px solid #713f12;border-radius:8px;margin-bottom:8px;font-size:.8rem;color:#fde047;gap:8px">
+        <span>⚠️ WhatsApp не подключён — сообщения не будут доставлены</span>
+        <a href="/wa/setup" style="color:#fde047;font-weight:600;white-space:nowrap;text-decoration:underline">Подключить →</a>
+      </div>
+      <div class="chat-input-row">
+        <input type="file" id="wa-file-input" accept="image/*" style="display:none" onchange="sendWaFile(this)"/>
+        <button class="send-btn-green" style="background:#374151;padding:10px 13px;font-size:1.1rem" onclick="document.getElementById('wa-file-input').click()" title="Отправить фото">📎</button>
+        <textarea id="wa-reply" placeholder="Написать в WhatsApp… (Enter — отправить)" rows="1" onkeydown="handleWaKey(event)"></textarea>
+        <button class="send-btn-green" onclick="sendWaMsg()">Отправить</button>
+      </div></div>""" if active_conv and active_conv["status"] == "open" else (
         f"{header_html}<div class='no-conv'><div>Чат закрыт</div></div>" if active_conv else
         '<div class="no-conv"><div style="font-size:2.5rem">💚</div><div>Выбери диалог WhatsApp</div></div>'
     )
@@ -4567,9 +4576,28 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     async function sendWaMsg(){{
       const ta=document.getElementById('wa-reply');
       const text=ta.value.trim(); if(!text) return; ta.value='';
-      await fetch('/wa/send',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},
-        body:'conv_id={conv_id}&text='+encodeURIComponent(text)}});
-      loadNewWaMsgs();
+      try{{
+        const r=await fetch('/wa/send',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},
+          body:'conv_id={conv_id}&text='+encodeURIComponent(text)}});
+        const d=await r.json();
+        if(d.ok) loadNewWaMsgs(); else showWaError(d.error||'');
+      }}catch(e){{showWaError(e.message);}}
+    }}
+
+    function showWaError(msg){{
+      var errDiv=document.getElementById('wa-send-error');
+      var errTxt=document.getElementById('wa-send-error-text');
+      if(!errDiv||!errTxt)return;
+      var isDisconn=msg&&(msg.toLowerCase().includes('not connect')||msg.toLowerCase().includes('503'));
+      if(isDisconn){{
+        errTxt.innerHTML='⚠️ WhatsApp не подключён. <a href="/wa/setup" style="color:#fca5a5;text-decoration:underline;font-weight:600">Подключить →</a>';
+        var banner=document.getElementById('wa-disconnected-banner');
+        if(banner) banner.style.display='flex';
+      }}else{{
+        errTxt.textContent='Ошибка: '+(msg||'неизвестная ошибка');
+      }}
+      errDiv.style.display='flex';
+      setTimeout(function(){{errDiv.style.display='none';}},6000);
     }}
 
     async function sendWaFile(input){{
@@ -4582,13 +4610,22 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
       try{{
         const res=await fetch('/wa/send_media',{{method:'POST',body:fd}});
         const data=await res.json();
-        if(data.ok) loadNewWaMsgs();
-        else alert('Ошибка отправки: '+(data.error||'неизвестно'));
-      }}catch(e){{alert('Ошибка: '+e.message);}}
+        if(data.ok) loadNewWaMsgs(); else showWaError(data.error||'');
+      }}catch(e){{showWaError(e.message);}}
       btn.textContent='📎'; btn.disabled=false;
       input.value='';
     }}
     function handleWaKey(e){{if(e.key==='Enter'&&!e.shiftKey){{e.preventDefault();sendWaMsg();}}}}
+
+    // Polling статуса WA — обновляем баннер автоматически
+    setInterval(async function(){{
+      try{{
+        var r=await fetch('/api/stats');if(!r.ok)return;
+        var d=await r.json();
+        var banner=document.getElementById('wa-disconnected-banner');
+        if(banner) banner.style.display=(d.wa_status==='ready')?'none':'flex';
+      }}catch(e){{}}
+    }},5000);
 
     // Обновление сообщений в открытом чате
     {"setInterval(loadNewWaMsgs, 3000);" if active_conv else ""}
@@ -5065,7 +5102,15 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               <div style="display:flex;gap:6px;flex-shrink:0">{close_btn} {delete_btn}</div>
             </div>
             <div class="chat-messages" id="tga-msgs">{messages_html}</div>
-            <div class="chat-input">
+            <div id="tga-send-error" style="display:none;padding:8px 18px;background:#2d0a0a;border-top:1px solid #7f1d1d;font-size:.8rem;color:#fca5a5;display:flex;align-items:center;justify-content:space-between;gap:8px">
+              <span id="tga-send-error-text"></span>
+              <button onclick="document.getElementById('tga-send-error').style.display='none'" style="background:none;border:none;color:#fca5a5;cursor:pointer;font-size:1rem;line-height:1">✕</button>
+            </div>
+            <div class="chat-input" id="tga-chat-input">
+              <div id="tga-disconnected-banner" style="display:{'none' if tg_status == 'connected' else 'flex'};align-items:center;justify-content:space-between;padding:8px 12px;background:#1c1a00;border:1px solid #713f12;border-radius:8px;margin-bottom:8px;font-size:.8rem;color:#fde047;gap:8px">
+                <span>⚠️ TG аккаунт не подключён — сообщения не будут доставлены</span>
+                <a href="/tg_account/setup" style="color:#fde047;font-weight:600;white-space:nowrap;text-decoration:underline">Подключить →</a>
+              </div>
               <div class="chat-input-row">
                 <div style="position:relative;flex:1">
                   <textarea id="tga-inp" placeholder="Написать в Telegram... (Enter — отправить)"
@@ -5085,21 +5130,36 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             if(tgaMsgBox) tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
             var lastTgAId=(function(){{var m=document.querySelectorAll('#tga-msgs .msg[data-id]');return m.length?m[m.length-1].dataset.id:0;}})();
             function escTga(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}}
+            function showTgaError(msg){{
+              var errDiv=document.getElementById('tga-send-error');
+              var errTxt=document.getElementById('tga-send-error-text');
+              if(!errDiv||!errTxt) return;
+              var isDisconn = msg&&(msg.toLowerCase().includes('not connected')||msg.toLowerCase().includes('503')||msg.toLowerCase().includes('disconnect'));
+              if(isDisconn){{
+                errTxt.innerHTML='⚠️ TG аккаунт не подключён. <a href="/tg_account/setup" style="color:#fca5a5;text-decoration:underline;font-weight:600">Подключить новый аккаунт →</a>';
+                var banner=document.getElementById('tga-disconnected-banner');
+                if(banner) banner.style.display='flex';
+              }} else {{
+                errTxt.textContent='Ошибка отправки: '+(msg||'неизвестная ошибка');
+              }}
+              errDiv.style.display='flex';
+              setTimeout(function(){{errDiv.style.display='none';}}, 6000);
+            }}
             async function sendTgAccMsg(){{
               var inp=document.getElementById('tga-inp');
               var text=inp.value.trim();if(!text)return;inp.value='';
               try{{
                 var r=await fetch('/tg_account/send',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+TGA_CONV_ID+'&text='+encodeURIComponent(text)}});
-                var d=await r.json();if(!d.ok)alert('Ошибка: '+(d.error||''));else loadNewTgAccMsgs();
-              }}catch(e){{alert('Ошибка отправки: '+e.message);}}
+                var d=await r.json();if(!d.ok)showTgaError(d.error||'');else loadNewTgAccMsgs();
+              }}catch(e){{showTgaError(e.message);}}
             }}
             async function sendTgAccFile(input){{
               if(!input.files[0])return;
               var fd=new FormData();fd.append('conv_id',TGA_CONV_ID);fd.append('file',input.files[0]);
               try{{
                 var r=await fetch('/tg_account/send_media',{{method:'POST',body:fd}});
-                var d=await r.json();if(!d.ok)alert('Ошибка: '+(d.error||''));else loadNewTgAccMsgs();
-              }}catch(e){{alert('Ошибка: '+e.message);}}
+                var d=await r.json();if(!d.ok)showTgaError(d.error||'');else loadNewTgAccMsgs();
+              }}catch(e){{showTgaError(e.message);}}
               input.value='';
             }}
             async function loadNewTgAccMsgs(){{
@@ -5127,9 +5187,20 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 var d=await r.json();
                 if(d.ok) window.location.href='/tg_account/chat?status_filter='+TGA_SF;
                 else{{alert('Ошибка: '+(d.error||r.status));if(btn){{btn.textContent='Удалить';btn.disabled=false;}}}}
-              }}catch(e){{alert('Ошибка: '+e.message);if(btn){{btn.textContent='Удалить';btn.disabled=false;}}}}
+              }}catch(e){{showTgaError(e.message);if(btn){{btn.textContent='Удалить';btn.disabled=false;}}}}
             }}
             setInterval(loadNewTgAccMsgs,3000);
+            // Polling статуса TG — обновляем баннер при подключении/отключении
+            setInterval(async function(){{
+              try{{
+                var r=await fetch('/api/stats');
+                if(!r.ok)return;
+                var d=await r.json();
+                var banner=document.getElementById('tga-disconnected-banner');
+                if(!banner)return;
+                banner.style.display=(d.tg_status==='connected')?'none':'flex';
+              }}catch(e){{}}
+            }},5000);
             function filterTgConvs(q){{
               var items=document.querySelectorAll('#tg-conv-items .conv-item');
               items.forEach(function(el){{

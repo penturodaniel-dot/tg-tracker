@@ -681,6 +681,7 @@ def nav_html(active: str, request: Request) -> str:
       }}catch(e){{}}
     }}
     setInterval(pollUnread, 5000);
+    </script>
 """
 
 def _render_conv_tags_picker(active_tags: list, all_tags: list, active_ids: set, conv_type: str, conv_id: int) -> str:

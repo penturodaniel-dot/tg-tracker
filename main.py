@@ -3315,11 +3315,20 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
             + '</div>'
             for i in range(5)
         )
-        # CTA и badge
+        # CTA, badge, кнопки и футер
         _cta_fields = (
             _tf("cta_title",   "Заголовок CTA секции",  "Заголовок CTA") +
             _tf("cta_subtitle","Подзаголовок CTA",       "Подзаголовок CTA") +
-            _tf("badge_text",  "Текст badge (например: Элитный СПА)", "Badge текст")
+            _tf("badge_text",  "Текст badge (например: Відкритий набір)", "Badge текст") +
+            ('<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">'
+             '<div style="font-size:.75rem;font-weight:600;color:var(--orange);margin-bottom:8px">Кнопки навигации</div>' if cur_tpl == "light_clean" else "") +
+            (_tf("nav_btn",   "Відкликнутися →",  "Кнопка в шапке (nav)") +
+             _tf("hero_btn",  "Дізнатися більше →","Кнопка в герое") +
+             '</div>' if cur_tpl == "light_clean" else "") +
+            ('<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">'
+             '<div style="font-size:.75rem;font-weight:600;color:var(--orange);margin-bottom:8px">Футер</div>'
+             + _tf("footer_text", f"© {__import__('datetime').datetime.now().year} {landing.get('name','')}. Усі права захищені.", "Текст футера (год, компания, права)")
+             + '</div>')
         )
         # Цифры доверия (только для tiktok_spa и bold_cta)
         _trust_fields = ""
@@ -3985,8 +3994,9 @@ def _render_staff_landing(landing: dict, contacts: list, pixel_id: str = "") -> 
 
 def _tpl_dark_hr(name: str, buttons: str, pixel_js: str, year: int, texts: dict = None) -> str:
     if texts is None: texts = {}
-    _h1   = texts.get("hero_title")    or name
-    _sub  = texts.get("hero_subtitle","")
+    _h1      = texts.get("hero_title")    or name
+    _sub     = texts.get("hero_subtitle","")
+    _dh_footer = texts.get("footer_text","") or f"© {year} {name}. Все права защищены."
     _sub_html  = f'<p>{_sub}</p>' if _sub else ""
     _ben_items = ""
     for i in range(6):
@@ -4046,17 +4056,20 @@ footer{{text-align:center;padding:24px 0 40px;color:#576574;font-size:.85rem}}
   {_cta_s_html}
   <div class="btns">{buttons}</div>
 </div></section>
-<footer>© {year} {name}. Все права защищены.</footer>
+<footer>{_dh_footer}</footer>
 </body></html>"""
 
 
 def _tpl_light_clean(name: str, buttons: str, pixel_js: str, year: int, texts: dict = None) -> str:
     if texts is None: texts = {}
-    _lc_h1    = texts.get("hero_title","")    or name
-    _lc_sub   = texts.get("hero_subtitle","")
-    _lc_badge = texts.get("badge_text","")
-    _lc_cta_h = texts.get("cta_title","")
-    _lc_cta_s = texts.get("cta_subtitle","")
+    _lc_h1       = texts.get("hero_title","")    or name
+    _lc_sub      = texts.get("hero_subtitle","")
+    _lc_badge    = texts.get("badge_text","")
+    _lc_cta_h    = texts.get("cta_title","")
+    _lc_cta_s    = texts.get("cta_subtitle","")
+    _lc_nav_btn  = texts.get("nav_btn","")     or "Відкликнутися →"
+    _lc_hero_btn = texts.get("hero_btn","")    or "Дізнатися більше →"
+    _lc_footer   = texts.get("footer_text","") or f"© {year} {name}. Усі права захищені."
     _lc_perks = "".join(
         f'<div class="perk"><div class="perk-icon">{"💰🎓🏠🗓📍🤝".split()[0] if False else ["💰","🎓","🏠","🗓","📍","🤝"][i]}</div><h3>{texts.get(f"ben_{i}_title","")}</h3><p>{texts.get(f"ben_{i}_text","")}</p></div>'
         for i in range(6)
@@ -4105,13 +4118,13 @@ footer{{background:var(--bg);border-top:1px solid var(--border);text-align:cente
 </style></head><body>
 <nav><div class="nav-inner">
   <div class="nav-logo">{name}</div>
-  <a href="#contact" class="nav-cta">Откликнуться →</a>
+  {f'<a href="#contact" class="nav-cta">{_lc_nav_btn}</a>' if _lc_nav_btn else ""}
 </div></nav>
 <section class="hero"><div>
   {f'<div class="badge">{_lc_badge}</div>' if _lc_badge else ""}
   <h1>{_lc_h1}</h1>
   {f'<p>{_lc_sub}</p>' if _lc_sub else ""}
-  <a href="#contact" class="hr-btn hr-btn-tg" style="display:inline-flex;width:auto;margin:0 auto">Узнать подробности →</a>
+  {f'<a href="#contact" class="hr-btn hr-btn-tg" style="display:inline-flex;width:auto;margin:0 auto">{_lc_hero_btn}</a>' if _lc_hero_btn else ""}
 </div></section>
 {_lc_perks_sec}
 <section class="cta-section" id="contact"><div>
@@ -4119,17 +4132,18 @@ footer{{background:var(--bg);border-top:1px solid var(--border);text-align:cente
   {f'<p>{_lc_cta_s}</p>' if _lc_cta_s else ""}
   <div class="btns">{buttons}</div>
 </div></section>
-<footer>© {year} {name}. Все права защищены.</footer>
+<footer>{_lc_footer}</footer>
 </body></html>"""
 
 
 def _tpl_bold_cta(name: str, buttons: str, pixel_js: str, year: int, texts: dict = None) -> str:
     if texts is None: texts = {}
-    _bc_h1    = texts.get("hero_title","")    or name
-    _bc_sub   = texts.get("hero_subtitle","")
-    _bc_badge = texts.get("badge_text","")
-    _bc_cta_h = texts.get("cta_title","")
-    _bc_cta_s = texts.get("cta_subtitle","")
+    _bc_h1      = texts.get("hero_title","")    or name
+    _bc_sub     = texts.get("hero_subtitle","")
+    _bc_badge   = texts.get("badge_text","")
+    _bc_cta_h   = texts.get("cta_title","")
+    _bc_cta_s   = texts.get("cta_subtitle","")
+    _bc_footer  = texts.get("footer_text","") or f"© {year} {name}. Все права защищены."
     _bc_stats = "".join(
         f'<div class="stat"><div class="stat-v">{texts.get(f"trust_{i}_val","")}</div><div class="stat-l">{texts.get(f"trust_{i}_lbl","")}</div></div>'
         for i in range(3) if texts.get(f"trust_{i}_val","")
@@ -4194,7 +4208,7 @@ footer{{text-align:center;padding:24px 0 40px;color:#3d3460;font-size:.83rem}}
   {f'<p>{_bc_cta_s}</p>' if _bc_cta_s else ""}
   <div class="btns">{buttons}</div>
 </div></section>
-<footer>© {year} {name}. Все права защищены.</footer>
+<footer>{_bc_footer}</footer>
 </body></html>"""
 
 
@@ -4288,8 +4302,9 @@ def _tpl_massage_job(name: str, contacts: list, pixel_js: str, year: int) -> str
 
 def _tpl_tiktok_spa(name: str, contacts: list, pixel_js: str, tt_pixel_id: str, year: int, texts: dict = None) -> str:
     if texts is None: texts = {}
-    _tt_h1    = texts.get("hero_title","")    or name
-    _tt_sub   = texts.get("hero_subtitle","")
+    _tt_h1     = texts.get("hero_title","")    or name
+    _tt_sub    = texts.get("hero_subtitle","")
+    _tt_footer = texts.get("footer_text","") or f"© {year} Massage Job USA · Вся территория США"
     _tt_badge = texts.get("badge_text","")
     _tt_cta_h = texts.get("cta_title","")
     _tt_cta_s = texts.get("cta_subtitle","")
@@ -4464,7 +4479,7 @@ a{{text-decoration:none;color:inherit}}
 </section>
 
 <footer class="tt-footer">
-  <div class="wrap">© {year} Massage Job USA · Вся территория США</div>
+  <div class="wrap">{_tt_footer}</div>
 </footer>
 
 <!-- Sticky CTA bar — появляется при скролле вниз -->

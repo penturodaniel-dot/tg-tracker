@@ -70,6 +70,39 @@ async def tg_api(method: str, path: str, **kwargs) -> dict:
         return {"error": str(e)}
 
 
+def _resolve_pixels(conv: dict) -> dict:
+    """
+    Определяет пиксели для отправки Lead события.
+    Приоритет: проект по utm_campaign → глобальные настройки.
+    Возвращает dict с ключами: fb_pixel, fb_token, tt_pixel, tt_token, test_event_code, project_name
+    """
+    utm_campaign = conv.get("utm_campaign") or ""
+    project = db.get_project_by_utm(utm_campaign) if utm_campaign else None
+
+    if project:
+        fb_pixel  = project.get("fb_pixel_id") or db.get_setting("pixel_id_staff") or db.get_setting("pixel_id")
+        fb_token  = project.get("fb_token")    or db.get_setting("meta_token_staff") or db.get_setting("meta_token")
+        tt_pixel  = project.get("tt_pixel_id") or db.get_setting("tt_pixel_id")
+        tt_token  = project.get("tt_token")    or db.get_setting("tt_access_token")
+        proj_name = project.get("name", "")
+    else:
+        fb_pixel  = db.get_setting("pixel_id_staff") or db.get_setting("pixel_id")
+        fb_token  = db.get_setting("meta_token_staff") or db.get_setting("meta_token")
+        tt_pixel  = db.get_setting("tt_pixel_id")
+        tt_token  = db.get_setting("tt_access_token")
+        proj_name = ""
+
+    return {
+        "fb_pixel":        fb_pixel,
+        "fb_token":        fb_token,
+        "tt_pixel":        tt_pixel,
+        "tt_token":        tt_token,
+        "test_event_code": db.get_setting("test_event_code") or None,
+        "project_name":    proj_name,
+    }
+
+
+
 @router.get("/tg_account/chat", response_class=HTMLResponse)
 async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter: str = "open"):
     user, err = require_auth(request)
@@ -700,32 +733,32 @@ async def tg_account_send_lead(request: Request, conv_id: int = Form(...)):
     if not conv: return RedirectResponse("/tg_account/chat", 303)
     if conv.get("fb_event_sent"):
         return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
-    pixel_id   = db.get_setting("pixel_id_staff") or db.get_setting("pixel_id")
-    meta_token = db.get_setting("meta_token_staff") or db.get_setting("meta_token")
-    test_event_code = db.get_setting("test_event_code") or None
+    # Определяем пиксели — проект по utm_campaign или глобальные
+    px       = _resolve_pixels(conv)
+    campaign = conv.get("utm_campaign") or "telegram_account"
+    utm_src  = conv.get("utm_source")   or "telegram"
+    fbclid   = conv.get("fbclid")
+    fbp      = conv.get("fbp")
+    if px["project_name"]:
+        log.info(f"[Lead/TGA] проект: {px['project_name']} utm={campaign}")
     sent = await meta_capi.send_lead_event(
-        pixel_id, meta_token,
+        px["fb_pixel"], px["fb_token"],
         user_id=conv.get("tg_user_id", ""),
-        campaign=conv.get("utm_campaign") or "telegram_account",
-        fbclid=conv.get("fbclid"), fbp=conv.get("fbp"),
-        utm_source=conv.get("utm_source") or "telegram",
-        utm_campaign=conv.get("utm_campaign"),
-        test_event_code=test_event_code,
+        campaign=campaign, fbclid=fbclid, fbp=fbp,
+        utm_source=utm_src, utm_campaign=campaign,
+        test_event_code=px["test_event_code"],
         event_source_url="https://t.me/",
     )
     if sent:
         db.set_tg_account_fb_event(conv_id, "Lead")
-    # TikTok Lead (аналогично FB CAPI)
-    tt_pixel = db.get_setting("tt_pixel_id")
-    tt_token = db.get_setting("tt_access_token")
-    if tt_pixel and tt_token and tiktok_capi:
+    # TikTok Lead
+    if px["tt_pixel"] and px["tt_token"] and tiktok_capi:
         await tiktok_capi.send_lead_event(
-            tt_pixel, tt_token,
+            px["tt_pixel"], px["tt_token"],
             user_id=conv.get("tg_user_id", ""),
             ip=request.client.host if request.client else None,
-            utm_source=conv.get("utm_source") or "telegram",
-            utm_campaign=conv.get("utm_campaign") or "",
-            ttclid=conv.get("ttclid") or conv.get("fbclid") or None,
+            utm_source=utm_src, utm_campaign=campaign,
+            ttclid=conv.get("ttclid") or fbclid or None,
             event_source_url="https://t.me/",
         )
     return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)

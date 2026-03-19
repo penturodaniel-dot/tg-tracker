@@ -87,6 +87,79 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+# ── Middleware: кастомные домены для лендингов ────────────────────────────────
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import HTMLResponse as _HTMLResponse
+
+class CustomDomainMiddleware(BaseHTTPMiddleware):
+    """Если запрос пришёл с кастомного домена — показываем нужный лендинг."""
+    # Системные домены — не трогаем
+    _SYSTEM = ("railway.app", "localhost", "127.0.0.1", "0.0.0.0")
+
+    async def dispatch(self, request, call_next):
+        host = request.headers.get("host", "").split(":")[0].lower()
+        if host.startswith("www."):
+            host = host[4:]
+
+        # Системный домен — обычная обработка
+        if not host or any(host.endswith(s) for s in self._SYSTEM):
+            return await call_next(request)
+
+        path = request.url.path
+
+        # На корневом пути "/" — ищем лендинг по домену
+        if path in ("/", ""):
+            landing = db.get_landing_by_domain(host)
+            if landing:
+                try:
+                    qp = dict(request.query_params)
+                    fbclid      = qp.get("fbclid", "")
+                    utm_source  = qp.get("utm_source", "")
+                    utm_medium  = qp.get("utm_medium", "")
+                    utm_campaign= qp.get("utm_campaign", "")
+                    utm_content = qp.get("utm_content", "")
+                    utm_term    = qp.get("utm_term", "")
+                    cookie_fbp  = request.cookies.get("_fbp", "")
+
+                    contacts    = db.get_landing_contacts(landing["id"])
+                    pixel_staff = db.get_setting("pixel_id_staff", "") or db.get_setting("pixel_id", "")
+                    app_url     = db.get_setting("app_url", "").rstrip("/")
+
+                    # Строим tracked_contacts с UTM — как в /l/{slug}
+                    import urllib.parse as _up, secrets as _sec
+                    tracked_contacts = []
+                    for c in contacts:
+                        if c.get("url"):
+                            c_type = c.get("type", "")
+                            if not c_type:
+                                if "wa.me" in c["url"] or "whatsapp" in c["url"].lower():
+                                    c_type = "whatsapp"
+                                elif "t.me" in c["url"] or "telegram" in c["url"].lower():
+                                    c_type = "telegram"
+                            ref_id = _sec.token_urlsafe(10)
+                            db.save_staff_click(
+                                ref_id, c["url"], c_type, landing["slug"],
+                                fbclid=fbclid, fbp=cookie_fbp,
+                                utm_source=utm_source or "facebook",
+                                utm_medium=utm_medium or "paid",
+                                utm_campaign=utm_campaign,
+                                utm_content=utm_content,
+                                utm_term=utm_term,
+                            )
+                            go_url = f"{app_url}/go-staff?ref={ref_id}"
+                            tracked_contacts.append({**c, "url": go_url, "type": c_type})
+                        else:
+                            tracked_contacts.append(c)
+
+                    html = _render_staff_landing(landing, tracked_contacts, pixel_id=pixel_staff)
+                    return _HTMLResponse(html)
+                except Exception as e:
+                    log.error(f"[CustomDomain] render error: {e}")
+
+        return await call_next(request)
+
+app.add_middleware(CustomDomainMiddleware)
+
 # ══════════════════════════════════════════════════════════════════════════════
 # AUTH helpers
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3072,8 +3145,10 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
         except:
             tpl_name = "Dark Spa"
         slug_url = f"/l/{l['slug']}"
+        _cdomain = l.get("custom_domain") or ""
+        _domain_badge = f'<div style="margin-top:4px"><span style="font-family:monospace;font-size:.68rem;background:#052e16;color:#86efac;border:1px solid #166534;border-radius:4px;padding:1px 6px">🌐 {_cdomain}</span></div>' if _cdomain else ""
         rows += f"""<tr>
-          <td><b>{l['name']}</b></td>
+          <td><b>{l['name']}</b>{_domain_badge}</td>
           <td><span class="badge-gray" style="font-size:.68rem">{tpl_name}</span></td>
           <td><a href="{slug_url}" target="_blank" class="link-box" style="display:inline-block">{slug_url}</a></td>
           <td><span class="{'badge-green' if l['active'] else 'badge-gray'}">{'Активен' if l['active'] else 'Скрыт'}</span></td>
@@ -3168,6 +3243,46 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
 
     public_url = f"{app_url}/l/{landing['slug']}"
     back = "/landings_staff" if landing["type"] == "staff" else "/landings"
+    cur_domain = landing.get("custom_domain") or ""
+
+    # Блок кастомного домена
+    domain_status = ""
+    if cur_domain:
+        domain_status = f'<div style="display:inline-flex;align-items:center;gap:6px;background:#052e16;border:1px solid #166534;border-radius:6px;padding:4px 10px;font-size:.78rem;color:#86efac;margin-top:8px">✅ Активен: <b>{cur_domain}</b></div>'
+    domain_block = f"""
+    <div class="section">
+      <div class="section-head"><h3>🌐 Кастомный домен</h3></div>
+      <div class="section-body">
+        <form method="post" action="/landings/set_domain" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <input type="hidden" name="landing_id" value="{id}"/>
+          <div class="field-group" style="max-width:320px">
+            <div class="field-label">Домен (без https:// и www.)</div>
+            <input type="text" name="custom_domain" value="{cur_domain}"
+              placeholder="job.example.com" style="font-family:monospace"/>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:6px">
+            <button class="btn">Сохранить</button>
+            {'<button type="submit" class="btn-gray" onclick="this.form.elements.custom_domain.value=\'\'">Очистить</button>' if cur_domain else ''}
+          </div>
+        </form>
+        {domain_status}
+        <div style="margin-top:16px;padding:14px 16px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
+          <div style="font-weight:600;font-size:.85rem;margin-bottom:10px">📋 Инструкция по подключению домена</div>
+          <div style="font-size:.82rem;color:var(--text2);line-height:1.8">
+            <b>Шаг 1.</b> Зайди в настройки DNS своего домена (Cloudflare, Namecheap, GoDaddy и др.)<br>
+            <b>Шаг 2.</b> Добавь <b>CNAME запись:</b><br>
+            <div style="margin:8px 0 8px 16px;font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:.8rem">
+              Имя: <b>{cur_domain.split('.')[0] if '.' in cur_domain else '@'}</b> &nbsp;→&nbsp; Значение: <b id="railway-host">{app_url.replace('https://','').replace('http://','')}</b>
+            </div>
+            <b>Шаг 3.</b> В Railway → твой сервис <b>web</b> → Settings → <b>Custom Domain</b> → добавь <b>{cur_domain or 'твой-домен.com'}</b><br>
+            <b>Шаг 4.</b> Подожди 5-15 минут пока DNS обновится ✅
+          </div>
+          <div style="margin-top:10px;padding:8px 12px;background:#1c1a00;border:1px solid #713f12;border-radius:6px;font-size:.78rem;color:#fde047">
+            ⚠️ Важно: кастомный домен нужно добавить в Railway иначе он не будет работать даже при правильном DNS
+          </div>
+        </div>
+      </div>
+    </div>"""
 
     # Блок смены шаблона (только для staff)
     tpl_block = ""
@@ -3208,6 +3323,7 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
       <a href="{public_url}" target="_blank" class="btn btn-sm" style="margin-top:10px;display:inline-flex">Открыть →</a>
     </div></div>
     {tpl_block}
+    {domain_block}
     <div class="section"><div class="section-head"><h3>Добавить кнопку</h3><small style="color:var(--text3)">Кнопки появятся на лендинге</small></div>
     <div class="section-body"><form method="post" action="/landings/contact/add"><input type="hidden" name="landing_id" value="{id}"/>
     <div class="form-row">
@@ -3221,6 +3337,25 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
     <table><thead><tr><th>Тип</th><th>Текст</th><th>URL</th><th></th></tr></thead>
     <tbody>{contact_rows}</tbody></table></div></div>"""
     return HTMLResponse(base(content, landing["type"] + "_landing", request))
+
+
+@app.post("/landings/set_domain")
+async def landings_set_domain(request: Request, landing_id: int = Form(...), custom_domain: str = Form("")):
+    """Сохранить или очистить кастомный домен лендинга"""
+    user, err = require_auth(request)
+    if err: return err
+    domain = custom_domain.strip().lower()
+    # Убираем протокол если вставили полный URL
+    for prefix in ("https://", "http://"):
+        if domain.startswith(prefix):
+            domain = domain[len(prefix):]
+    # Убираем слэш в конце и path
+    domain = domain.split("/")[0].strip()
+    if domain.startswith("www."):
+        domain = domain[4:]
+    db.set_landing_custom_domain(landing_id, domain)
+    msg = f"Домен {'сохранён: ' + domain if domain else 'очищен'}"
+    return RedirectResponse(f"/landings/edit?id={landing_id}&msg={msg}", 303)
 
 
 @app.post("/landings/set_template")

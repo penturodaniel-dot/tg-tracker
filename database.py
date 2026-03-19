@@ -275,6 +275,7 @@ class Database:
                     "ALTER TABLE staff ADD COLUMN IF NOT EXISTS manager_name TEXT DEFAULT ''",
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_name TEXT DEFAULT ''",
                     "ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS sender_name TEXT DEFAULT ''",
+                    "ALTER TABLE landings ADD COLUMN IF NOT EXISTS custom_domain TEXT DEFAULT ''",
                 ]
                 # Таблица галереи фото сотрудников
                 cur.execute("""
@@ -1132,6 +1133,29 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM landings WHERE slug=%s", (slug,))
                 r = cur.fetchone(); return dict(r) if r else None
+
+    def get_landing_by_domain(self, domain: str):
+        """Найти лендинг по кастомному домену (без www, без порта)"""
+        domain = domain.lower().strip()
+        # Убираем www.
+        if domain.startswith("www."):
+            domain = domain[4:]
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM landings WHERE LOWER(custom_domain)=%s AND custom_domain!=''", (domain,))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def set_landing_custom_domain(self, landing_id: int, domain: str) -> bool:
+        """Установить или очистить кастомный домен лендинга"""
+        domain = domain.strip().lower()
+        if domain.startswith("www."):
+            domain = domain[4:]
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE landings SET custom_domain=%s WHERE id=%s", (domain, landing_id))
+                ok = cur.rowcount > 0
+            conn.commit()
+        return ok
 
     def create_landing(self, name, ltype, slug, content):
         with self._conn() as conn:

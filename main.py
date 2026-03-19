@@ -3244,6 +3244,9 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
     public_url = f"{app_url}/l/{landing['slug']}"
     back = "/landings_staff" if landing["type"] == "staff" else "/landings"
     cur_domain = landing.get("custom_domain") or ""
+    _app_host = app_url.replace("https://", "").replace("http://", "")
+    _domain_prefix = cur_domain.split(".")[0] if "." in cur_domain else "@"
+    _domain_or_placeholder = cur_domain or "твой-домен.com"
 
     # Блок кастомного домена
     domain_status = ""
@@ -3272,9 +3275,9 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
             <b>Шаг 1.</b> Зайди в настройки DNS своего домена (Cloudflare, Namecheap, GoDaddy и др.)<br>
             <b>Шаг 2.</b> Добавь <b>CNAME запись:</b><br>
             <div style="margin:8px 0 8px 16px;font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:.8rem">
-              Имя: <b>{cur_domain.split('.')[0] if '.' in cur_domain else '@'}</b> &nbsp;→&nbsp; Значение: <b id="railway-host">{app_url.replace('https://','').replace('http://','')}</b>
+              Имя: <b>{_domain_prefix}</b> &nbsp;→&nbsp; Значение: <b id="railway-host">{_app_host}</b>
             </div>
-            <b>Шаг 3.</b> В Railway → твой сервис <b>web</b> → Settings → <b>Custom Domain</b> → добавь <b>{cur_domain or 'твой-домен.com'}</b><br>
+            <b>Шаг 3.</b> В Railway → твой сервис <b>web</b> → Settings → <b>Custom Domain</b> → добавь <b>{_domain_or_placeholder}</b><br>
             <b>Шаг 4.</b> Подожди 5-15 минут пока DNS обновится ✅
           </div>
           <div style="margin-top:10px;padding:8px 12px;background:#1c1a00;border:1px solid #713f12;border-radius:6px;font-size:.78rem;color:#fde047">

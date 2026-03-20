@@ -1795,22 +1795,11 @@ async def public_landing(request: Request, slug: str,
 
     # Строим /go-staff ссылки — с UTM трекингом
     raw_contacts = db.get_landing_contacts(landing["id"])
-    # Если utm_campaign не передан в URL — берём первый из привязанного проекта (fallback)
-    _utm_campaign = utm_campaign or ""
-    if not _utm_campaign and landing.get("project_id"):
-        try:
-            _proj = db.get_project(int(landing["project_id"]))
-            if _proj and _proj.get("utm_campaigns"):
-                _utm_campaign = [u.strip() for u in _proj["utm_campaigns"].split(",") if u.strip()][0]
-                log.info(f"[/l/{slug}] utm_campaign из проекта: {_utm_campaign}")
-        except Exception:
-            pass
-
     utm_params = dict(
         fbclid=fbclid, fbp=cookie_fbp,
-        utm_source=utm_source or "facebook",
-        utm_medium=utm_medium or "paid",
-        utm_campaign=_utm_campaign,
+        utm_source=utm_source or "",
+        utm_medium=utm_medium or "",
+        utm_campaign=utm_campaign or "",
         utm_content=utm_content or "",
         utm_term=utm_term or "",
         landing_slug=slug,

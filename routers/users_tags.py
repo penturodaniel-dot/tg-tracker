@@ -48,12 +48,11 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
 
     # Все вкладки и их названия
     ALL_TABS = [
-        ("overview",         "📊 Обзор"),
         ("channels",         "📡 Каналы"),
         ("campaigns",        "🔗 Кампании"),
         ("landings",         "🎨 Шаблоны"),
         ("analytics_clients","📈 Статистика Клиентов"),
-        ("chat",             "💬 TG Чаты"),
+        ("tg_account_chat", "📱 TG Чаты"),
         ("wa_chat",          "💚 WA Чаты"),
         ("staff",            "🗂 База сотрудников"),
         ("landings_staff",   "🌐 Лендинги HR"),
@@ -221,8 +220,8 @@ async def users_security(request: Request,
 async def users_add(request: Request, username: str = Form(...), password: str = Form(...), role: str = Form("manager"), display_name: str = Form("")):
     user, err = require_auth(request, role="admin")
     if err: return err
-    ALL_TAB_IDS = ["overview","channels","campaigns","landings","analytics_clients",
-                   "chat","wa_chat","staff","landings_staff","analytics_staff"]
+    ALL_TAB_IDS = ["channels","campaigns","landings","analytics_clients",
+                   "tg_account_chat","wa_chat","staff","landings_staff","analytics_staff"]
     form = await request.form()
     checked = [t for t in ALL_TAB_IDS if form.get(f"perm_{t}")]
     perms = "" if len(checked) == len(ALL_TAB_IDS) else ",".join(checked)
@@ -238,8 +237,8 @@ async def users_update(request: Request, user_id: int = Form(...), username: str
                         role: str = Form("manager"), new_password: str = Form(""), display_name: str = Form("")):
     user, err = require_auth(request, role="admin")
     if err: return err
-    ALL_TAB_IDS = ["overview","channels","campaigns","landings","analytics_clients",
-                   "chat","wa_chat","staff","landings_staff","analytics_staff"]
+    ALL_TAB_IDS = ["channels","campaigns","landings","analytics_clients",
+                   "tg_account_chat","wa_chat","staff","landings_staff","analytics_staff"]
     form = await request.form()
     checked = [t for t in ALL_TAB_IDS if form.get(f"perm_{t}")]
     perms = "" if len(checked) == len(ALL_TAB_IDS) else ",".join(checked)

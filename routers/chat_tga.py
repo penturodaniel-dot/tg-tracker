@@ -507,11 +507,17 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 }}
               }}catch(e){{}}
             }},4000);
-            </script>"""
+
+            // Автозапуск поиска если поле не пустое (после переключения вкладок)
+            (function(){{
+              var inp=document.getElementById('tga-search-input');
+              if(inp&&inp.value.trim())filterTgConvs(inp.value);
+            }})();
+                        </script>"""
 
     content_html = f"""<div class="chat-layout">
       <div class="conv-list">
-        <div class="conv-search">{conn_badge}{tabs_html}<input type="text" placeholder="🔍 Поиск..." oninput="filterTgConvs(this.value)" style="width:100%;margin-top:6px"/></div>
+        <div class="conv-search">{conn_badge}{tabs_html}<input type="text" id="tga-search-input" placeholder="🔍 Поиск..." oninput="filterTgConvs(this.value)" style="width:100%;margin-top:6px"/></div>
         <div id="tg-conv-items" style="overflow-y:auto;flex:1">{conv_items}</div>
       </div>
       <div class="chat-window">{chat_area}</div>

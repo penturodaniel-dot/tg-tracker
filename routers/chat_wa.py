@@ -451,7 +451,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     )
     content = f"""{WA_CSS}<div class="chat-layout">
       <div class="conv-list">
-        <div class="conv-search">{status_bar}{status_tabs}<input type="text" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
+        <div class="conv-search">{status_bar}{status_tabs}<input type="text" id="wa-search-input" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
         <div id="conv-items">{conv_items}</div>
       </div>
       <div class="chat-window">{right}</div>
@@ -711,7 +711,13 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
       else alert('Не удалось получить профиль: '+(d.error||''));
       if(btn){{btn.textContent='🔄';btn.disabled=false;}}
     }}
-    </script>"""
+
+    // Автозапуск поиска если поле не пустое (после переключения вкладок)
+    (function(){{
+      var inp=document.getElementById('wa-search-input');
+      if(inp&&inp.value.trim())filterConvs(inp.value);
+    }})();
+        </script>"""
     return HTMLResponse(base(content, "wa_chat", request))
 
 

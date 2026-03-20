@@ -681,7 +681,9 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
               +'</div></a>';
           }}).join('');
           if(!d.convs.length)list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Ничего не найдено</div>';
-        }}catch(e){{}}
+          // Сбрасываем флаг — результаты показаны
+          _waSearchActive=false;
+        }}catch(e){{ _waSearchActive=false; }}
       }},400);
     }}
     async function deleteWaConv(id){{

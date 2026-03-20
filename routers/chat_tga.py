@@ -416,7 +416,9 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                       +'</div></a>';
                   }}).join('');
                   if(!d.convs.length)list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Ничего не найдено</div>';
-                }}catch(e){{}}
+                  // Сбрасываем флаг — результаты показаны, polling может обновлять badges
+                  _tgSearchActive=false;
+                }}catch(e){{ _tgSearchActive=false; }}
               }},400);
             }}
             var ACTIVE_TGA_CONV_ID={conv_id};

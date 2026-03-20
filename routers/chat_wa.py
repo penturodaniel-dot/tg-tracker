@@ -647,32 +647,45 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     }}
 
     function esc(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>');}}
-    var _waSearchTimer=null;
-    var _waSearchQuery='';
-    function filterConvs(q){{
-      _waSearchQuery=q.trim();
-      clearTimeout(_waSearchTimer);
+    // ── Кэш для фронтенд поиска ─────────────────────────────────
+    var _waAllConvItems=null;
+    function _saveWaCache(){{
       var list=document.getElementById('conv-items');
-      if(!_waSearchQuery){{
-        // Поиск очищен — загружаем полный список
-        _waSearchTimer=setTimeout(async function(){{
-          try{{
-            var res=await fetch('/api/wa_convs?status='+encodeURIComponent(WA_SF));
-            var data=await res.json();
-            if(!data.convs||!list)return;
-            // Перерисовываем список
-            location.reload();
-          }}catch(e){{}}
-        }},100);
+      if(!list)return;
+      _waAllConvItems=Array.from(list.querySelectorAll('a')).map(function(a){{
+        return {{el:a,text:(a.textContent||'').toLowerCase()}};
+      }});
+    }}
+    _saveWaCache();
+
+    var _waSearchTimer=null;
+    function filterConvs(q){{
+      var list=document.getElementById('conv-items');
+      if(!list)return;
+      var qLow=(q||'').trim().toLowerCase().replace(/^[+]/,'');
+      if(!qLow){{
+        if(_waAllConvItems)_waAllConvItems.forEach(function(i){{i.el.style.display='';}});
         return;
       }}
-      if(list)list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.82rem">🔍 Поиск...</div>';
+      if(!_waAllConvItems)_saveWaCache();
+      if(_waAllConvItems){{
+        var found=0;
+        _waAllConvItems.forEach(function(item){{
+          var match=item.text.includes(qLow);
+          item.el.style.display=match?'':'none';
+          if(match)found++;
+        }});
+        if(found===0)_waServerSearch(qLow,list);
+      }}
+    }}
+
+    function _waServerSearch(q,list){{
+      clearTimeout(_waSearchTimer);
       _waSearchTimer=setTimeout(async function(){{
-        if(_waSearchQuery!==q.trim())return;
         try{{
-          var r=await fetch('/api/search_wa?q='+encodeURIComponent(_waSearchQuery)+'&status='+encodeURIComponent(WA_SF));
+          var r=await fetch('/api/search_wa?q='+encodeURIComponent(q)+'&status='+encodeURIComponent(WA_SF));
           var d=await r.json();
-          if(!d.convs||!list)return;
+          if(!d.convs)return;
           if(!d.convs.length){{
             list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Ничего не найдено</div>';
             return;
@@ -681,7 +694,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
           list.innerHTML=d.convs.map(c=>{{
             var src=isFb(c)?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
             var bdg=c.unread_count>0?'<span class="unread-num unread-badge" style="background:#25d366">'+c.unread_count+'</span>':'';
-            var utm=c.utm_campaign?'<span class="utm-tag" title="Кампания">🎯 '+escWa(c.utm_campaign.substring(0,25))+'</span>':'';
+            var utm=c.utm_campaign?'<span class="utm-tag">🎯 '+escWa(c.utm_campaign.substring(0,25))+'</span>':'';
             return '<a href="/wa/chat?conv_id='+c.id+'&status_filter='+encodeURIComponent(WA_SF)+'">'
               +'<div class="conv-item" data-conv-id="'+c.id+'">'
               +'<div class="conv-name"><span>'+escWa(c.visitor_name||c.wa_number)+'</span>'+bdg+'</div>'
@@ -690,10 +703,9 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
               +(utm?'<div class="conv-meta">'+utm+'</div>':'')
               +'</div></a>';
           }}).join('');
-        }}catch(e){{
-          if(list)list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Ошибка поиска</div>';
-        }}
-      }},350);
+          _saveWaCache();
+        }}catch(e){{}}
+      }},300);
     }}
     async function deleteWaConv(id){{
       if(!confirm('Удалить WA чат и все сообщения? Это нельзя отменить.')) return;
@@ -712,7 +724,6 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
       if(btn){{btn.textContent='🔄';btn.disabled=false;}}
     }}
 
-    // Автозапуск поиска если поле не пустое (после переключения вкладок)
     (function(){{
       var inp=document.getElementById('wa-search-input');
       if(inp&&inp.value.trim())filterConvs(inp.value);

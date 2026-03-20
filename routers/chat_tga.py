@@ -406,8 +406,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               }}).join('')||'<div style="padding:20px;text-align:center;color:var(--text3)">Нет диалогов</div>';
             }}
 
-            // Инициализируем кэш из уже отрендеренного HTML
-(q){{
+            function filterTgConvs(q){{
               var list=document.getElementById('tg-conv-items');
               if(!list)return;
               var qLow=(q||'').trim().toLowerCase().replace(/^[@]/,'');

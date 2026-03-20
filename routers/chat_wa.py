@@ -577,7 +577,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
           }}
         }});
 
-        if(hasNew){{
+        if(hasNew && !_waSearchActive){{
           _knownConvIds = newIds;
           // Добавляем только новые чаты — не перерисовываем весь список
           data.convs.forEach(c=>{{
@@ -645,12 +645,15 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
 
     function esc(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>');}}
     var _waSearchTimer=null;
+    var _waSearchActive=false;
     function filterConvs(q){{
       clearTimeout(_waSearchTimer);
       if(!q.trim()){{
+        _waSearchActive=false;
         document.querySelectorAll('.conv-item').forEach(el=>el.parentElement.style.display='');
         return;
       }}
+      _waSearchActive=true;
       // Быстрая локальная фильтрация пока ждём сервер
       document.querySelectorAll('.conv-item').forEach(el=>{{
         const txt=(el.textContent||'').toLowerCase();
@@ -662,7 +665,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
           const r=await fetch('/api/search_wa?q='+encodeURIComponent(q)+'&status='+encodeURIComponent(WA_SF));
           const d=await r.json();
           if(!d.convs)return;
-          const list=document.getElementById('wa-conv-list');
+          const list=document.getElementById('conv-items');
           if(!list)return;
           const isFb=c=>!!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));
           list.innerHTML=d.convs.map(c=>{{

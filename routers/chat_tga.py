@@ -382,9 +382,11 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             function filterTgConvs(q){{
               clearTimeout(_tgSearchTimer);
               if(!q.trim()){{
+                _tgSearchActive=false;
                 document.querySelectorAll('#tg-conv-items .conv-item').forEach(el=>el.parentElement.style.display='');
                 return;
               }}
+              _tgSearchActive=true;
               // Локальная фильтрация пока ждём сервер
               document.querySelectorAll('#tg-conv-items .conv-item').forEach(function(el){{
                 var txt=(el.textContent||'').toLowerCase();
@@ -418,6 +420,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             }}
             var ACTIVE_TGA_CONV_ID={conv_id};
             var _knownTgIds=new Set([{','.join(str(c['id']) for c in convs)}]);
+            var _tgSearchActive=false;  // true пока активен поиск
             setInterval(async function(){{
               try{{
                 var res=await fetch('/api/tg_account_convs?status='+encodeURIComponent(TGA_SF));
@@ -439,7 +442,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                     if(prev)prev.textContent=c.last_message||'Нет сообщений';
                   }}
                 }});
-                if(hasNew){{
+                if(hasNew && !_tgSearchActive){{
                   _knownTgIds=newIds;
                   list.innerHTML=data.convs.map(function(c){{
                     var active=c.id===ACTIVE_TGA_CONV_ID?' active':'';

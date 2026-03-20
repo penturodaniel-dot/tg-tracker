@@ -379,6 +379,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               if(cid) loadTgaChat(cid, sf);
             }});
             var _tgSearchTimer=null;
+            var _tgSearchActive=false;
             function filterTgConvs(q){{
               clearTimeout(_tgSearchTimer);
               if(!q.trim()){{
@@ -420,7 +421,6 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             }}
             var ACTIVE_TGA_CONV_ID={conv_id};
             var _knownTgIds=new Set([{','.join(str(c['id']) for c in convs)}]);
-            var _tgSearchActive=false;  // true пока активен поиск
             setInterval(async function(){{
               try{{
                 var res=await fetch('/api/tg_account_convs?status='+encodeURIComponent(TGA_SF));

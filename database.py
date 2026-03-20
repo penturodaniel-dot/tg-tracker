@@ -1898,7 +1898,9 @@ class Database:
 
     def search_wa_conversations(self, query: str, status: str = None) -> list:
         """Поиск по WA диалогам: имя, номер телефона, UTM кампания"""
-        q = f"%{query.lower()}%"
+        # Убираем + если пользователь ввёл +номер
+        clean_query = query.lstrip("+").strip()
+        q = f"%{clean_query.lower()}%"
         with self._conn() as conn:
             with conn.cursor() as cur:
                 status_clause = "AND status=%s" if status else ""
@@ -1920,7 +1922,9 @@ class Database:
 
     def search_tg_account_conversations(self, query: str, status: str = None) -> list:
         """Поиск по TG Account диалогам: имя, username, UTM кампания"""
-        q = f"%{query.lower()}%"
+        # Убираем @ если пользователь ввёл @username
+        clean_query = query.lstrip("@").strip()
+        q = f"%{clean_query.lower()}%"
         with self._conn() as conn:
             with conn.cursor() as cur:
                 status_clause = "AND status=%s" if status else ""

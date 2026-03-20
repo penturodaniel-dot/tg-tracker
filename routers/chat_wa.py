@@ -644,9 +644,43 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     }}
 
     function esc(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>');}}
-    function filterConvs(q){{document.querySelectorAll('.conv-item').forEach(el=>{{
-      const n=el.querySelector('.conv-name')?.textContent?.toLowerCase()||'';
-      el.parentElement.style.display=n.includes(q.toLowerCase())?'':'none';}});}}
+    var _waSearchTimer=null;
+    function filterConvs(q){{
+      clearTimeout(_waSearchTimer);
+      if(!q.trim()){{
+        document.querySelectorAll('.conv-item').forEach(el=>el.parentElement.style.display='');
+        return;
+      }}
+      // Быстрая локальная фильтрация пока ждём сервер
+      document.querySelectorAll('.conv-item').forEach(el=>{{
+        const txt=(el.textContent||'').toLowerCase();
+        el.parentElement.style.display=txt.includes(q.toLowerCase())?'':'none';
+      }});
+      // Серверный поиск с задержкой
+      _waSearchTimer=setTimeout(async function(){{
+        try{{
+          const r=await fetch('/api/search_wa?q='+encodeURIComponent(q)+'&status='+encodeURIComponent(WA_SF));
+          const d=await r.json();
+          if(!d.convs)return;
+          const list=document.getElementById('wa-conv-list');
+          if(!list)return;
+          const isFb=c=>!!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));
+          list.innerHTML=d.convs.map(c=>{{
+            const src=isFb(c)?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
+            const bdg=c.unread_count>0?'<span class="unread-num unread-badge" style="background:#25d366">'+c.unread_count+'</span>':'';
+            const utm=c.utm_campaign?'<span class="utm-tag">🎯 '+c.utm_campaign+'</span>':'';
+            return '<a href="/wa/chat?conv_id='+c.id+'&status_filter='+encodeURIComponent(WA_SF)+'">'
+              +'<div class="conv-item" data-conv-id="'+c.id+'">'
+              +'<div class="conv-name"><span>'+escWa(c.visitor_name||c.wa_number)+'</span>'+bdg+'</div>'
+              +'<div class="conv-preview">'+(c.last_message||'Нет сообщений').substring(0,50)+'</div>'
+              +'<div class="conv-time">+'+c.wa_number+' '+src+'</div>'
+              +(utm?'<div class="conv-meta">'+utm+'</div>':'')
+              +'</div></a>';
+          }}).join('');
+          if(!d.convs.length)list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Ничего не найдено</div>';
+        }}catch(e){{}}
+      }},400);
+    }}
     async function deleteWaConv(id){{
       if(!confirm('Удалить WA чат и все сообщения? Это нельзя отменить.')) return;
       const r=await fetch('/wa/delete',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+id}});

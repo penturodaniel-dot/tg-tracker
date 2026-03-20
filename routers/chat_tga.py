@@ -379,16 +379,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               if(cid) loadTgaChat(cid, sf);
             }});
             // ── Кэш всех диалогов для фронтенд поиска ──────────────────
-            var _tgAllConvItems = null;
 
-            function _saveTgCache(){{
-              // Сохраняем все a>div.conv-item в кэш при каждом рендере списка
-              var list=document.getElementById('tg-conv-items');
-              if(!list)return;
-              _tgAllConvItems=Array.from(list.querySelectorAll('a')).map(function(a){{
-                return {{el:a, text:(a.textContent||'').toLowerCase()}};
-              }});
-            }}
 
             function renderTgConvList(list, convs){{
               if(!list)return;
@@ -413,69 +404,18 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                   +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 '+uname+' · '+(c.last_message_at||'').substring(11,16)+' '+src+'</div>'
                   +utmLine+'</div></a>';
               }}).join('')||'<div style="padding:20px;text-align:center;color:var(--text3)">Нет диалогов</div>';
-              _saveTgCache();
             }}
 
             // Инициализируем кэш из уже отрендеренного HTML
-            _saveTgCache();
-
-            function filterTgConvs(q){{
+(q){{
               var list=document.getElementById('tg-conv-items');
               if(!list)return;
-              var qLow=(q||'').trim().toLowerCase().replace(/^@/,'');
-              if(!qLow){{
-                // Показываем всё
-                if(_tgAllConvItems){{
-                  _tgAllConvItems.forEach(function(item){{item.el.style.display='';}});
-                }}
-                return;
-              }}
-              // Фильтруем кэш — мгновенно, без сервера
-              if(!_tgAllConvItems)_saveTgCache();
-              if(_tgAllConvItems){{
-                var found=0;
-                _tgAllConvItems.forEach(function(item){{
-                  var match=item.text.includes(qLow);
-                  item.el.style.display=match?'':'none';
-                  if(match)found++;
-                }});
-                // Если ничего нет в кэше — ищем на сервере
-                if(found===0){{
-                  _tgServerSearch(qLow, list);
-                }}
-              }}
+              var qLow=(q||'').trim().toLowerCase().replace(/^[@]/,'');
+              list.querySelectorAll('a').forEach(function(a){{
+                a.style.display=qLow===''||a.textContent.toLowerCase().includes(qLow)?'':'none';
+              }});
             }}
 
-            var _tgSearchTimer=null;
-            function _tgServerSearch(q, list){{
-              clearTimeout(_tgSearchTimer);
-              _tgSearchTimer=setTimeout(async function(){{
-                try{{
-                  var r=await fetch('/api/search_tga?q='+encodeURIComponent(q)+'&status='+encodeURIComponent(TGA_SF));
-                  var d=await r.json();
-                  if(!d.convs)return;
-                  if(!d.convs.length){{
-                    list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Ничего не найдено</div>';
-                    return;
-                  }}
-                  var isFb=function(c){{return !!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));}}
-                  list.innerHTML=d.convs.map(function(c){{
-                    var src=isFb(c)?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
-                    var bdg=c.unread_count>0?'<span class="unread-num unread-badge">'+c.unread_count+'</span>':'';
-                    var uname=c.username?'@'+escTga(c.username):String(c.id);
-                    var utm=c.utm_campaign?'<span class="utm-tag">🎯 '+escTga(c.utm_campaign.substring(0,25))+'</span>':'';
-                    return '<a href="/tg_account/chat?conv_id='+c.id+'&status_filter='+encodeURIComponent(TGA_SF)+'">'
-                      +'<div class="conv-item" data-conv-id="'+c.id+'">'
-                      +'<div class="conv-name"><span>'+escTga(c.visitor_name||uname)+'</span>'+bdg+'</div>'
-                      +'<div class="conv-preview">'+(c.last_message||'Нет сообщений').substring(0,50)+'</div>'
-                      +'<div class="conv-time">📱 '+uname+' '+src+'</div>'
-                      +(utm?'<div class="conv-meta">'+utm+'</div>':'')
-                      +'</div></a>';
-                  }}).join('');
-                  _saveTgCache();
-                }}catch(e){{}}
-              }},300);
-            }}
             var ACTIVE_TGA_CONV_ID={conv_id};
             var _knownTgIds=new Set([{','.join(str(c['id']) for c in convs)}]);
             setInterval(async function(){{

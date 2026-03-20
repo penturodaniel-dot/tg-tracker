@@ -378,48 +378,79 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               var sf  = url.searchParams.get('status_filter') || 'open';
               if(cid) loadTgaChat(cid, sf);
             }});
+            function renderTgConvList(list, convs){{
+              if(!list)return;
+              list.innerHTML=convs.map(function(c){{
+                var active=c.id===ACTIVE_TGA_CONV_ID?' active':'';
+                var dot=c.status==='open'?'🟢':'⚫';
+                var bdg=c.unread_count>0?'<span class="unread-num unread-badge">'+c.unread_count+'</span>':'';
+                var inBase=c.in_staff?'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>':'';
+                var isFb=!!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));
+                var src=isFb?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
+                var uname=c.username?'@'+escTga(c.username):'';
+                var utm='';
+                if(isFb){{
+                  if(c.utm_campaign)utm+='<span class="utm-tag" title="Кампания">🎯 '+escTga(c.utm_campaign.substring(0,25))+'</span>';
+                  if(c.utm_content)utm+='<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 '+escTga(c.utm_content.substring(0,20))+'</span>';
+                  if(c.utm_term)utm+='<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 '+escTga(c.utm_term.substring(0,20))+'</span>';
+                }}
+                var utmLine=utm?'<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">'+utm+'</div>':'';
+                return '<a href="/tg_account/chat?conv_id='+c.id+'"><div class="conv-item'+active+'" data-conv-id="'+c.id+'">'
+                  +'<div class="conv-name"><span>'+dot+' '+escTga(c.visitor_name)+'</span>'+bdg+inBase+'</div>'
+                  +'<div class="conv-preview">'+escTga((c.last_message||'Нет сообщений').substring(0,50))+'</div>'
+                  +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 '+uname+' · '+(c.last_message_at||'').substring(11,16)+' '+src+'</div>'
+                  +utmLine+'</div></a>';
+              }}).join('')||'<div style="padding:20px;text-align:center;color:var(--text3)">Нет диалогов</div>';
+            }}
             var _tgSearchTimer=null;
-            var _tgSearchActive=false;
+            var _tgSearchQuery='';
             function filterTgConvs(q){{
+              _tgSearchQuery=q.trim();
               clearTimeout(_tgSearchTimer);
-              if(!q.trim()){{
-                _tgSearchActive=false;
-                document.querySelectorAll('#tg-conv-items .conv-item').forEach(el=>el.parentElement.style.display='');
+              var list=document.getElementById('tg-conv-items');
+              if(!_tgSearchQuery){{
+                // Поиск очищен — запрашиваем полный список заново
+                _tgSearchTimer=setTimeout(async function(){{
+                  try{{
+                    var res=await fetch('/api/tg_account_convs?status='+encodeURIComponent(TGA_SF));
+                    var data=await res.json();
+                    if(!data.convs||!list)return;
+                    renderTgConvList(list,data.convs);
+                  }}catch(e){{}}
+                }},100);
                 return;
               }}
-              _tgSearchActive=true;
-              // Локальная фильтрация пока ждём сервер
-              document.querySelectorAll('#tg-conv-items .conv-item').forEach(function(el){{
-                var txt=(el.textContent||'').toLowerCase();
-                el.parentElement.style.display=txt.includes(q.toLowerCase())?'':'none';
-              }});
-              // Серверный поиск
+              // Показываем спиннер/заглушку пока ищем
+              if(list)list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.82rem">🔍 Поиск...</div>';
               _tgSearchTimer=setTimeout(async function(){{
+                if(_tgSearchQuery!==q.trim())return; // устаревший запрос
                 try{{
-                  var r=await fetch('/api/search_tga?q='+encodeURIComponent(q)+'&status='+encodeURIComponent(TGA_SF));
+                  var r=await fetch('/api/search_tga?q='+encodeURIComponent(_tgSearchQuery)+'&status='+encodeURIComponent(TGA_SF));
                   var d=await r.json();
-                  if(!d.convs)return;
-                  var list=document.getElementById('tg-conv-items');
-                  if(!list)return;
+                  if(!d.convs||!list)return;
+                  if(!d.convs.length){{
+                    list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Ничего не найдено</div>';
+                    return;
+                  }}
                   var isFb=function(c){{return !!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));}}
                   list.innerHTML=d.convs.map(function(c){{
                     var src=isFb(c)?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
                     var bdg=c.unread_count>0?'<span class="unread-num unread-badge">'+c.unread_count+'</span>':'';
                     var uname=c.username?'@'+escTga(c.username):String(c.id);
-                    var utm=c.utm_campaign?'<span class="utm-tag">🎯 '+escTga(c.utm_campaign)+'</span>':'';
+                    var utm=c.utm_campaign?'<span class="utm-tag" title="Кампания">🎯 '+escTga(c.utm_campaign.substring(0,25))+'</span>':'';
+                    var utmContent=c.utm_content?'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 '+escTga(c.utm_content.substring(0,20))+'</span>':'';
                     return '<a href="/tg_account/chat?conv_id='+c.id+'&status_filter='+encodeURIComponent(TGA_SF)+'">'
                       +'<div class="conv-item" data-conv-id="'+c.id+'">'
                       +'<div class="conv-name"><span>'+escTga(c.visitor_name||uname)+'</span>'+bdg+'</div>'
                       +'<div class="conv-preview">'+(c.last_message||'Нет сообщений').substring(0,50)+'</div>'
                       +'<div class="conv-time">📱 '+uname+' '+src+'</div>'
-                      +(utm?'<div class="conv-meta">'+utm+'</div>':'')
+                      +((utm||utmContent)?'<div class="conv-meta">'+utm+utmContent+'</div>':'')
                       +'</div></a>';
                   }}).join('');
-                  if(!d.convs.length)list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Ничего не найдено</div>';
-                  // Сбрасываем флаг — результаты показаны, polling может обновлять badges
-                  _tgSearchActive=false;
-                }}catch(e){{ _tgSearchActive=false; }}
-              }},400);
+                }}catch(e){{
+                  if(list)list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Ошибка поиска</div>';
+                }}
+              }},350);
             }}
             var ACTIVE_TGA_CONV_ID={conv_id};
             var _knownTgIds=new Set([{','.join(str(c['id']) for c in convs)}]);
@@ -444,7 +475,10 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                     if(prev)prev.textContent=c.last_message||'Нет сообщений';
                   }}
                 }});
-                if(hasNew && !_tgSearchActive){{
+                // Не перерисовываем список если идёт поиск
+                var _searchInput=document.querySelector('#tg-conv-items')?.closest('.conv-list-wrap')?.querySelector('input[oninput]');
+                var _isSearching=_searchInput&&_searchInput.value.trim()!=='';
+                if(hasNew && !_isSearching){{
                   _knownTgIds=newIds;
                   list.innerHTML=data.convs.map(function(c){{
                     var active=c.id===ACTIVE_TGA_CONV_ID?' active':'';

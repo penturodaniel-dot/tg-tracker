@@ -385,7 +385,7 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
 .conv-preview{font-size:.75rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .conv-time{font-size:.68rem;color:var(--text3);margin-top:3px}
 .unread-num{background:var(--orange);color:#fff;border-radius:99px;padding:1px 7px;font-size:.67rem;font-weight:700}
-.chat-window{display:flex;flex-direction:column;overflow:hidden}
+.chat-window{display:flex;flex-direction:column;height:calc(100vh - 64px);overflow:hidden}
 .chat-header{padding:14px 18px;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;gap:10px}
 .tga-avatar-wrap{position:relative;flex-shrink:0;cursor:pointer}
 .tga-avatar-wrap:hover .tga-avatar-zoom{display:block}
@@ -504,7 +504,10 @@ def nav_html(active: str, request: Request) -> str:
     allowed_tabs = [p.strip() for p in perms_str.split(",") if p.strip()]
     def can(tab):
         if role == "admin": return True
-        return not allowed_tabs or tab in allowed_tabs
+        # backward compat: старое "chat" разрешает tg_account_chat
+        effective = set(allowed_tabs)
+        if "chat" in effective: effective.add("tg_account_chat")
+        return not effective or tab in effective
 
     def item(icon, label, page, section_color="blue", badge_count=0, url=None, badge_id=None):
         if not can(page): return ""
@@ -887,7 +890,7 @@ async def login_submit(request: Request):
     _clear_attempts(ip)
     login_ts = str(_time.time())
     token = hashlib.sha256(f"{user['username']}{SECRET}{login_ts}".encode()).hexdigest()
-    resp = RedirectResponse("/overview", 303)
+    resp = RedirectResponse("/tg_account/chat", 303)
     resp.set_cookie("session", token, max_age=_SESSION_TIMEOUT, httponly=True, samesite="lax")
     resp.set_cookie("session_ts", login_ts, max_age=_SESSION_TIMEOUT, httponly=True, samesite="lax")
 

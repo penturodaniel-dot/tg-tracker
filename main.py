@@ -783,6 +783,78 @@ async function removeConvTag(ct, cid, tagId, btn) {{
     }});
   }}
 }}
+
+    // ── Staff photo hover popup ──────────────────────────────────────────────
+    (function(){{
+      var _popup = null;
+      var _hideTimer = null;
+
+      function showPopup(wrap){{
+        var popup = wrap.querySelector('.staff-photo-popup');
+        if(!popup) return;
+        if(_hideTimer){{ clearTimeout(_hideTimer); _hideTimer = null; }}
+        popup.style.top = '0';
+        popup.style.left = '0';
+        popup.style.width = '100vw';
+        popup.style.height = '100vh';
+        popup.style.background = 'rgba(0,0,0,0.78)';
+        popup.classList.add('visible');
+        _popup = popup;
+      }}
+
+      function hidePopupNow(popup){{
+        if(!popup) return;
+        if(_hideTimer){{ clearTimeout(_hideTimer); _hideTimer = null; }}
+        popup.classList.remove('visible');
+        if(_popup === popup) _popup = null;
+      }}
+
+      function hidePopup(popup){{
+        if(!popup) return;
+        _hideTimer = setTimeout(function(){{
+          popup.classList.remove('visible');
+          if(_popup === popup) _popup = null;
+          _hideTimer = null;
+        }}, 80);
+      }}
+
+      // Закрытие по клику на фон или крестик
+      document.addEventListener('click', function(e){{
+        if(!_popup) return;
+        var onClose = e.target.closest('.spp-close');
+        if(onClose) {{ hidePopupNow(_popup); return; }}
+        var onImg  = e.target.closest('.staff-photo-popup img');
+        var onBtns = e.target.closest('.staff-photo-popup-btns');
+        if(onImg || onBtns) return;
+        if(_popup.classList.contains('visible')) hidePopupNow(_popup);
+      }});
+
+      document.addEventListener('mouseover', function(e){{
+        var wrap = e.target.closest('.staff-photo-wrap');
+        if(wrap){{ showPopup(wrap); return; }}
+        var popup = e.target.closest('.staff-photo-popup');
+        if(popup){{ if(_hideTimer){{ clearTimeout(_hideTimer); _hideTimer = null; }} return; }}
+        if(_popup && !_popup.contains(e.target)){{
+          var onWrap = e.target.closest('.staff-photo-wrap');
+          if(!onWrap) hidePopup(_popup);
+        }}
+      }});
+
+      document.addEventListener('mouseout', function(e){{
+        if(!_popup) return;
+        var to = e.relatedTarget;
+        if(!to) {{ hidePopup(_popup); return; }}
+        var onWrap  = to.closest('.staff-photo-wrap');
+        var onPopup = to.closest('.staff-photo-popup');
+        if(!onWrap && !onPopup) hidePopup(_popup);
+      }});
+
+      // Escape закрывает
+      document.addEventListener('keydown', function(e){{
+        if(e.key === 'Escape' && _popup) hidePopupNow(_popup);
+      }});
+    }})();
+    </script>
 </script>
 </body></html>'''
 

@@ -2036,6 +2036,39 @@ async def api_wa_convs(request: Request, status: str = "open"):
     ]})
 
 
+
+
+@app.get("/api/search_wa")
+async def api_search_wa(request: Request, q: str = "", status: str = "open"):
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    if not q.strip(): return JSONResponse({"convs": []})
+    convs = db.search_wa_conversations(q.strip(), status if status != "all" else None)
+    return JSONResponse({"convs": [
+        {"id": c["id"], "visitor_name": c.get("visitor_name",""),
+         "wa_number": c.get("wa_number",""), "last_message": c.get("last_message",""),
+         "unread_count": c.get("unread_count",0), "status": c.get("status","open"),
+         "utm_campaign": c.get("utm_campaign",""), "fbclid": bool(c.get("fbclid")),
+         "utm_source": c.get("utm_source","")}
+        for c in convs
+    ]})
+
+
+@app.get("/api/search_tga")
+async def api_search_tga(request: Request, q: str = "", status: str = "open"):
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    if not q.strip(): return JSONResponse({"convs": []})
+    convs = db.search_tg_account_conversations(q.strip(), status if status != "all" else None)
+    return JSONResponse({"convs": [
+        {"id": c["id"], "visitor_name": c.get("visitor_name",""),
+         "username": c.get("username",""), "last_message": c.get("last_message",""),
+         "unread_count": c.get("unread_count",0), "status": c.get("status","open"),
+         "utm_campaign": c.get("utm_campaign",""), "fbclid": bool(c.get("fbclid")),
+         "utm_source": c.get("utm_source","")}
+        for c in convs
+    ]})
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": "5.0",

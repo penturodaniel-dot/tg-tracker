@@ -1893,3 +1893,49 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("UPDATE landings SET project_id=%s WHERE id=%s", (project_id, landing_id))
             conn.commit()
+
+    # ── Поиск по диалогам ─────────────────────────────────────────────────────
+
+    def search_wa_conversations(self, query: str, status: str = None) -> list:
+        """Поиск по WA диалогам: имя, номер телефона, UTM кампания"""
+        q = f"%{query.lower()}%"
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                status_clause = "AND status=%s" if status else ""
+                params = [q, q, q, q]
+                if status:
+                    params.append(status)
+                cur.execute(f"""
+                    SELECT * FROM wa_conversations
+                    WHERE (
+                        LOWER(visitor_name) LIKE %s OR
+                        LOWER(wa_number)    LIKE %s OR
+                        LOWER(utm_campaign) LIKE %s OR
+                        LOWER(last_message) LIKE %s
+                    ) {status_clause}
+                    ORDER BY COALESCE(last_message_at, created_at) DESC
+                    LIMIT 50
+                """, params)
+                return [dict(r) for r in cur.fetchall()]
+
+    def search_tg_account_conversations(self, query: str, status: str = None) -> list:
+        """Поиск по TG Account диалогам: имя, username, UTM кампания"""
+        q = f"%{query.lower()}%"
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                status_clause = "AND status=%s" if status else ""
+                params = [q, q, q, q]
+                if status:
+                    params.append(status)
+                cur.execute(f"""
+                    SELECT * FROM tg_account_conversations
+                    WHERE (
+                        LOWER(visitor_name)  LIKE %s OR
+                        LOWER(username)      LIKE %s OR
+                        LOWER(utm_campaign)  LIKE %s OR
+                        LOWER(last_message)  LIKE %s
+                    ) {status_clause}
+                    ORDER BY COALESCE(last_message_at, created_at) DESC
+                    LIMIT 50
+                """, params)
+                return [dict(r) for r in cur.fetchall()]

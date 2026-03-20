@@ -406,14 +406,6 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               }}).join('')||'<div style="padding:20px;text-align:center;color:var(--text3)">Нет диалогов</div>';
             }}
 
-            function filterTgConvs(q){{
-              var list=document.getElementById('tg-conv-items');
-              if(!list)return;
-              var qLow=(q||'').trim().toLowerCase().replace(/^[@]/,'');
-              list.querySelectorAll('a').forEach(function(a){{
-                a.style.display=qLow===''||a.textContent.toLowerCase().includes(qLow)?'':'none';
-              }});
-            }}
 
             var ACTIVE_TGA_CONV_ID={conv_id};
             var _knownTgIds=new Set([{','.join(str(c['id']) for c in convs)}]);
@@ -485,7 +477,18 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
       </div>
       <div class="chat-window">{chat_area}</div>
     </div>"""
-    return HTMLResponse(base(content_html, "tg_account_chat", request))
+    tga_search_script = """
+    <script>
+    function filterTgConvs(q){
+      var list=document.getElementById('tg-conv-items');
+      if(!list)return;
+      var qLow=(q||'').trim().toLowerCase().replace(/^@/,'');
+      list.querySelectorAll('a').forEach(function(a){
+        a.style.display=qLow===''||a.textContent.toLowerCase().includes(qLow)?'':'none';
+      });
+    }
+    </script>"""
+    return HTMLResponse(base(tga_search_script + content_html, "tg_account_chat", request))
 
 
 @router.get("/tg_account/setup", response_class=HTMLResponse)

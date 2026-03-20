@@ -690,8 +690,19 @@ async def tg_account_webhook(request: Request):
                 try:
                     ustr = f"@{username}" if username else tg_user_id
                     short = text[:80] + ("..." if len(text) > 80 else "")
+                    _app_url = db.get_setting("app_url", "").rstrip("/")
+                    _tg_kwargs = {}
+                    if _app_url:
+                        from aiogram import types as _tg_t
+                        _tg_kwargs["reply_markup"] = _tg_t.InlineKeyboardMarkup(inline_keyboard=[[
+                            _tg_t.InlineKeyboardButton(
+                                text="Открыть TG чат →",
+                                url=f"{_app_url}/tg_account/chat?conv_id={conv['id']}"
+                            )
+                        ]])
                     await bot2.send_message(int(notify_chat),
-                        f"📱 TG Аккаунт — новое сообщение\n👤 {sender_name} ({ustr})\n✉️ {short}")
+                        f"📱 TG Аккаунт — новое сообщение\n👤 {sender_name} ({ustr})\n✉️ {short}",
+                        **_tg_kwargs)
                 except Exception as e:
                     log.warning(f"[TG webhook] notify error: {e}")
     except Exception as e:

@@ -242,18 +242,21 @@ async def wa_webhook(request: Request):
                         safe_name    = sender_name.replace("<","&lt;").replace(">","&gt;")
                         safe_preview = preview.replace("<","&lt;").replace(">","&gt;")
                         safe_number  = str(wa_number).replace("<","&lt;")
+                        _app_url = db.get_setting("app_url", "").rstrip("/")
+                        _msg_kwargs = dict(parse_mode="HTML")
+                        if _app_url:
+                            _msg_kwargs["reply_markup"] = tg_types.InlineKeyboardMarkup(inline_keyboard=[[
+                                tg_types.InlineKeyboardButton(
+                                    text="Открыть WA чат →",
+                                    url=f"{_app_url}/wa/chat?conv_id={conv['id']}"
+                                )
+                            ]])
                         await bot.send_message(
                             int(notify_chat),
                             f"💚 <b>WhatsApp — новое сообщение</b>\n"
                             f"👤 {safe_name} (+{safe_number})\n\n"
                             f"{safe_preview}",
-                            parse_mode="HTML",
-                            reply_markup=tg_types.InlineKeyboardMarkup(inline_keyboard=[[
-                                tg_types.InlineKeyboardButton(
-                                    text="Открыть WA чат →",
-                                    url=f"{db.get_setting('app_url','')}/wa/chat?conv_id={conv['id']}"
-                                )
-                            ]])
+                            **_msg_kwargs
                         )
                     except Exception as e:
                         log.warning(f"[WA webhook] notify error: {e}")

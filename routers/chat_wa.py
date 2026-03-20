@@ -661,7 +661,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
       if(btn){{btn.textContent='🔄';btn.disabled=false;}}
     }}
     </script>"""
-    return HTMLResponse(f'<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WA Чаты</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">{CSS}</head><body>{nav_html("wa_chat",request)}<div class="main">{content}</div></body></html>')
+    return HTMLResponse(base(content, "wa_chat", request))
 
 
 @router.get("/wa/setup", response_class=HTMLResponse)

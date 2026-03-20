@@ -548,6 +548,7 @@ def nav_html(active: str, request: Request) -> str:
         item("🎨", "Шаблоны",     "landings",          "blue") +
         item("📈", "Статистика",  "analytics_clients", "blue", url="/analytics/clients")
     )
+    show_clients = bool(clients_items.strip())  # скрываем если все пункты недоступны
 
     # Блок Сотрудники
     staff_items = (
@@ -582,7 +583,7 @@ def nav_html(active: str, request: Request) -> str:
         </div>
       </div>
 
-      {accordion("clients",  "📋", "Клиенты",     "blue",   clients_items,  open_by_default=is_clients)}
+      {accordion("clients",  "📋", "Клиенты",     "blue",   clients_items,  open_by_default=is_clients) if show_clients else ""}
       <div class="nav-divider"></div>
       {accordion("staff",    "👥", "Сотрудники",  "orange", staff_items,    open_by_default=True)}
       {'<div class="nav-divider"></div>' + accordion("settings", "⚙️", "Настройки", "blue", settings_items, open_by_default=is_settings) if role == "admin" and settings_items else ''}

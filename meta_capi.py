@@ -65,10 +65,14 @@ async def send_event(
     if utm_campaign: custom_data["utm_campaign"] = utm_campaign
     if campaign:     custom_data["campaign"]     = campaign
 
-    # Lead отправляется из CRM менеджером — это system_generated
-    # Subscribe/другие события с лендинга — website
-    _action_source = "system_generated" if event_name == "Lead" else "website"
-    _source_url = {} if event_name == "Lead" else {"event_source_url": event_source_url or "https://t.me/"}
+    # Lead: если есть test_event_code — используем "website" чтобы событие
+    # было видно в Test Events. В продакшне без test_event_code — "system_generated".
+    if event_name == "Lead":
+        _action_source = "website" if test_event_code else "system_generated"
+        _source_url = {"event_source_url": event_source_url or "https://t.me/"} if test_event_code else {}
+    else:
+        _action_source = "website"
+        _source_url = {"event_source_url": event_source_url or "https://t.me/"}
 
     payload = {
         "data": [{

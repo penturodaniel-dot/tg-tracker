@@ -6,6 +6,7 @@ routers/staff.py — Управление сотрудниками
     app.include_router(staff_router)
 """
 
+import os
 from fastapi import APIRouter, Request, Form, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 

@@ -1993,6 +1993,11 @@ async def api_wa_chat_panel(request: Request, conv_id: int = 0, status_filter: s
     window.ACTIVE_CONV_ID = {conv_id};
     const msgsEl = document.getElementById('wa-msgs');
     if(msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight;
+    // После SPA-навигации перезапускаем polling сообщений для нового чата
+    if(window._waMsgsInterval) clearInterval(window._waMsgsInterval);
+    window._waMsgsInterval = setInterval(function(){{
+      if(typeof loadNewWaMsgs === 'function') loadNewWaMsgs();
+    }}, 3000);
     </script>""")
 
 

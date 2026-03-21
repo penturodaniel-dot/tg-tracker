@@ -167,9 +167,14 @@ class CustomDomainMiddleware(BaseHTTPMiddleware):
                                 elif "t.me" in c["url"] or "telegram" in c["url"].lower():
                                     c_type = "telegram"
                             ref_id = _sec.token_urlsafe(10)
+                            # fbc генерируем в момент клика
+                            _fbc_mid = None
+                            if fbclid:
+                                import time as _time_mid
+                                _fbc_mid = f"fb.1.{int(_time_mid.time()*1000)}.{fbclid}"
                             db.save_staff_click(
                                 ref_id, c["url"], c_type, landing["slug"],
-                                fbclid=fbclid, fbp=cookie_fbp,
+                                fbclid=fbclid, fbp=cookie_fbp, fbc=_fbc_mid,
                                 utm_source=utm_source or "facebook",
                                 utm_medium=utm_medium or "paid",
                                 utm_campaign=utm_campaign,
@@ -1815,7 +1820,13 @@ async def public_landing(request: Request, slug: str,
                     c_type = "whatsapp"
                 elif "t.me" in c["url"] or "telegram" in c["url"].lower():
                     c_type = "telegram"
-            db.save_staff_click(ref_id, c["url"], c_type, slug, **{k:v for k,v in utm_params.items() if k!='landing_slug'})
+            # fbc = fb.1.{timestamp_клика}.{fbclid} — генерируем в момент клика
+            _fbc = None
+            if utm_params.get("fbclid"):
+                import time as _time
+                _fbc = f"fb.1.{int(_time.time()*1000)}.{utm_params['fbclid']}"
+            db.save_staff_click(ref_id, c["url"], c_type, slug,
+                fbc=_fbc, **{k:v for k,v in utm_params.items() if k!='landing_slug'})
             go_url = f"{app_url}/go-staff?ref={ref_id}"
             tracked_contacts.append({**c, "url": go_url, "type": c_type})
         else:
@@ -1849,13 +1860,18 @@ async def go_staff_redirect(request: Request, ref: str = ""):
     target_url = click.get("target_url", "")
     target_type = click.get("target_type", "wa")
 
-    # Добавляем ref код только для TG (через ?start=), для WA - редиректим напрямую
+    # Добавляем ref код в ссылку — точный матчинг клика к пользователю
     destination = target_url
     if target_type == "telegram" or "t.me" in target_url:
-        # t.me/username → t.me/username?start=ref_XXX
+        # t.me/username?start=ref_XXX — Telethon передаёт это как первое сообщение
         sep = "&" if "?" in target_url else "?"
         destination = f"{target_url}{sep}start=ref_{ref}"
-    # Для WA — просто редиректим без ref в тексте (трекинг по времени в webhook)
+    elif target_type == "whatsapp" or "wa.me" in target_url:
+        # wa.me/number?text=ref:XXX — предзаполненный текст, парсится в WA webhook
+        import urllib.parse as _urlparse
+        sep = "&" if "?" in target_url else "?"
+        pre_text = _urlparse.quote(f"ref:{ref}")
+        destination = f"{target_url}{sep}text={pre_text}"
 
     log.info(f"[/go-staff] ref={ref} type={target_type} utm={click.get('utm_campaign')} fbclid={'✓' if click.get('fbclid') else '—'}")
 

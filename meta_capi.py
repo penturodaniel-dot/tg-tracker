@@ -33,6 +33,7 @@ async def send_event(
     campaign: str = "unknown",
     fbclid: str = None,
     fbp: str = None,
+    fbc: str = None,
     utm_source: str = None,
     utm_campaign: str = None,
     client_ip: str = None,
@@ -50,9 +51,10 @@ async def send_event(
         user_data["external_id"] = [_hash(str(user_id))]
     if fbp:
         user_data["fbp"] = fbp
-    fbc = _make_fbc(fbclid)
-    if fbc:
-        user_data["fbc"] = fbc
+    # Используем готовый fbc (сгенерированный в момент клика) или генерируем из fbclid
+    _fbc = fbc or _make_fbc(fbclid)
+    if _fbc:
+        user_data["fbc"] = _fbc
     if client_ip:
         user_data["client_ip_address"] = client_ip
     if user_agent:

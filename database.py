@@ -262,9 +262,12 @@ class Database:
                         used        INTEGER DEFAULT 0,
                         created_at  TEXT NOT NULL
                     )""",
-                    # fbp в conversations/wa_conversations для CAPI matching
+                    # fbp/fbc в conversations/wa_conversations для CAPI matching
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS fbp TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbp TEXT",
+                    "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS fbc TEXT",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
+                    "ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_medium TEXT",
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS utm_medium TEXT",
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS utm_content TEXT",
@@ -635,16 +638,16 @@ class Database:
 
     # ── Staff Clicks (HR landing UTM tracking) ────────────────────────────────
     def save_staff_click(self, ref_id, target_url, target_type="wa", landing_slug="",
-                         fbclid=None, fbp=None, utm_source=None, utm_medium=None,
+                         fbclid=None, fbp=None, fbc=None, utm_source=None, utm_medium=None,
                          utm_campaign=None, utm_content=None, utm_term=None):
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""INSERT INTO staff_clicks
-                    (ref_id,target_url,target_type,landing_slug,fbclid,fbp,
+                    (ref_id,target_url,target_type,landing_slug,fbclid,fbp,fbc,
                      utm_source,utm_medium,utm_campaign,utm_content,utm_term,created_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (ref_id) DO NOTHING""",
-                    (ref_id, target_url, target_type, landing_slug, fbclid, fbp,
+                    (ref_id, target_url, target_type, landing_slug, fbclid, fbp, fbc,
                      utm_source, utm_medium, utm_campaign, utm_content, utm_term,
                      datetime.utcnow().isoformat()))
             conn.commit()
@@ -686,29 +689,29 @@ class Database:
                 cur.execute("UPDATE staff_clicks SET used=1 WHERE ref_id=%s", (ref_id,))
             conn.commit()
 
-    def apply_utm_to_wa_conv(self, conv_id, fbclid=None, fbp=None, utm_source=None,
+    def apply_utm_to_wa_conv(self, conv_id, fbclid=None, fbp=None, fbc=None, utm_source=None,
                               utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None):
         """Применяет UTM к существующему WA диалогу (если ещё не заполнен)"""
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""UPDATE wa_conversations
-                    SET fbclid=%s, fbp=%s, utm_source=%s, utm_medium=%s,
+                    SET fbclid=%s, fbp=%s, fbc=%s, utm_source=%s, utm_medium=%s,
                         utm_campaign=%s, utm_content=%s, utm_term=%s
                     WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
-                    (fbclid, fbp, utm_source, utm_medium, utm_campaign,
+                    (fbclid, fbp, fbc, utm_source, utm_medium, utm_campaign,
                      utm_content, utm_term, conv_id))
             conn.commit()
 
-    def apply_utm_to_tg_conv(self, conv_id, fbclid=None, fbp=None, utm_source=None,
+    def apply_utm_to_tg_conv(self, conv_id, fbclid=None, fbp=None, fbc=None, utm_source=None,
                               utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None):
         """Применяет UTM к существующему TG аккаунт диалогу"""
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""UPDATE tg_account_conversations
-                    SET fbclid=%s, fbp=%s, utm_source=%s, utm_medium=%s,
+                    SET fbclid=%s, fbp=%s, fbc=%s, utm_source=%s, utm_medium=%s,
                         utm_campaign=%s, utm_content=%s, utm_term=%s
                     WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
-                    (fbclid, fbp, utm_source, utm_medium, utm_campaign,
+                    (fbclid, fbp, fbc, utm_source, utm_medium, utm_campaign,
                      utm_content, utm_term, conv_id))
             conn.commit()
 

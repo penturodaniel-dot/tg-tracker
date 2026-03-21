@@ -299,7 +299,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               if(_tgaLoadingMsgs)return;
               _tgaLoadingMsgs=true;
               try{{
-                var res=await fetch('/api/tg_account_messages/{conv_id}?after='+lastTgAId);
+                var res=await fetch('/api/tg_account_messages/'+TGA_CONV_ID+'?after='+lastTgAId);
                 if(!res.ok){{_tgaLoadingMsgs=false;return;}}var data=await res.json();
                 if(!data.messages||!data.messages.length){{_tgaLoadingMsgs=false;return;}}
                 data.messages.forEach(function(m){{
@@ -326,6 +326,10 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               }}catch(e){{showTgaError(e.message);if(btn){{btn.textContent='Удалить';btn.disabled=false;}}}}
             }}
             setInterval(loadNewTgAccMsgs,3000);
+            // При возврате на вкладку — сразу опрашиваем, не ждём следующего интервала
+            document.addEventListener('visibilitychange', function(){{
+              if(document.visibilityState === 'visible') loadNewTgAccMsgs();
+            }});
             // Polling статуса TG — обновляем баннер при подключении/отключении
             setInterval(async function(){{
               try{{
@@ -1017,6 +1021,11 @@ async def api_tga_chat_panel(request: Request, conv_id: int = 0, status_filter: 
     var tgaMsgBox=document.getElementById('tga-msgs');
     if(tgaMsgBox) tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
     var lastTgAId=(function(){{var m=document.querySelectorAll('#tga-msgs .msg[data-id]');return m.length?m[m.length-1].dataset.id:0;}})();
+    // После SPA-навигации перезапускаем polling сообщений для нового чата
+    if(window._tgaMsgsInterval) clearInterval(window._tgaMsgsInterval);
+    window._tgaMsgsInterval = setInterval(function(){{
+      if(typeof loadNewTgAccMsgs === 'function') loadNewTgAccMsgs();
+    }}, 3000);
     </script>""")
 
 

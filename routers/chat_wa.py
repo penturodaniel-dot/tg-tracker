@@ -517,6 +517,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
 
     // Обновление сообщений в открытом чате
     {"setInterval(loadNewWaMsgs, 3000);" if active_conv else ""}
+    {"document.addEventListener('visibilitychange', function(){{ if(document.visibilityState==='visible' && window.ACTIVE_CONV_ID) loadNewWaMsgs(); }});" if active_conv else ""}
 
     var _waLoadingMsgs=false;
     async function loadNewWaMsgs(){{
@@ -525,7 +526,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
       try{{
         const msgs=document.querySelectorAll('#wa-msgs .msg[data-id]');
         const lastId=msgs.length?msgs[msgs.length-1].dataset.id:0;
-        const res=await fetch('/api/wa_messages/{conv_id}?after='+lastId);
+        const res=await fetch('/api/wa_messages/'+window.ACTIVE_CONV_ID+'?after='+lastId);
         const data=await res.json();
         if(data.messages&&data.messages.length>0){{
           const c=document.getElementById('wa-msgs');

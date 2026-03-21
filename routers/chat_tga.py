@@ -776,10 +776,24 @@ async def tg_account_webhook(request: Request):
                     log.warning(f"[TG webhook] photo fetch error: {_e}")
             is_new = not conv.get("utm_source") and not conv.get("fbclid")
             if is_new:
-                click_data = db.get_staff_click_recent_any(minutes=30)
-                if click_data:
+                # Шаг 1: точный матчинг по ref_XXX из текста сообщения (/start ref_XXX)
+                import re as _re
+                _ref_match = _re.search(r'ref_([A-Za-z0-9_\-]{8,20})', raw_text)
+                click_data = None
+                if _ref_match:
+                    _ref_id = _ref_match.group(1)
+                    click_data = db.get_staff_click(_ref_id)
+                    if click_data:
+                        log.info(f"[TG webhook] UTM by ref_code: ref={_ref_id} utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
+                # Шаг 2: fallback — ищем любой клик за последние 15 минут
+                if not click_data:
+                    click_data = db.get_staff_click_recent_any(minutes=15)
+                    if click_data:
+                        log.info(f"[TG webhook] UTM by time-window utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
+                if click_data and not click_data.get("used"):
                     db.apply_utm_to_tg_conv(conv["id"],
                         fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),
+                        fbc=click_data.get("fbc"),
                         utm_source=click_data.get("utm_source"), utm_medium=click_data.get("utm_medium"),
                         utm_campaign=click_data.get("utm_campaign"), utm_content=click_data.get("utm_content"),
                         utm_term=click_data.get("utm_term"))
@@ -816,6 +830,7 @@ async def tg_account_webhook(request: Request):
                         px["fb_pixel"], px["fb_token"],
                         user_id=str(tg_user_id), campaign=_campaign,
                         fbclid=_fbclid, fbp=_fbp,
+                        fbc=_fresh_conv.get("fbc") or None,
                         utm_source=_utm_src, utm_campaign=_campaign,
                         test_event_code=px["test_event_code"],
                         event_source_url="https://t.me/",
@@ -924,6 +939,7 @@ async def tg_account_send_lead(request: Request, conv_id: int = Form(...)):
         px["fb_pixel"], px["fb_token"],
         user_id=conv.get("tg_user_id", ""),
         campaign=campaign, fbclid=fbclid, fbp=fbp,
+        fbc=conv.get("fbc") or None,
         utm_source=utm_src, utm_campaign=campaign,
         test_event_code=px["test_event_code"],
         event_source_url="https://t.me/",

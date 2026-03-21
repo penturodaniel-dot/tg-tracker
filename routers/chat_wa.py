@@ -202,6 +202,7 @@ async def wa_webhook(request: Request):
                 if click_data and not click_data.get("used"):
                     db.apply_utm_to_wa_conv(conv["id"],
                         fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),
+                        fbc=click_data.get("fbc"),
                         utm_source=click_data.get("utm_source"),
                         utm_medium=click_data.get("utm_medium"),
                         utm_campaign=click_data.get("utm_campaign"),
@@ -209,13 +210,14 @@ async def wa_webhook(request: Request):
                         utm_term=click_data.get("utm_term"))
                     db.mark_staff_click_used(ref_id)
                     conv = db.get_wa_conversation(conv["id"]) or conv
-                    log.info(f"[WA webhook] UTM by ref:{ref_id} utm={click_data.get('utm_campaign')}")
+                    log.info(f"[WA webhook] UTM by ref:{ref_id} utm={click_data.get('utm_campaign')} fbc={'✓' if click_data.get('fbc') else '—'}")
             elif is_new_conv:
                 # Трекинг по временному окну — ищем последний клик за 30 минут
-                click_data = db.get_staff_click_recent_any(minutes=30)
+                click_data = db.get_staff_click_recent_any(minutes=15)
                 if click_data:
                     db.apply_utm_to_wa_conv(conv["id"],
                         fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),
+                        fbc=click_data.get("fbc"),
                         utm_source=click_data.get("utm_source"),
                         utm_medium=click_data.get("utm_medium"),
                         utm_campaign=click_data.get("utm_campaign"),
@@ -223,7 +225,7 @@ async def wa_webhook(request: Request):
                         utm_term=click_data.get("utm_term"))
                     db.mark_staff_click_used(click_data["ref_id"])
                     conv = db.get_wa_conversation(conv["id"]) or conv
-                    log.info(f"[WA webhook] UTM by time-window utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
+                    log.info(f"[WA webhook] UTM by time-window utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'} fbc={'✓' if click_data.get('fbc') else '—'}")
 
             db.save_wa_message(conv["id"], wa_chat_id, "visitor", text,
                                media_url=media_url, media_type=media_type)
@@ -257,6 +259,7 @@ async def wa_webhook(request: Request):
                         px["fb_pixel"], px["fb_token"],
                         user_id=wa_number, campaign=_campaign,
                         fbclid=_fbclid, fbp=_fbp,
+                        fbc=_fresh_conv.get("fbc") or None,
                         utm_source=_utm_src, utm_campaign=_campaign,
                         test_event_code=px["test_event_code"],
                         event_source_url=f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/",
@@ -973,6 +976,7 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
         px["fb_pixel"], px["fb_token"],
         user_id=wa_number, campaign=campaign,
         fbclid=fbclid, fbp=fbp,
+        fbc=conv.get("fbc") or None,
         utm_source=utm_src, utm_campaign=campaign,
         test_event_code=px["test_event_code"],
         event_source_url=f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/",

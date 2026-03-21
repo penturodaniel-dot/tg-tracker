@@ -466,7 +466,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
       const text=ta.value.trim(); if(!text) return; ta.value='';
       try{{
         const r=await fetch('/wa/send',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},
-          body:'conv_id={conv_id}&text='+encodeURIComponent(text)}});
+          body:'conv_id='+window.ACTIVE_CONV_ID+'&text='+encodeURIComponent(text)}});
         const d=await r.json();
         if(d.ok) loadNewWaMsgs(); else showWaError(d.error||'');
       }}catch(e){{showWaError(e.message);}}
@@ -493,7 +493,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
       const btn=document.querySelector('button[onclick*="wa-file-input"]');
       btn.textContent='⏳'; btn.disabled=true;
       const fd=new FormData();
-      fd.append('conv_id','{conv_id}');
+      fd.append('conv_id', window.ACTIVE_CONV_ID);
       fd.append('file',file);
       try{{
         const res=await fetch('/wa/send_media',{{method:'POST',body:fd}});

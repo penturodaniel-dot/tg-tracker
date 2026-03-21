@@ -282,6 +282,28 @@ class Database:
                     "ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS project_id INTEGER DEFAULT NULL",
                     "ALTER TABLE projects ADD COLUMN IF NOT EXISTS test_event_code TEXT DEFAULT ''",
                 ]
+                # ── Индексы для быстрой выборки ─────────────────────────────
+                _indexes = [
+                    "CREATE INDEX IF NOT EXISTS idx_tga_conv_status ON tg_account_conversations (status, last_message_at DESC NULLS LAST)",
+                    "CREATE INDEX IF NOT EXISTS idx_tga_conv_user ON tg_account_conversations (tg_user_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_tga_conv_utm ON tg_account_conversations (utm_campaign)",
+                    "CREATE INDEX IF NOT EXISTS idx_tga_msg_conv ON tg_account_messages (conversation_id, created_at ASC)",
+                    "CREATE INDEX IF NOT EXISTS idx_wa_conv_status ON wa_conversations (status, last_message_at DESC NULLS LAST)",
+                    "CREATE INDEX IF NOT EXISTS idx_wa_conv_chat ON wa_conversations (wa_chat_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_wa_conv_utm ON wa_conversations (utm_campaign)",
+                    "CREATE INDEX IF NOT EXISTS idx_wa_msg_conv ON wa_messages (conversation_id, created_at ASC)",
+                    "CREATE INDEX IF NOT EXISTS idx_staff_status ON staff (status, created_at DESC)",
+                    "CREATE INDEX IF NOT EXISTS idx_staff_clicks_used ON staff_clicks (used, created_at DESC)",
+                    "CREATE INDEX IF NOT EXISTS idx_staff_clicks_ref ON staff_clicks (ref_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_landings_slug ON landings (slug)",
+                    "CREATE INDEX IF NOT EXISTS idx_conv_status ON conversations (status, last_message_at DESC NULLS LAST)",
+                    "CREATE INDEX IF NOT EXISTS idx_utm_conv ON utm_tracking (conversation_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_conv_tags ON conv_tags (conv_type, conv_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_campaigns_slug ON campaigns (slug)",
+                ]
+                for _idx in _indexes:
+                    try: cur.execute(_idx)
+                    except Exception: pass
                 # Таблица галереи фото сотрудников
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS staff_gallery (

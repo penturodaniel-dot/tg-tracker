@@ -452,7 +452,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     content = f"""{WA_CSS}<div class="chat-layout">
       <div class="conv-list">
         <div class="conv-search">{status_bar}{status_tabs}<input type="text" id="wa-search-input" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
-        <div id="conv-items">{conv_items}</div>
+        <div id="conv-items">{conv_items}<div id="wa-scroll-sentinel" style="height:1px"></div></div>
       </div>
       <div class="chat-window">{right}</div>
     </div>
@@ -551,6 +551,49 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
 
     // Авто-обновление списка диалогов каждые 4 сек
     var WA_SF = '{status_filter}';
+    var _waOffset = {len(convs)};
+    var _waLoading = false;
+    var _waHasMore = {str(len(convs) == 30).lower()};
+
+    function _waLoadMore(){{
+      if(_waLoading||!_waHasMore)return;
+      _waLoading=true;
+      fetch('/api/wa_convs?status='+encodeURIComponent(WA_SF)+'&offset='+_waOffset)
+        .then(r=>r.json())
+        .then(function(d){{
+          if(!d.convs||!d.convs.length){{_waHasMore=false;_waLoading=false;return;}}
+          var list=document.getElementById('conv-items');
+          var sentinel=document.getElementById('wa-scroll-sentinel');
+          d.convs.forEach(function(c){{
+            if(list.querySelector('[data-conv-id="'+c.id+'"]'))return;
+            var isFb=!!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));
+            var dot=c.status==='open'?'🟢':'⚫';
+            var bdg=c.unread_count>0?'<span class="unread-num unread-badge" style="background:#25d366">'+c.unread_count+'</span>':'';
+            var src=isFb?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
+            var utm=isFb&&c.utm_campaign?'<span class="utm-tag">🎯 '+esc(c.utm_campaign.substring(0,25))+'</span>':'';
+            var el=document.createElement('a');
+            el.href='/wa/chat?conv_id='+c.id+'&status_filter='+encodeURIComponent(WA_SF);
+            el.innerHTML='<div class="conv-item" data-conv-id="'+c.id+'">'
+              +'<div class="conv-name"><span>'+dot+' '+esc(c.visitor_name||c.wa_number)+'</span>'+bdg+'</div>'
+              +'<div class="conv-preview">'+(c.last_message||'Нет сообщений').substring(0,50)+'</div>'
+              +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +'+esc(c.wa_number||'')+' · '+c.last_message_at.substring(11,16)+' '+src+'</div>'
+              +(utm?'<div class="conv-meta">'+utm+'</div>':'')
+              +'</div>';
+            list.insertBefore(el,sentinel);
+          }});
+          _waOffset+=d.convs.length;
+          _waHasMore=d.has_more;
+          _waLoading=false;
+        }})
+        .catch(function(){{_waLoading=false;}});
+    }}
+    (function(){{
+      var sentinel=document.getElementById('wa-scroll-sentinel');
+      if(!sentinel||!window.IntersectionObserver)return;
+      new IntersectionObserver(function(entries){{
+        if(entries[0].isIntersecting)_waLoadMore();
+      }},{{threshold:0.1}}).observe(sentinel);
+    }})();
     let _knownConvIds = new Set([{','.join(str(c['id']) for c in (db.get_wa_conversations() if True else []))}]);
     setInterval(async function(){{
       try {{

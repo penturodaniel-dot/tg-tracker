@@ -407,6 +407,59 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             }}
 
 
+            // ── Infinite scroll ──────────────────────────────────────
+            var _tgaOffset = {len(convs)};
+            var _tgaLoading = false;
+            var _tgaHasMore = {str(len(convs) == 30).lower()};
+
+            function _tgaLoadMore() {{
+              if(_tgaLoading || !_tgaHasMore) return;
+              _tgaLoading = true;
+              fetch('/api/tg_account_convs?status='+encodeURIComponent(TGA_SF)+'&offset='+_tgaOffset)
+                .then(r=>r.json())
+                .then(function(d){{
+                  if(!d.convs||!d.convs.length){{ _tgaHasMore=false; _tgaLoading=false; return; }}
+                  var list=document.getElementById('tg-conv-items');
+                  var sentinel=document.getElementById('tga-scroll-sentinel');
+                  var isFb=function(c){{return !!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));}}
+                  d.convs.forEach(function(c){{
+                    if(list.querySelector('[data-conv-id="'+c.id+'"]'))return;
+                    var dot=c.status==='open'?'🟢':'⚫';
+                    var bdg=c.unread_count>0?'<span class="unread-num unread-badge">'+c.unread_count+'</span>':'';
+                    var uname=c.username?'@'+escTga(c.username):'';
+                    var src=isFb(c)?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
+                    var utm='';
+                    if(isFb(c)){{
+                      if(c.utm_campaign)utm+='<span class="utm-tag">🎯 '+escTga(c.utm_campaign.substring(0,25))+'</span>';
+                      if(c.utm_content)utm+='<span class="utm-tag" style="background:#1a2a1a;color:#86efac">📌 '+escTga(c.utm_content.substring(0,20))+'</span>';
+                    }}
+                    var el=document.createElement('a');
+                    el.href='/tg_account/chat?conv_id='+c.id+'&status_filter='+encodeURIComponent(TGA_SF);
+                    el.innerHTML='<div class="conv-item" data-conv-id="'+c.id+'">'
+                      +'<div class="conv-name"><span>'+dot+' '+escTga(c.visitor_name)+'</span>'+bdg+'</div>'
+                      +'<div class="conv-preview">'+escTga((c.last_message||'Нет сообщений').substring(0,50))+'</div>'
+                      +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 '+uname+' · '+c.last_message_at.substring(11,16)+' '+src+'</div>'
+                      +(utm?'<div class="conv-meta">'+utm+'</div>':'')
+                      +'</div>';
+                    list.insertBefore(el, sentinel);
+                  }});
+                  _tgaOffset += d.convs.length;
+                  _tgaHasMore = d.has_more;
+                  _tgaLoading = false;
+                }})
+                .catch(function(){{ _tgaLoading=false; }});
+            }}
+
+            // IntersectionObserver — грузим когда дошли до конца списка
+            (function(){{
+              var sentinel=document.getElementById('tga-scroll-sentinel');
+              if(!sentinel||!window.IntersectionObserver)return;
+              var obs=new IntersectionObserver(function(entries){{
+                if(entries[0].isIntersecting)_tgaLoadMore();
+              }},{{threshold:0.1}});
+              obs.observe(sentinel);
+            }})();
+
             var ACTIVE_TGA_CONV_ID={conv_id};
             var _knownTgIds=new Set([{','.join(str(c['id']) for c in convs)}]);
             setInterval(async function(){{
@@ -473,7 +526,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
     content_html = f"""<div class="chat-layout">
       <div class="conv-list">
         <div class="conv-search">{conn_badge}{tabs_html}<input type="text" id="tga-search-input" placeholder="🔍 Поиск..." oninput="filterTgConvs(this.value)" style="width:100%;margin-top:6px"/></div>
-        <div id="tg-conv-items" style="overflow-y:auto;flex:1">{conv_items}</div>
+        <div id="tg-conv-items" style="overflow-y:auto;flex:1">{conv_items}<div id="tga-scroll-sentinel" style="height:1px"></div></div>
       </div>
       <div class="chat-window">{chat_area}</div>
     </div>"""
@@ -968,13 +1021,12 @@ async def api_tga_chat_panel(request: Request, conv_id: int = 0, status_filter: 
 
 
 @router.get("/api/tg_account_convs")
-async def api_tg_account_convs(request: Request, status: str = "open"):
-    """Список TG диалогов для авто-обновления"""
+async def api_tg_account_convs(request: Request, status: str = "open", offset: int = 0):
+    """Список TG диалогов для авто-обновления и пагинации"""
     user = check_session(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
-    # Фильтруем по статусу как на странице
     status_arg = status if status != "all" else None
-    convs = db.get_tg_account_conversations(status=status_arg)
+    convs = db.get_tg_account_conversations(status=status_arg, limit=30, offset=offset)
     tga_in_staff = db.get_tga_conv_ids_in_staff()
     return JSONResponse({"convs": [
         {
@@ -992,4 +1044,4 @@ async def api_tg_account_convs(request: Request, status: str = "open"):
             "fbclid":       bool(c.get("fbclid")),
             "in_staff":     bool(tga_in_staff.get(c["id"])),
         } for c in convs
-    ]})
+    ], "has_more": len(convs) == 30, "offset": offset})

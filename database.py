@@ -600,7 +600,7 @@ class Database:
                 r = cur.fetchone()
             conn.commit(); return r["id"]
 
-    def get_recent_joins(self, limit=50):
+    def get_recent_joins(self, limit=30):
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""SELECT j.*, c.name as channel_name FROM joins j
@@ -1258,20 +1258,31 @@ class Database:
                 r = cur.fetchone()
             conn.commit(); return dict(r)
 
-    def get_wa_conversations(self, status=None):
-        cache_key = f"wa_convs:{status or 'all'}"
-        cached = _cache.get(cache_key)
-        if cached is not None:
-            return cached
+    def get_wa_conversations(self, status=None, limit=30, offset=0):
+        cache_key = f"wa_convs:{status or 'all'}:{offset}"
+        if offset == 0:
+            cached = _cache.get(cache_key)
+            if cached is not None:
+                return cached
         with self._conn() as conn:
             with conn.cursor() as cur:
                 if status:
-                    cur.execute("SELECT * FROM wa_conversations WHERE status=%s ORDER BY COALESCE(last_message_at,created_at) DESC", (status,))
+                    cur.execute("SELECT * FROM wa_conversations WHERE status=%s ORDER BY COALESCE(last_message_at,created_at) DESC LIMIT %s OFFSET %s", (status, limit, offset))
                 else:
-                    cur.execute("SELECT * FROM wa_conversations ORDER BY COALESCE(last_message_at,created_at) DESC")
+                    cur.execute("SELECT * FROM wa_conversations ORDER BY COALESCE(last_message_at,created_at) DESC LIMIT %s OFFSET %s", (limit, offset))
                 result = [dict(r) for r in cur.fetchall()]
-        _cache.set(cache_key, result, ttl=4.0)
+        if offset == 0:
+            _cache.set(cache_key, result, ttl=4.0)
         return result
+
+    def count_wa_conversations(self, status=None):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if status:
+                    cur.execute("SELECT COUNT(*) as c FROM wa_conversations WHERE status=%s", (status,))
+                else:
+                    cur.execute("SELECT COUNT(*) as c FROM wa_conversations")
+                return cur.fetchone()["c"]
 
     def delete_wa_conversation(self, conv_id):
         with self._conn() as conn:
@@ -1485,7 +1496,7 @@ class Database:
                     GROUP BY utm_source, utm_medium ORDER BY clicks DESC LIMIT 20""", params)
                 return [dict(r) for r in cur.fetchall()]
 
-    def get_recent_joins_detailed(self, limit=50, date_from=None, date_to=None, days=30):
+    def get_recent_joins_detailed(self, limit=30, date_from=None, date_to=None, days=30):
         where, params = self._date_filter("j.joined_at", days, date_from, date_to)
         with self._conn() as conn:
             with conn.cursor() as cur:
@@ -1730,21 +1741,33 @@ class Database:
                 cur.execute("SELECT * FROM tg_account_conversations WHERE id=%s", (conv_id,))
                 r = cur.fetchone(); return dict(r) if r else None
 
-    def get_tg_account_conversations(self, status=None):
+    def get_tg_account_conversations(self, status=None, limit=30, offset=0):
         self._init_tg_account_tables()
-        cache_key = f"tga_convs:{status or 'all'}"
-        cached = _cache.get(cache_key)
-        if cached is not None:
-            return cached
+        cache_key = f"tga_convs:{status or 'all'}:{offset}"
+        if offset == 0:
+            cached = _cache.get(cache_key)
+            if cached is not None:
+                return cached
         with self._conn() as conn:
             with conn.cursor() as cur:
                 if status:
-                    cur.execute("SELECT * FROM tg_account_conversations WHERE status=%s ORDER BY COALESCE(last_message_at,created_at) DESC", (status,))
+                    cur.execute("SELECT * FROM tg_account_conversations WHERE status=%s ORDER BY COALESCE(last_message_at,created_at) DESC LIMIT %s OFFSET %s", (status, limit, offset))
                 else:
-                    cur.execute("SELECT * FROM tg_account_conversations ORDER BY COALESCE(last_message_at,created_at) DESC")
+                    cur.execute("SELECT * FROM tg_account_conversations ORDER BY COALESCE(last_message_at,created_at) DESC LIMIT %s OFFSET %s", (limit, offset))
                 result = [dict(r) for r in cur.fetchall()]
-        _cache.set(cache_key, result, ttl=4.0)
+        if offset == 0:
+            _cache.set(cache_key, result, ttl=4.0)
         return result
+
+    def count_tg_account_conversations(self, status=None):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if status:
+                    cur.execute("SELECT COUNT(*) as c FROM tg_account_conversations WHERE status=%s", (status,))
+                else:
+                    cur.execute("SELECT COUNT(*) as c FROM tg_account_conversations")
+                return cur.fetchone()["c"]
 
     def save_tg_account_message(self, conv_id, tg_user_id, sender_type, content,
                                  media_url=None, media_type=None, sender_name=None):

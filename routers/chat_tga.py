@@ -192,8 +192,14 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             active_tag_ids = {tg["id"] for tg in active_ctags}
             tga_tags_html = _render_conv_tags_picker(active_ctags, all_tags, active_tag_ids, "tga", conv_id)
             fb_sent = active_conv.get("fb_event_sent")
-            lead_btn = '<span class="badge-green">✅ Lead отправлен</span>' if fb_sent else \
-                       f'<form method="post" action="/tg_account/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
+            lead_btn = (
+                '<span class="badge-green">✅ Lead отправлен (авто)</span>'
+                if fb_sent else (
+                    '<span style="color:var(--text3);font-size:.73rem;opacity:.7">⏳ Ждём первого сообщения...</span>'
+                    if (active_conv.get("fbclid") or active_conv.get("utm_source","").lower() in ("facebook","fb"))
+                    else f'<form method="post" action="/tg_account/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
+                )
+            )
             status_color = "#34d399" if active_conv["status"] == "open" else "#ef4444"
             close_btn = f'<form method="post" action="/tg_account/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>' if active_conv["status"] == "open" else \
                         f'<form method="post" action="/tg_account/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-orange btn-sm">↺ Открыть</button></form>'
@@ -783,6 +789,54 @@ async def tg_account_webhook(request: Request):
             db.save_tg_account_message(conv["id"], tg_user_id, "visitor", text, media_url=media_url, media_type=media_type)
             db.update_tg_account_last_message(tg_user_id, text, increment_unread=True)
 
+            # ── Авто-отправка Lead при первом сообщении (только FB/TikTok трафик) ──
+            _is_fb_traffic = bool(
+                conv.get("fbclid") or
+                conv.get("utm_source", "").lower() in ("facebook", "fb")
+            )
+            _fresh_conv = db.get_tg_account_conversation(conv["id"]) or conv
+            _is_first_msg = (_fresh_conv.get("unread_count") or 0) == 1
+            if _is_fb_traffic and _is_first_msg and not _fresh_conv.get("fb_event_sent"):
+                try:
+                    px = _resolve_pixels(_fresh_conv)
+                    _campaign = _fresh_conv.get("utm_campaign") or "telegram_account"
+                    _utm_src  = _fresh_conv.get("utm_source") or "telegram"
+                    _fbclid   = _fresh_conv.get("fbclid")
+                    _fbp      = _fresh_conv.get("fbp")
+                    _created_at = _fresh_conv.get("created_at", "")
+                    _event_time = None
+                    if _created_at:
+                        try:
+                            from datetime import timezone as _tz
+                            _event_time = int(datetime.fromisoformat(_created_at.replace("Z","")).replace(tzinfo=_tz.utc).timestamp())
+                        except Exception:
+                            pass
+                    log.info(f"[AutoLead/TGA] conv={conv['id']} pixel={px['fb_pixel'][:8] if px['fb_pixel'] else 'NONE'} project={px['project_name'] or 'global'} utm={_campaign} fbp={'✓' if _fbp else '—'} fbc={'✓' if _fbclid else '—'}")
+                    _fb_sent = await meta_capi.send_lead_event(
+                        px["fb_pixel"], px["fb_token"],
+                        user_id=str(tg_user_id), campaign=_campaign,
+                        fbclid=_fbclid, fbp=_fbp,
+                        utm_source=_utm_src, utm_campaign=_campaign,
+                        test_event_code=px["test_event_code"],
+                        event_source_url="https://t.me/",
+                        event_time=_event_time,
+                    )
+                    if _fb_sent:
+                        db.set_tg_account_fb_event(conv["id"], "Lead")
+                        log.info(f"[AutoLead/TGA] ✅ Lead sent conv={conv['id']}")
+                    # TikTok
+                    if px["tt_pixel"] and px["tt_token"] and tiktok_capi:
+                        await tiktok_capi.send_lead_event(
+                            px["tt_pixel"], px["tt_token"],
+                            user_id=str(tg_user_id),
+                            utm_source=_utm_src, utm_campaign=_campaign,
+                            ttclid=_fresh_conv.get("ttclid") or _fbclid or None,
+                            ttp=_fresh_conv.get("ttp") or None,
+                            event_source_url="https://t.me/",
+                        )
+                except Exception as _e:
+                    log.error(f"[AutoLead/TGA] error: {_e}")
+
             notify_chat = db.get_setting("notify_chat_id")
             bot2 = bot_manager.get_staff_bot()
             if notify_chat and bot2:
@@ -958,8 +1012,13 @@ async def api_tga_chat_panel(request: Request, conv_id: int = 0, status_filter: 
     active_tag_ids = {tg["id"] for tg in active_ctags}
     tga_tags_html = _render_conv_tags_picker(active_ctags, all_tags, active_tag_ids, "tga", conv_id)
     fb_sent = active_conv.get("fb_event_sent")
-    lead_btn = '<span class="badge-green">✅ Lead отправлен</span>' if fb_sent else \
-               f'<form method="post" action="/tg_account/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
+    _is_fb_tga = bool(active_conv.get("fbclid") or active_conv.get("utm_source","").lower() in ("facebook","fb"))
+    if fb_sent:
+        lead_btn = '<span class="badge-green">✅ Lead отправлен (авто)</span>'
+    elif _is_fb_tga:
+        lead_btn = '<span style="color:var(--text3);font-size:.73rem;opacity:.7">⏳ Ждём первого сообщения...</span>'
+    else:
+        lead_btn = f'<form method="post" action="/tg_account/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
     status_color = "#34d399" if active_conv["status"] == "open" else "#ef4444"
     close_btn = f'<form method="post" action="/tg_account/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>' if active_conv["status"] == "open" else \
                 f'<form method="post" action="/tg_account/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-orange btn-sm">↺ Открыть</button></form>'

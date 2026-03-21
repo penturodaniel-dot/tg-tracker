@@ -230,6 +230,54 @@ async def wa_webhook(request: Request):
             db.update_wa_last_message(wa_chat_id, text, increment_unread=True)
             log.info(f"[WA webhook] saved msg conv={conv['id']} from={wa_number}: {text[:50]}")
 
+            # ── Авто-отправка Lead при первом сообщении (только FB/TikTok трафик) ──
+            _is_fb_traffic = bool(
+                conv.get("fbclid") or
+                conv.get("utm_source", "").lower() in ("facebook", "fb")
+            )
+            _fresh_conv = db.get_wa_conversation(conv["id"]) or conv
+            _is_first_msg = (_fresh_conv.get("unread_count") or 0) == 1
+            if _is_fb_traffic and _is_first_msg and not _fresh_conv.get("fb_event_sent"):
+                try:
+                    px = _resolve_pixels(_fresh_conv)
+                    _campaign = _fresh_conv.get("utm_campaign") or "whatsapp"
+                    _utm_src  = _fresh_conv.get("utm_source") or "whatsapp"
+                    _fbclid   = _fresh_conv.get("fbclid")
+                    _fbp      = _fresh_conv.get("fbp")
+                    _created_at = _fresh_conv.get("created_at", "")
+                    _event_time = None
+                    if _created_at:
+                        try:
+                            from datetime import timezone as _tz
+                            _event_time = int(datetime.fromisoformat(_created_at.replace("Z","")).replace(tzinfo=_tz.utc).timestamp())
+                        except Exception:
+                            pass
+                    log.info(f"[AutoLead/WA] conv={conv['id']} pixel={px['fb_pixel'][:8] if px['fb_pixel'] else 'NONE'} project={px['project_name'] or 'global'} utm={_campaign} fbp={'✓' if _fbp else '—'} fbc={'✓' if _fbclid else '—'}")
+                    _fb_sent = await meta_capi.send_lead_event(
+                        px["fb_pixel"], px["fb_token"],
+                        user_id=wa_number, campaign=_campaign,
+                        fbclid=_fbclid, fbp=_fbp,
+                        utm_source=_utm_src, utm_campaign=_campaign,
+                        test_event_code=px["test_event_code"],
+                        event_source_url=f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/",
+                        event_time=_event_time,
+                    )
+                    if _fb_sent:
+                        db.set_wa_fb_event(conv["id"], "Lead")
+                        log.info(f"[AutoLead/WA] ✅ Lead sent conv={conv['id']}")
+                    # TikTok
+                    if px["tt_pixel"] and px["tt_token"] and tiktok_capi:
+                        await tiktok_capi.send_lead_event(
+                            px["tt_pixel"], px["tt_token"],
+                            user_id=wa_number,
+                            utm_source=_utm_src, utm_campaign=_campaign,
+                            ttclid=_fresh_conv.get("ttclid") or _fbclid or None,
+                            ttp=_fresh_conv.get("ttp") or None,
+                            event_source_url=f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/",
+                        )
+                except Exception as _e:
+                    log.error(f"[AutoLead/WA] error: {_e}")
+
             # Уведомление менеджеру через Бот 2 (уведомления)
             notify_chat = db.get_setting("notify_chat_id")
             bot2 = bot_manager.get_staff_bot()
@@ -320,8 +368,13 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
                 wa_avatar = '<div style="width:40px;height:40px;border-radius:50%;background:#052e16;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">💚</div>'
 
             fb_sent = active_conv.get("fb_event_sent")
-            fb_btn  = '<span class="badge-green">✅ Lead отправлен</span>' if fb_sent else \
-                      f'<form method="post" action="/wa/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-green btn-sm">📤 Lead → FB</button></form>'
+            _is_fb_conv = bool(active_conv.get("fbclid") or active_conv.get("utm_source","").lower() in ("facebook","fb"))
+            if fb_sent:
+                fb_btn = '<span class="badge-green">✅ Lead отправлен (авто)</span>'
+            elif _is_fb_conv:
+                fb_btn = '<span style="color:var(--text3);font-size:.75rem;opacity:.7">⏳ Ждём первого сообщения...</span>'
+            else:
+                fb_btn = f'<form method="post" action="/wa/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-green btn-sm">📤 Lead → FB</button></form>'
             status_color = "#34d399" if active_conv["status"] == "open" else "#ef4444"
             close_btn = f'<form method="post" action="/wa/close"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-gray btn-sm">✓ Закрыть</button></form>' if active_conv["status"] == "open" else \
                         f'<form method="post" action="/wa/reopen"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn-green btn-sm">↺ Открыть</button></form>'

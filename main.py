@@ -1870,7 +1870,7 @@ async def go_staff_redirect(request: Request, ref: str = ""):
         # wa.me/number?text=ref:XXX — предзаполненный текст, парсится в WA webhook
         import urllib.parse as _urlparse
         sep = "&" if "?" in target_url else "?"
-        pre_text = _urlparse.quote(f"ref:{ref}")
+        pre_text = _urlparse.quote(f"ref:{ref} Приветствую! Я по поводу работы. Увидела ваше объявление, подскажите, пожалуйста, какие условия работы?")
         destination = f"{target_url}{sep}text={pre_text}"
 
     log.info(f"[/go-staff] ref={ref} type={target_type} utm={click.get('utm_campaign')} fbclid={'✓' if click.get('fbclid') else '—'}")

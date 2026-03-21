@@ -230,36 +230,32 @@ async def wa_webhook(request: Request):
             db.update_wa_last_message(wa_chat_id, text, increment_unread=True)
             log.info(f"[WA webhook] saved msg conv={conv['id']} from={wa_number}: {text[:50]}")
 
-            # Уведомление менеджеру — без Markdown чтобы спецсимволы не ломали
+            # Уведомление менеджеру через Бот 2 (уведомления)
             notify_chat = db.get_setting("notify_chat_id")
-            if notify_chat:
-                bot = bot_manager.get_tracker_bot() or bot_manager.get_staff_bot()
-                if bot:
-                    try:
-                        from aiogram import types as tg_types
-                        preview = text[:80] + ("..." if len(text) > 80 else "")
-                        # Используем HTML вместо Markdown — надёжнее
-                        safe_name    = sender_name.replace("<","&lt;").replace(">","&gt;")
-                        safe_preview = preview.replace("<","&lt;").replace(">","&gt;")
-                        safe_number  = str(wa_number).replace("<","&lt;")
-                        _app_url = db.get_setting("app_url", "").rstrip("/")
-                        _msg_kwargs = dict(parse_mode="HTML")
-                        if _app_url:
-                            _msg_kwargs["reply_markup"] = tg_types.InlineKeyboardMarkup(inline_keyboard=[[
-                                tg_types.InlineKeyboardButton(
-                                    text="Открыть WA чат →",
-                                    url=f"{_app_url}/wa/chat?conv_id={conv['id']}"
-                                )
-                            ]])
-                        await bot.send_message(
-                            int(notify_chat),
-                            f"💚 <b>WhatsApp — новое сообщение</b>\n"
-                            f"👤 {safe_name} (+{safe_number})\n\n"
-                            f"{safe_preview}",
-                            **_msg_kwargs
-                        )
-                    except Exception as e:
-                        log.warning(f"[WA webhook] notify error: {e}")
+            bot2 = bot_manager.get_staff_bot()
+            if notify_chat and bot2:
+                try:
+                    from aiogram import types as tg_types
+                    preview = text[:80] + ("..." if len(text) > 80 else "")
+                    safe_name    = sender_name.replace("<","&lt;").replace(">","&gt;")
+                    safe_preview = preview.replace("<","&lt;").replace(">","&gt;")
+                    safe_number  = str(wa_number).replace("<","&lt;")
+                    _app_url = db.get_setting("app_url", "").rstrip("/")
+                    _wa_kwargs = {}
+                    if _app_url:
+                        _wa_kwargs["reply_markup"] = tg_types.InlineKeyboardMarkup(inline_keyboard=[[
+                            tg_types.InlineKeyboardButton(
+                                text="Открыть WA чат →",
+                                url=f"{_app_url}/wa/chat?conv_id={conv['id']}"
+                            )
+                        ]])
+                    await bot2.send_message(
+                        int(notify_chat),
+                        f"💚 WA — новое сообщение\n👤 {safe_name} (+{safe_number})\n✉️ {safe_preview}",
+                        **_wa_kwargs
+                    )
+                except Exception as e:
+                    log.warning(f"[WA webhook] notify error: {e}")
 
         elif event == "ready":
             db.set_setting("wa_connected_number", data.get("number", ""))

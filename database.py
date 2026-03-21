@@ -1291,10 +1291,14 @@ class Database:
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM wa_messages WHERE conversation_id=%s", (conv_id,))
-                cur.execute("DELETE FROM staff WHERE wa_conv_id=%s", (conv_id,))
+                cur.execute("DELETE FROM conv_tags WHERE conv_type='wa' AND conv_id=%s", (conv_id,))
+                # Отвязываем сотрудника (не удаляем карточку, только связь)
+                cur.execute("UPDATE staff SET wa_conv_id=NULL WHERE wa_conv_id=%s", (conv_id,))
                 cur.execute("DELETE FROM wa_conversations WHERE id=%s", (conv_id,))
             conn.commit()
         _cache.invalidate_prefix('wa_convs:')
+        _cache.invalidate(f"conv_tags:wa:{conv_id}")
+        _cache.invalidate_prefix("conv_tags_map:wa")
 
     def get_wa_conversation(self, conv_id):
         with self._conn() as conn:
@@ -1867,9 +1871,14 @@ class Database:
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM tg_account_messages WHERE conversation_id=%s", (conv_id,))
+                cur.execute("DELETE FROM conv_tags WHERE conv_type='tga' AND conv_id=%s", (conv_id,))
+                # Отвязываем сотрудника (не удаляем карточку, только связь)
+                cur.execute("UPDATE staff SET tga_conv_id=NULL WHERE tga_conv_id=%s", (conv_id,))
                 cur.execute("DELETE FROM tg_account_conversations WHERE id=%s", (conv_id,))
             conn.commit()
         _cache.invalidate_prefix('tga_convs:')
+        _cache.invalidate(f"conv_tags:tga:{conv_id}")
+        _cache.invalidate_prefix("conv_tags_map:tga")
 
     # ══════════════════════════════════════════════════════════════════════════
     # PROJECTS — мультипиксельные проекты

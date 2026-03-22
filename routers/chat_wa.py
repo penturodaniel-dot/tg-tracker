@@ -501,7 +501,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         f"{header_html}<div class='no-conv'><div>Чат закрыт</div></div>" if active_conv else
         '<div class="no-conv"><div style="font-size:2.5rem">💚</div><div>Выбери диалог WhatsApp</div></div>'
     )
-    # Определяем project_id для скриптов по utm_campaign активного диалога
+    # Определяем project_id для скриптов по utm_campaign
     wa_scripts_project_id = 0
     if conv_id and active_conv:
         _utm_cam = (active_conv.get("utm_campaign") or "").strip()
@@ -509,36 +509,16 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         if _proj:
             wa_scripts_project_id = _proj["id"]
     if not wa_scripts_project_id:
-        _all_projects = db.get_projects()
-        if _all_projects:
-            wa_scripts_project_id = _all_projects[0]["id"]
+        _all_projs = db.get_projects()
+        if _all_projs:
+            wa_scripts_project_id = _all_projs[0]["id"]
 
-    content = f"""{WA_CSS}<div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
+    content = f"""{WA_CSS}<div class="chat-layout">
       <div class="conv-list">
         <div class="conv-search">{status_bar}{status_tabs}<input type="text" id="wa-search-input" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
         <div id="conv-items">{conv_items}<div id="wa-scroll-sentinel" style="height:1px"></div></div>
       </div>
       <div class="chat-window">{right}</div>
-      <div id="wa-scripts-panel" style="background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;height:100vh;overflow:hidden">
-        <div style="padding:10px 12px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-          <span style="font-weight:700;font-size:.85rem;color:var(--text)">📝 Скрипты</span>
-          <button onclick="toggleWaScriptsPanel()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1rem;padding:2px 4px" title="Свернуть">✕</button>
-        </div>
-        <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0">
-          <input type="text" id="wa-script-search" placeholder="🔍 Поиск скрипта..." oninput="filterWaScripts(this.value)"
-            style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:6px 10px;color:var(--text);font-size:.8rem;box-sizing:border-box"/>
-        </div>
-        <div id="wa-scripts-list" style="overflow-y:auto;flex:1;padding:8px 6px">
-          <div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Загрузка...</div>
-        </div>
-        <div style="padding:8px 10px;border-top:1px solid var(--border);flex-shrink:0">
-          <a href="/scripts" target="_blank" style="font-size:.75rem;color:var(--text3);text-decoration:none;display:block;text-align:center">⚙️ Управление скриптами</a>
-        </div>
-      </div>
-      <button id="wa-scripts-toggle-btn" onclick="toggleWaScriptsPanel()"
-        style="position:fixed;right:0;top:50%;transform:translateY(-50%);background:var(--bg2);border:1px solid var(--border);border-right:none;border-radius:8px 0 0 8px;padding:12px 6px;cursor:pointer;color:var(--text3);font-size:.8rem;writing-mode:vertical-rl;display:none;z-index:10">
-        📝 Скрипты
-      </button>
     </div>
     <script>
     const msgsEl=document.getElementById('wa-msgs');
@@ -806,88 +786,54 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
       if(inp&&inp.value.trim())filterConvs(inp.value);
     }})();
 
-    // ── Панель скриптов WA ────────────────────────────────────────────────────
+    // ── Панель скриптов WA ───────────────────────────────────────────────────
     var _waScriptsPanelOpen = true;
     var _waScriptsProjectId = {wa_scripts_project_id};
-
     function toggleWaScriptsPanel() {{
-      var panel = document.getElementById('wa-scripts-panel');
-      var btn   = document.getElementById('wa-scripts-toggle-btn');
-      var layout = document.querySelector('.chat-layout');
-      _waScriptsPanelOpen = !_waScriptsPanelOpen;
-      if (_waScriptsPanelOpen) {{
-        panel.style.display = 'flex';
-        btn.style.display   = 'none';
-        if (layout) layout.style.gridTemplateColumns = '300px 1fr 260px';
-      }} else {{
-        panel.style.display = 'none';
-        btn.style.display   = 'block';
-        if (layout) layout.style.gridTemplateColumns = '300px 1fr 0';
-      }}
+      var panel=document.getElementById('wa-scripts-panel');
+      var btn=document.getElementById('wa-scripts-toggle-btn');
+      var layout=document.querySelector('.chat-layout');
+      _waScriptsPanelOpen=!_waScriptsPanelOpen;
+      if(_waScriptsPanelOpen){{panel.style.display='flex';btn.style.display='none';if(layout)layout.style.gridTemplateColumns='300px 1fr 260px';}}
+      else{{panel.style.display='none';btn.style.display='block';if(layout)layout.style.gridTemplateColumns='300px 1fr 0';}}
     }}
-
     function injectWaScript(body) {{
-      var inp = document.getElementById('wa-reply');
-      if(!inp) return;
-      inp.value = body;
-      inp.focus();
+      var inp=document.getElementById('wa-reply');
+      if(!inp)return; inp.value=body; inp.focus();
     }}
-
     function renderWaScripts(scripts) {{
-      var box = document.getElementById('wa-scripts-list');
-      if(!box) return;
-      if(!scripts || !scripts.length) {{
-        box.innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Нет скриптов.<br><a href="/scripts" target="_blank" style="color:#25d366">Добавить →</a></div>';
-        return;
-      }}
-      var cats = {{}};
-      scripts.forEach(function(s){{ (cats[s.category] = cats[s.category]||[]).push(s); }});
-      var html = '';
-      Object.keys(cats).sort().forEach(function(cat) {{
-        html += '<div style="margin-bottom:10px">'
-          + '<div style="font-size:.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:4px 6px">' + cat + '</div>';
-        cats[cat].forEach(function(s) {{
-          html += '<div class="wa-script-item" data-title="' + (s.title||'').toLowerCase() + '" data-body="' + (s.body||'').toLowerCase() + '"' 
-            + ' onclick="injectWaScript(' + JSON.stringify(s.body) + ')"' 
-            + ' style="cursor:pointer;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1px solid var(--border);background:var(--bg3)"' 
-            + ' onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'var(--bg3)\'">' 
-            + '<div style="font-size:.8rem;font-weight:600;color:var(--text);margin-bottom:2px">' + (s.title||'') + '</div>' 
-            + '<div style="font-size:.73rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (s.body||'').substring(0,60) + (s.body&&s.body.length>60?'…':'') + '</div>' 
-            + '</div>';
+      var box=document.getElementById('wa-scripts-list');
+      if(!box)return;
+      if(!scripts||!scripts.length){{box.innerHTML='<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">\u041d\u0435\u0442 \u0441\u043a\u0440\u0438\u043f\u0442\u043e\u0432. <a href="/scripts" target="_blank" style="color:#25d366">\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c</a></div>';return;}}
+      var cats={{}};
+      scripts.forEach(function(s){{(cats[s.category]=cats[s.category]||[]).push(s);}});
+      var html='';
+      Object.keys(cats).sort().forEach(function(cat){{
+        html+='<div style="margin-bottom:10px"><div style="font-size:.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:4px 6px">'+cat+'</div>';
+        cats[cat].forEach(function(s){{
+          html+='<div class="wa-script-item" data-title="'+(s.title||'').toLowerCase()+'" data-body="'+(s.body||'').toLowerCase()+'" onclick="injectWaScript('+JSON.stringify(s.body)+')" style="cursor:pointer;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1px solid var(--border);background:var(--bg3)" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'var(--bg3)\'">'
+            +'<div style="font-size:.8rem;font-weight:600;color:var(--text);margin-bottom:2px">'+(s.title||'')+'</div>'
+            +'<div style="font-size:.73rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(s.body||'').substring(0,60)+(s.body&&s.body.length>60?'\u2026':'')+'</div></div>';
         }});
-        html += '</div>';
+        html+='</div>';
       }});
-      box.innerHTML = html;
+      box.innerHTML=html;
     }}
-
     function filterWaScripts(q) {{
-      var items = document.querySelectorAll('#wa-scripts-list .wa-script-item');
-      var qLow = (q||'').toLowerCase();
-      items.forEach(function(el){{
-        var match = !qLow || (el.dataset.title||'').includes(qLow) || (el.dataset.body||'').includes(qLow);
-        el.style.display = match ? '' : 'none';
-      }});
-      document.querySelectorAll('#wa-scripts-list > div').forEach(function(catBlock){{
-        var visible = Array.from(catBlock.querySelectorAll('.wa-script-item')).some(function(i){{ return i.style.display !== 'none'; }});
-        catBlock.style.display = visible ? '' : 'none';
-      }});
+      var items=document.querySelectorAll('#wa-scripts-list .wa-script-item');
+      var qLow=(q||'').toLowerCase();
+      items.forEach(function(el){{el.style.display=(!qLow||(el.dataset.title||'').includes(qLow)||(el.dataset.body||'').includes(qLow))?'':'none';}});
+      document.querySelectorAll('#wa-scripts-list > div').forEach(function(c){{c.style.display=Array.from(c.querySelectorAll('.wa-script-item')).some(function(i){{return i.style.display!=='none';}})?'':'none';}});
     }}
-
-    async function loadWaScripts(projectId) {{
-      if(!projectId) {{
-        document.getElementById('wa-scripts-list').innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Создайте проект в Настройках</div>';
-        return;
-      }}
-      try {{
-        var r = await fetch('/api/scripts?project_id=' + projectId);
-        if(!r.ok) throw new Error(r.status);
-        var d = await r.json();
-        renderWaScripts(d.scripts || []);
-      }} catch(e) {{
-        document.getElementById('wa-scripts-list').innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Ошибка загрузки</div>';
-      }}
+    async function loadWaScripts(pid) {{
+      if(!pid){{document.getElementById('wa-scripts-list').innerHTML='<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">\u0421\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u043f\u0440\u043e\u0435\u043a\u0442</div>';return;}}
+      try{{
+        var r=await fetch('/api/scripts?project_id='+pid);
+        if(!r.ok)throw new Error(r.status);
+        var d=await r.json();
+        renderWaScripts(d.scripts||[]);
+      }}catch(e){{document.getElementById('wa-scripts-list').innerHTML='<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">\u041e\u0448\u0438\u0431\u043a\u0430</div>';}}
     }}
-
     loadWaScripts(_waScriptsProjectId);
         </script>"""
     return HTMLResponse(base(content, "wa_chat", request))
@@ -909,7 +855,7 @@ async def wa_setup_page(request: Request, msg: str = "", err: str = ""):
         if qr:
             qr_html = f"""<div style="text-align:center;padding:20px">
               <img src="{qr}" style="width:220px;height:220px;border-radius:12px;border:2px solid #25d366"/>
-              <div style="color:#86efac;margin-top:12px;font-size:.88rem">Открой WhatsApp → Связанные устройства → Привязать устройство</div>
+              <div style="color:#86efac;margin-top:12px;font-size:.88rem">Открой WhatsApp &#x2192; Связанные устройства &#x2192; Привязать устройство</div>
               <div style="color:var(--text3);font-size:.78rem;margin-top:6px">Обновление через <span id="cd">20</span>с
               <script>let t=20;setInterval(()=>{{const el=document.getElementById('cd');if(el)el.textContent=--t;if(t<=0)location.reload()}},1000)</script></div>
             </div>"""
@@ -939,7 +885,7 @@ async def wa_setup_page(request: Request, msg: str = "", err: str = ""):
     <div class="section"><div class="section-head"><h3>ℹ️ Как это работает</h3></div>
       <div class="section-body" style="font-size:.85rem;color:var(--text3);line-height:2">
         <div>1. Нажми "Подключить WhatsApp" — появится QR-код</div>
-        <div>2. Открой WhatsApp → Связанные устройства → Привязать устройство</div>
+        <div>2. Открой WhatsApp &#x2192; Связанные устройства &#x2192; Привязать устройство</div>
         <div>3. Отсканируй QR — подключение займёт ~10 секунд</div>
         <div>4. Если номер заблокировали → "Сменить номер" → подключи новый</div>
         <div style="margin-top:8px;color:#fbbf24">⚠️ Используй отдельный номер, не основной</div>

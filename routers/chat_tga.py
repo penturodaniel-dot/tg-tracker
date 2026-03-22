@@ -563,110 +563,92 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
     # Определяем project_id для скриптов по utm_campaign активного диалога
     scripts_project_id = 0
     if conv_id and active_conv:
-        utm_cam = (active_conv.get("utm_campaign") or "").strip()
-        proj = db.get_project_by_utm(utm_cam) if utm_cam else None
-        if proj:
-            scripts_project_id = proj["id"]
+        _utm_cam = (active_conv.get("utm_campaign") or "").strip()
+        _proj = db.get_project_by_utm(_utm_cam) if _utm_cam else None
+        if _proj:
+            scripts_project_id = _proj["id"]
     if not scripts_project_id:
-        all_projects = db.get_projects()
-        if all_projects:
-            scripts_project_id = all_projects[0]["id"]
+        _all_projects = db.get_projects()
+        if _all_projects:
+            scripts_project_id = _all_projects[0]["id"]
 
-    tga_search_script = f"""
+    _tga_scripts_js = """
     <script>
-    function filterTgConvs(q){{
+    function filterTgConvs(q){
       var list=document.getElementById('tg-conv-items');
       if(!list)return;
       var qLow=(q||'').trim().toLowerCase().replace(/^@/,'');
-      list.querySelectorAll('a').forEach(function(a){{
-        a.style.display=qLow===''||a.textContent.toLowerCase().includes(qLow)?'':' none';
-      }});
-    }}
-
+      list.querySelectorAll('a').forEach(function(a){
+        a.style.display=qLow===''||a.textContent.toLowerCase().includes(qLow)?'':'none';
+      });
+    }
     var _tgaScriptsPanelOpen = true;
-    var _tgaScriptsProjectId = {scripts_project_id};
-
-    function toggleTgaScriptsPanel() {{
+    var _tgaScriptsProjectId = TGA_PROJECT_ID_PLACEHOLDER;
+    function toggleTgaScriptsPanel() {
       var panel = document.getElementById('tga-scripts-panel');
       var btn   = document.getElementById('tga-scripts-toggle-btn');
       var layout = document.querySelector('.chat-layout');
       _tgaScriptsPanelOpen = !_tgaScriptsPanelOpen;
-      if (_tgaScriptsPanelOpen) {{
-        panel.style.display = 'flex';
-        btn.style.display   = 'none';
+      if (_tgaScriptsPanelOpen) {
+        panel.style.display = 'flex'; btn.style.display = 'none';
         if (layout) layout.style.gridTemplateColumns = '300px 1fr 260px';
-      }} else {{
-        panel.style.display = 'none';
-        btn.style.display   = 'block';
+      } else {
+        panel.style.display = 'none'; btn.style.display = 'block';
         if (layout) layout.style.gridTemplateColumns = '300px 1fr 0';
-      }}
-    }}
-
-    function injectTgaScript(body) {{
+      }
+    }
+    function injectTgaScript(body) {
       var inp = document.getElementById('tga-inp');
       if(!inp) return;
-      inp.value = body;
-      inp.focus();
-      inp.dispatchEvent(new Event('input'));
-    }}
-
-    function renderTgaScripts(scripts) {{
+      inp.value = body; inp.focus(); inp.dispatchEvent(new Event('input'));
+    }
+    function renderTgaScripts(scripts) {
       var box = document.getElementById('tga-scripts-list');
       if(!box) return;
-      if(!scripts || !scripts.length) {{
-        box.innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Нет скриптов.<br><a href="/scripts" target="_blank" style="color:var(--orange)">Добавить →</a></div>';
+      if(!scripts || !scripts.length) {
+        box.innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">\u041d\u0435\u0442 \u0441\u043a\u0440\u0438\u043f\u0442\u043e\u0432.<br><a href="/scripts" target="_blank" style="color:var(--orange)">\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c &#x2192;</a></div>';
         return;
-      }}
-      var cats = {{}};
-      scripts.forEach(function(s){{ (cats[s.category] = cats[s.category]||[]).push(s); }});
+      }
+      var cats = {};
+      scripts.forEach(function(s){ (cats[s.category] = cats[s.category]||[]).push(s); });
       var html = '';
-      Object.keys(cats).sort().forEach(function(cat) {{
-        html += '<div style="margin-bottom:10px">'
-          + '<div style="font-size:.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:4px 6px">' + cat + '</div>';
-        cats[cat].forEach(function(s) {{
-          html += '<div class="tga-script-item" data-title="' + (s.title||''). toLowerCase() + '" data-body="' + (s.body||'').toLowerCase() + '"' 
-            + ' onclick="injectTgaScript(' + JSON.stringify(s.body) + ')"' 
-            + ' style="cursor:pointer;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1px solid var(--border);background:var(--bg3)"' 
-            + ' onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'var(--bg3)\'">' 
-            + '<div style="font-size:.8rem;font-weight:600;color:var(--text);margin-bottom:2px">' + (s.title||'')+'</div>' 
-            + '<div style="font-size:.73rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (s.body||'').substring(0,60) + (s.body&&s.body.length>60?'…':'') + '</div>' 
-            + '</div>';
-        }});
+      Object.keys(cats).sort().forEach(function(cat) {
+        html += '<div style="margin-bottom:10px"><div style="font-size:.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:4px 6px">' + cat + '</div>';
+        cats[cat].forEach(function(s) {
+          html += '<div class="tga-script-item" data-title="'+(s.title||'').toLowerCase()+'" data-body="'+(s.body||'').toLowerCase()+'" onclick="injectTgaScript('+JSON.stringify(s.body)+')" style="cursor:pointer;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1px solid var(--border);background:var(--bg3)" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'var(--bg3)\'">'
+            + '<div style="font-size:.8rem;font-weight:600;color:var(--text);margin-bottom:2px">'+(s.title||'')+'</div>'
+            + '<div style="font-size:.73rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(s.body||'').substring(0,60)+(s.body&&s.body.length>60?'\u2026':'')+'</div></div>';
+        });
         html += '</div>';
-      }});
+      });
       box.innerHTML = html;
-    }}
-
-    function filterTgaScripts(q) {{
+    }
+    function filterTgaScripts(q) {
       var items = document.querySelectorAll('#tga-scripts-list .tga-script-item');
       var qLow = (q||'').toLowerCase();
-      items.forEach(function(el){{
-        var match = !qLow || (el.dataset.title||'').includes(qLow) || (el.dataset.body||'').includes(qLow);
+      items.forEach(function(el){
+        var match = !qLow||(el.dataset.title||'').includes(qLow)||(el.dataset.body||'').includes(qLow);
         el.style.display = match ? '' : 'none';
-      }});
-      document.querySelectorAll('#tga-scripts-list > div').forEach(function(catBlock){{
-        var visible = Array.from(catBlock.querySelectorAll('.tga-script-item')).some(function(i){{ return i.style.display !== 'none'; }});
-        catBlock.style.display = visible ? '' : 'none';
-      }});
-    }}
-
-    async function loadTgaScripts(projectId) {{
-      if(!projectId) {{
-        document.getElementById('tga-scripts-list').innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Создайте проект в Настройках</div>';
-        return;
-      }}
-      try {{
-        var r = await fetch('/api/scripts?project_id=' + projectId);
+      });
+      document.querySelectorAll('#tga-scripts-list > div').forEach(function(catBlock){
+        var vis = Array.from(catBlock.querySelectorAll('.tga-script-item')).some(function(i){ return i.style.display!=='none'; });
+        catBlock.style.display = vis ? '' : 'none';
+      });
+    }
+    async function loadTgaScripts(pid) {
+      if(!pid){ document.getElementById('tga-scripts-list').innerHTML='<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">\u0421\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u043f\u0440\u043e\u0435\u043a\u0442 \u0432 \u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u0445</div>'; return; }
+      try {
+        var r = await fetch('/api/scripts?project_id='+pid);
         if(!r.ok) throw new Error(r.status);
         var d = await r.json();
-        renderTgaScripts(d.scripts || []);
-      }} catch(e) {{
-        document.getElementById('tga-scripts-list').innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Ошибка загрузки</div>';
-      }}
-    }}
-
+        renderTgaScripts(d.scripts||[]);
+      } catch(e) {
+        document.getElementById('tga-scripts-list').innerHTML='<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438</div>';
+      }
+    }
     loadTgaScripts(_tgaScriptsProjectId);
-    </script>"""
+    </script>""".replace("TGA_PROJECT_ID_PLACEHOLDER", str(scripts_project_id))
+    tga_search_script = _tga_scripts_js
     return HTMLResponse(base(tga_search_script + content_html, "tg_account_chat", request))
 
 

@@ -574,8 +574,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
 
     _tga_scripts_js = """
     <style>
-    .tga-script-item:hover { background: var(--bg) !important; }
-    .wa-script-item:hover  { background: var(--bg) !important; }
+    .script-item:hover { background: var(--bg) !important; }
     </style>
     <script>
     function filterTgConvs(q){
@@ -594,14 +593,16 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
       var layout = document.querySelector('.chat-layout');
       _tgaScriptsPanelOpen = !_tgaScriptsPanelOpen;
       if (_tgaScriptsPanelOpen) {
-        panel.style.display = 'flex'; btn.style.display = 'none';
-        if (layout) layout.style.gridTemplateColumns = '300px 1fr 260px';
+        panel.style.display='flex'; btn.style.display='none';
+        if(layout) layout.style.gridTemplateColumns='300px 1fr 260px';
       } else {
-        panel.style.display = 'none'; btn.style.display = 'block';
-        if (layout) layout.style.gridTemplateColumns = '300px 1fr 0';
+        panel.style.display='none'; btn.style.display='block';
+        if(layout) layout.style.gridTemplateColumns='300px 1fr 0';
       }
     }
-    function injectTgaScript(body) {
+    function injectTgaScript(el) {
+      var body = el.getAttribute('data-body-full');
+      if(!body) return;
       var inp = document.getElementById('tga-inp');
       if(!inp) return;
       inp.value = body; inp.focus(); inp.dispatchEvent(new Event('input'));
@@ -610,7 +611,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
       var box = document.getElementById('tga-scripts-list');
       if(!box) return;
       if(!scripts || !scripts.length) {
-        box.innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">\u041d\u0435\u0442 \u0441\u043a\u0440\u0438\u043f\u0442\u043e\u0432.<br><a href="/scripts" target="_blank" style="color:var(--orange)">\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c &#x2192;</a></div>';
+        box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:.8rem">\u041d\u0435\u0442 \u0441\u043a\u0440\u0438\u043f\u0442\u043e\u0432.<br><a href="/scripts" target="_blank" style="color:var(--orange)">\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u2192</a></div>';
         return;
       }
       var cats = {};
@@ -619,9 +620,18 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
       Object.keys(cats).sort().forEach(function(cat) {
         html += '<div style="margin-bottom:10px"><div style="font-size:.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:4px 6px">' + cat + '</div>';
         cats[cat].forEach(function(s) {
-          html += '<div class="tga-script-item" data-title="'+(s.title||'').toLowerCase()+'" data-body="'+(s.body||'').toLowerCase()+'" onclick="injectTgaScript('+JSON.stringify(s.body)+')" style="cursor:pointer;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1px solid var(--border);background:var(--bg3)" >'
-            + '<div style="font-size:.8rem;font-weight:600;color:var(--text);margin-bottom:2px">'+(s.title||'')+'</div>'
-            + '<div style="font-size:.73rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(s.body||'').substring(0,60)+(s.body&&s.body.length>60?'\u2026':'')+'</div></div>';
+          var safeTitle = (s.title||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+          var safePreview = (s.body||'').substring(0,60).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          var safeBody = (s.body||'').replace(/"/g,'&quot;');
+          html += '<div class="script-item tga-script-item"'
+            + ' data-title="' + safeTitle.toLowerCase() + '"'
+            + ' data-body="' + (s.body||'').toLowerCase().replace(/"/g,'&quot;') + '"'
+            + ' data-body-full="' + safeBody + '"'
+            + ' onclick="injectTgaScript(this)"'
+            + ' style="cursor:pointer;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1px solid var(--border);background:var(--bg3)">'
+            + '<div style="font-size:.8rem;font-weight:600;color:var(--text);margin-bottom:2px">' + safeTitle + '</div>'
+            + '<div style="font-size:.73rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + safePreview + (s.body&&s.body.length>60?'\u2026':'') + '</div>'
+            + '</div>';
         });
         html += '</div>';
       });
@@ -631,23 +641,21 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
       var items = document.querySelectorAll('#tga-scripts-list .tga-script-item');
       var qLow = (q||'').toLowerCase();
       items.forEach(function(el){
-        var match = !qLow||(el.dataset.title||'').includes(qLow)||(el.dataset.body||'').includes(qLow);
-        el.style.display = match ? '' : 'none';
+        el.style.display = (!qLow||(el.dataset.title||'').includes(qLow)||(el.dataset.body||'').includes(qLow)) ? '' : 'none';
       });
-      document.querySelectorAll('#tga-scripts-list > div').forEach(function(catBlock){
-        var vis = Array.from(catBlock.querySelectorAll('.tga-script-item')).some(function(i){ return i.style.display!=='none'; });
-        catBlock.style.display = vis ? '' : 'none';
+      document.querySelectorAll('#tga-scripts-list > div').forEach(function(c){
+        c.style.display = Array.from(c.querySelectorAll('.tga-script-item')).some(function(i){ return i.style.display!=='none'; }) ? '' : 'none';
       });
     }
     async function loadTgaScripts(pid) {
-      if(!pid){ document.getElementById('tga-scripts-list').innerHTML='<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">\u0421\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u043f\u0440\u043e\u0435\u043a\u0442 \u0432 \u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u0445</div>'; return; }
+      if(!pid) { document.getElementById('tga-scripts-list').innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.8rem">\u0421\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u043f\u0440\u043e\u0435\u043a\u0442</div>'; return; }
       try {
         var r = await fetch('/api/scripts?project_id='+pid);
         if(!r.ok) throw new Error(r.status);
         var d = await r.json();
         renderTgaScripts(d.scripts||[]);
       } catch(e) {
-        document.getElementById('tga-scripts-list').innerHTML='<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438</div>';
+        document.getElementById('tga-scripts-list').innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.8rem">\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438</div>';
       }
     }
     loadTgaScripts(_tgaScriptsProjectId);

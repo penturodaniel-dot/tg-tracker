@@ -360,11 +360,19 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 if(!r.ok) throw new Error(r.status);
                 var html = await r.text();
                 if(chatWin) {{ chatWin.innerHTML = html; chatWin.style.opacity = '1'; }}
+                // Выполняем <script> теги (браузер не запускает их через innerHTML)
+                if(chatWin) {{
+                  chatWin.querySelectorAll('script').forEach(function(oldScript) {{
+                    var newScript = document.createElement('script');
+                    newScript.textContent = oldScript.textContent;
+                    document.body.appendChild(newScript);
+                    document.body.removeChild(newScript);
+                  }});
+                }}
                 // Обновляем активный элемент в списке
                 document.querySelectorAll('#tg-conv-items .conv-item').forEach(function(el){{
                   var isActive = el.dataset.convId == String(convId);
                   el.classList.toggle('active', isActive);
-                  // Мгновенно убираем бейдж непрочитанных на активном чате
                   if(isActive) {{
                     var badge = el.querySelector('.unread-num');
                     if(badge) badge.remove();
@@ -375,6 +383,8 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 // Обновляем глобальные переменные для polling
                 if(typeof TGA_CONV_ID !== 'undefined') window.TGA_CONV_ID = convId;
                 ACTIVE_TGA_CONV_ID = convId;
+                // Перезагружаем скрипты в панели для нового чата
+                if(typeof loadTgaScripts === 'function') loadTgaScripts(_tgaScriptsProjectId);
               }} catch(e) {{ if(chatWin) chatWin.style.opacity = '1'; }}
               _tgaChatLoading = false;
             }}

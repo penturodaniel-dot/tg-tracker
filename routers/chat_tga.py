@@ -533,12 +533,32 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             }})();
                         </script>"""
 
-    content_html = f"""<div class="chat-layout">
+    content_html = f"""<div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
       <div class="conv-list">
         <div class="conv-search">{conn_badge}{tabs_html}<input type="text" id="tga-search-input" placeholder="🔍 Поиск..." oninput="filterTgConvs(this.value)" style="width:100%;margin-top:6px"/></div>
         <div id="tg-conv-items" style="overflow-y:auto;flex:1">{conv_items}<div id="tga-scroll-sentinel" style="height:1px"></div></div>
       </div>
       <div class="chat-window">{chat_area}</div>
+      <div id="tga-scripts-panel" style="background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;height:100vh;overflow:hidden">
+        <div style="padding:10px 12px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+          <span style="font-weight:700;font-size:.85rem;color:var(--text)">📝 Скрипты</span>
+          <button onclick="toggleTgaScriptsPanel()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1rem;padding:2px 4px" title="Свернуть">✕</button>
+        </div>
+        <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0">
+          <input type="text" id="tga-script-search" placeholder="🔍 Поиск скрипта..." oninput="filterTgaScripts(this.value)"
+            style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:6px 10px;color:var(--text);font-size:.8rem;box-sizing:border-box"/>
+        </div>
+        <div id="tga-scripts-list" style="overflow-y:auto;flex:1;padding:8px 6px">
+          <div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Загрузка...</div>
+        </div>
+        <div style="padding:8px 10px;border-top:1px solid var(--border);flex-shrink:0">
+          <a href="/scripts" target="_blank" style="font-size:.75rem;color:var(--text3);text-decoration:none;display:block;text-align:center">⚙️ Управление скриптами</a>
+        </div>
+      </div>
+      <button id="tga-scripts-toggle-btn" onclick="toggleTgaScriptsPanel()"
+        style="position:fixed;right:0;top:50%;transform:translateY(-50%);background:var(--bg2);border:1px solid var(--border);border-right:none;border-radius:8px 0 0 8px;padding:12px 6px;cursor:pointer;color:var(--text3);font-size:.8rem;writing-mode:vertical-rl;display:none;z-index:10">
+        📝 Скрипты
+      </button>
     </div>"""
     tga_search_script = """
     <script>
@@ -550,6 +570,116 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
         a.style.display=qLow===''||a.textContent.toLowerCase().includes(qLow)?'':'none';
       });
     }
+
+    // ── Панель скриптов ──────────────────────────────────────────────────────
+    var _tgaScriptsPanelOpen = true;
+    var _tgaScriptsData = [];
+    var _tgaScriptsProjectId = 0;
+
+    function toggleTgaScriptsPanel() {
+      var panel = document.getElementById('tga-scripts-panel');
+      var btn   = document.getElementById('tga-scripts-toggle-btn');
+      var layout = document.querySelector('.chat-layout');
+      _tgaScriptsPanelOpen = !_tgaScriptsPanelOpen;
+      if (_tgaScriptsPanelOpen) {
+        panel.style.display = 'flex';
+        btn.style.display   = 'none';
+        if (layout) layout.style.gridTemplateColumns = '300px 1fr 260px';
+      } else {
+        panel.style.display = 'none';
+        btn.style.display   = 'block';
+        if (layout) layout.style.gridTemplateColumns = '300px 1fr 0';
+      }
+    }
+
+    function injectTgaScript(body) {
+      var inp = document.getElementById('tga-inp');
+      if(!inp) return;
+      inp.value = body;
+      inp.focus();
+      inp.dispatchEvent(new Event('input'));
+    }
+
+    function renderTgaScripts(scripts) {
+      var box = document.getElementById('tga-scripts-list');
+      if(!box) return;
+      if(!scripts || !scripts.length) {
+        box.innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Нет скриптов.<br><a href="/scripts" target="_blank" style="color:var(--orange)">Добавить →</a></div>';
+        return;
+      }
+      // Группируем по категориям
+      var cats = {};
+      scripts.forEach(function(s){ (cats[s.category] = cats[s.category]||[]).push(s); });
+      var html = '';
+      Object.keys(cats).sort().forEach(function(cat) {
+        html += '<div style="margin-bottom:10px">'
+          + '<div style="font-size:.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:4px 6px 4px">'
+          + cat + '</div>';
+        cats[cat].forEach(function(s) {
+          html += '<div class="tga-script-item" data-title="'+(s.title||'').toLowerCase()+'" data-body="'+(s.body||'').toLowerCase()+'"'
+            + ' onclick="injectTgaScript('+JSON.stringify(s.body)+')"'
+            + ' style="cursor:pointer;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1px solid var(--border);background:var(--bg3);transition:background .15s"'
+            + ' onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'var(--bg3)\'">'
+            + '<div style="font-size:.8rem;font-weight:600;color:var(--text);margin-bottom:2px">' + (s.title||'') + '</div>'
+            + '<div style="font-size:.73rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (s.body||'').substring(0,60) + (s.body&&s.body.length>60?'…':'') + '</div>'
+            + '</div>';
+        });
+        html += '</div>';
+      });
+      box.innerHTML = html;
+    }
+
+    function filterTgaScripts(q) {
+      var items = document.querySelectorAll('#tga-scripts-list .tga-script-item');
+      var qLow = (q||'').toLowerCase();
+      items.forEach(function(el){
+        var match = !qLow || (el.dataset.title||'').includes(qLow) || (el.dataset.body||'').includes(qLow);
+        el.style.display = match ? '' : 'none';
+      });
+      // Скрываем категории без видимых скриптов
+      document.querySelectorAll('#tga-scripts-list > div').forEach(function(catBlock){
+        var visible = Array.from(catBlock.querySelectorAll('.tga-script-item')).some(function(i){ return i.style.display !== 'none'; });
+        catBlock.style.display = visible ? '' : 'none';
+      });
+    }
+
+    async function loadTgaScripts(projectId) {
+      if(!projectId) {
+        // Берём первый проект
+        try {
+          var r = await fetch('/api/projects_list');
+          if(r.ok){ var d=await r.json(); if(d.projects&&d.projects.length) projectId=d.projects[0].id; }
+        } catch(e){}
+      }
+      if(!projectId) {
+        document.getElementById('tga-scripts-list').innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Создайте проект в Настройках</div>';
+        return;
+      }
+      _tgaScriptsProjectId = projectId;
+      try {
+        var r = await fetch('/api/scripts?project_id=' + projectId);
+        if(!r.ok) throw new Error(r.status);
+        var d = await r.json();
+        _tgaScriptsData = d.scripts || [];
+        renderTgaScripts(_tgaScriptsData);
+      } catch(e) {
+        document.getElementById('tga-scripts-list').innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Ошибка загрузки скриптов</div>';
+      }
+    }
+
+    // Загружаем скрипты при старте
+    (function(){
+      // Если есть активный conv — берём его project_id через API
+      var cid = typeof TGA_CONV_ID !== 'undefined' ? TGA_CONV_ID : 0;
+      if(cid) {
+        fetch('/api/tga_conv_project?conv_id=' + cid)
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(d){ loadTgaScripts(d && d.project_id ? d.project_id : 0); })
+          .catch(function(){ loadTgaScripts(0); });
+      } else {
+        loadTgaScripts(0);
+      }
+    })();
     </script>"""
     return HTMLResponse(base(tga_search_script + content_html, "tg_account_chat", request))
 

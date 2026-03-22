@@ -38,6 +38,7 @@ from routers.users_tags  import router as users_tags_router, setup as users_tags
 from routers.settings    import router as settings_router,  setup as settings_setup
 from routers.channels    import router as channels_router,  setup as channels_setup
 from routers.projects    import router as projects_router,  setup as projects_setup
+from routers.scripts     import router as scripts_router,   setup as scripts_setup
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -526,7 +527,7 @@ def nav_html(active: str, request: Request) -> str:
 
     # Определяем какой аккордеон активен
     clients_pages  = ["channels","campaigns","landings","analytics_clients"]
-    staff_pages    = ["tg_account_chat","wa_chat","staff","landings_staff","analytics_staff"]
+    staff_pages    = ["tg_account_chat","wa_chat","staff","scripts","landings_staff","analytics_staff"]
     settings_pages = ["tags","users","projects","settings"]
     is_clients  = active in clients_pages or (active and any(active.startswith(p) for p in clients_pages))
     is_staff    = active in staff_pages   or (active and any(active.startswith(p) for p in staff_pages))
@@ -560,6 +561,7 @@ def nav_html(active: str, request: Request) -> str:
         item("📱", "TG Чаты",     "tg_account_chat", "orange", badge_count=tga_unread, url="/tg_account/chat", badge_id="nav-tga-badge") +
         item("💚", "WA Чаты",     "wa_chat",         "orange", badge_count=wa_unread,  url="/wa/chat",         badge_id="nav-wa-badge") +
         item("🗂",  "База",        "staff",            "orange") +
+        item("📝", "Скрипты",     "scripts",          "orange", url="/scripts") +
         item("🌐", "Лендинги HR", "landings_staff",   "orange") +
         item("📊", "Статистика",  "analytics_staff",  "orange", url="/analytics/staff")
     )
@@ -890,6 +892,9 @@ app.include_router(channels_router)
 
 projects_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker)
 app.include_router(projects_router)
+
+scripts_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker)
+app.include_router(scripts_router)
 
 wa_setup(
     db, log, bot_manager, meta_capi,
@@ -1900,6 +1905,32 @@ async def api_stats(request: Request):
     stats["wa_status"] = db.get_setting("wa_status", "disconnected")
     stats["tg_status"] = db.get_setting("tg_account_status", "disconnected")
     return JSONResponse(stats)
+
+
+@app.get("/api/projects_list")
+async def api_projects_list(request: Request):
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    projects = db.get_projects()
+    return JSONResponse({"projects": [{"id": p["id"], "name": p["name"]} for p in projects]})
+
+
+@app.get("/api/tga_conv_project")
+async def api_tga_conv_project(request: Request, conv_id: int = 0):
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    if not conv_id: return JSONResponse({"project_id": 0})
+    conv = db.get_tg_account_conversation(conv_id)
+    return JSONResponse({"project_id": (conv or {}).get("project_id") or 0})
+
+
+@app.get("/api/wa_conv_project")
+async def api_wa_conv_project(request: Request, conv_id: int = 0):
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    if not conv_id: return JSONResponse({"project_id": 0})
+    conv = db.get_wa_conversation(conv_id)
+    return JSONResponse({"project_id": (conv or {}).get("project_id") or 0})
 
 
 @app.get("/api/wa_chat_panel", response_class=HTMLResponse)

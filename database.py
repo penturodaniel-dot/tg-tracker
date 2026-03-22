@@ -360,6 +360,19 @@ class Database:
                 # Заполняем slug для старых кампаний где он NULL
                 cur.execute("UPDATE campaigns SET slug = LOWER(REPLACE(name, ' ', '-')) || '-' || id WHERE slug IS NULL OR slug = ''")
 
+                # Скрипты общения — шаблонные сообщения по категориям для каждого проекта
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS scripts (
+                        id         SERIAL PRIMARY KEY,
+                        project_id INTEGER NOT NULL,
+                        category   TEXT NOT NULL DEFAULT 'Общее',
+                        title      TEXT NOT NULL,
+                        body       TEXT NOT NULL DEFAULT '',
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        created_at TEXT NOT NULL
+                    )
+                """)
+
             conn.commit()
 
         # Default admin
@@ -2000,3 +2013,55 @@ class Database:
                     LIMIT 50
                 """, params)
                 return [dict(r) for r in cur.fetchall()]
+
+    # ── Scripts ───────────────────────────────────────────────────────────────
+    def get_scripts(self, project_id: int) -> list:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM scripts WHERE project_id=%s ORDER BY category, sort_order, id",
+                    (project_id,)
+                )
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_script(self, script_id: int) -> dict | None:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM scripts WHERE id=%s", (script_id,))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def create_script(self, project_id: int, category: str, title: str, body: str, sort_order: int = 0) -> int:
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO scripts (project_id, category, title, body, sort_order, created_at) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+                    (project_id, category.strip(), title.strip(), body, sort_order, datetime.utcnow().isoformat())
+                )
+                new_id = cur.fetchone()["id"]
+            conn.commit()
+            return new_id
+
+    def update_script(self, script_id: int, category: str, title: str, body: str, sort_order: int = 0):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE scripts SET category=%s, title=%s, body=%s, sort_order=%s WHERE id=%s",
+                    (category.strip(), title.strip(), body, sort_order, script_id)
+                )
+            conn.commit()
+
+    def delete_script(self, script_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM scripts WHERE id=%s", (script_id,))
+            conn.commit()
+
+    def get_script_categories(self, project_id: int) -> list:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT DISTINCT category FROM scripts WHERE project_id=%s ORDER BY category",
+                    (project_id,)
+                )
+                return [r["category"] for r in cur.fetchall()]

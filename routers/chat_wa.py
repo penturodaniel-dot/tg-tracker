@@ -347,7 +347,10 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             db.mark_wa_read(conv_id)
             msgs = db.get_wa_messages(conv_id)
             for m in msgs:
-                t = m["created_at"][11:16]
+                _dt_wa = m["created_at"] or ""
+                _d_wa = _dt_wa[:10].replace("-",".")[2:] if len(_dt_wa) >= 10 else ""
+                _t_wa = _dt_wa[11:16] if len(_dt_wa) >= 16 else ""
+                t = f"{_d_wa} {_t_wa}".strip()
                 content_html = ""
                 if m.get("media_url") and (m.get("media_type","") or "").startswith("image/"):
                     content_html = f'<img src="{m["media_url"]}" style="max-width:220px;max-height:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)" />'

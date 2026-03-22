@@ -169,7 +169,10 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             msgs = db.get_tg_account_messages(conv_id)
             messages_html = ""
             for m in msgs:
-                t = m["created_at"][11:16]
+                _dt = m["created_at"] or ""
+                _date = _dt[:10].replace("-",".")[2:] if len(_dt) >= 10 else ""
+                _time = _dt[11:16] if len(_dt) >= 16 else ""
+                t = f"{_date} {_time}".strip()
                 if m.get("media_url") and (m.get("media_type") or "").startswith("image/"):
                     ch = f'<img src="{m["media_url"]}" style="max-width:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)" />'
                 elif m.get("media_url"):
@@ -1116,7 +1119,10 @@ async def api_tga_chat_panel(request: Request, conv_id: int = 0, status_filter: 
     msgs = db.get_tg_account_messages(conv_id)
     messages_html = ""
     for m in msgs:
-        t = m["created_at"][11:16]
+        _dt2 = m["created_at"] or ""
+        _date2 = _dt2[:10].replace("-",".")[2:] if len(_dt2) >= 10 else ""
+        _time2 = _dt2[11:16] if len(_dt2) >= 16 else ""
+        t = f"{_date2} {_time2}".strip()
         if m.get("media_url") and (m.get("media_type") or "").startswith("image/"):
             ch = f'<img src="{m["media_url"]}" style="max-width:220px;max-height:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)" />'
         elif m.get("media_url"):

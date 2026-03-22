@@ -570,22 +570,18 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
         📝 Скрипты
       </button>
     </div>"""
-    # Определяем project_id для скриптов по utm_campaign активного диалога
-    scripts_project_id = 0
-    if conv_id and active_conv:
-        _utm_cam = (active_conv.get("utm_campaign") or "").strip()
-        _proj = db.get_project_by_utm(_utm_cam) if _utm_cam else None
-        if _proj:
-            scripts_project_id = _proj["id"]
-    if not scripts_project_id:
-        _all_projects = db.get_projects()
-        if _all_projects:
-            scripts_project_id = _all_projects[0]["id"]
+    # Загружаем все проекты и скрипты для боковой панели
+    _all_projects = db.get_projects()
+    _all_scripts_data = []
+    for _p in _all_projects:
+        _scripts = db.get_scripts(_p["id"])
+        if _scripts:
+            _all_scripts_data.append({"project": _p["name"], "scripts": _scripts})
+    import json as _json
+    _scripts_json = _json.dumps(_all_scripts_data, ensure_ascii=False)
 
-    _tga_scripts_js = """
-    <style>
-    .script-item:hover { background: var(--bg) !important; }
-    </style>
+    _tga_scripts_js = ("""
+    <style>.script-item:hover{background:var(--bg)!important;}</style>
     <script>
     function filterTgConvs(q){
       var list=document.getElementById('tg-conv-items');
@@ -596,80 +592,72 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
       });
     }
     var _tgaScriptsPanelOpen = true;
-    var _tgaScriptsProjectId = TGA_PROJECT_ID_PLACEHOLDER;
+    var _tgaAllScripts = TGA_SCRIPTS_JSON_PLACEHOLDER;
     function toggleTgaScriptsPanel() {
-      var panel = document.getElementById('tga-scripts-panel');
-      var btn   = document.getElementById('tga-scripts-toggle-btn');
-      var layout = document.querySelector('.chat-layout');
-      _tgaScriptsPanelOpen = !_tgaScriptsPanelOpen;
-      if (_tgaScriptsPanelOpen) {
-        panel.style.display='flex'; btn.style.display='none';
-        if(layout) layout.style.gridTemplateColumns='300px 1fr 260px';
-      } else {
-        panel.style.display='none'; btn.style.display='block';
-        if(layout) layout.style.gridTemplateColumns='300px 1fr 0';
-      }
+      var panel=document.getElementById('tga-scripts-panel');
+      var btn=document.getElementById('tga-scripts-toggle-btn');
+      var layout=document.querySelector('.chat-layout');
+      _tgaScriptsPanelOpen=!_tgaScriptsPanelOpen;
+      if(_tgaScriptsPanelOpen){panel.style.display='flex';btn.style.display='none';if(layout)layout.style.gridTemplateColumns='300px 1fr 260px';}
+      else{panel.style.display='none';btn.style.display='block';if(layout)layout.style.gridTemplateColumns='300px 1fr 0';}
     }
     function injectTgaScript(el) {
-      var body = el.getAttribute('data-body-full');
-      if(!body) return;
-      var inp = document.getElementById('tga-inp');
-      if(!inp) return;
-      inp.value = body; inp.focus(); inp.dispatchEvent(new Event('input'));
+      var body=el.getAttribute('data-body-full');
+      if(!body)return;
+      var inp=document.getElementById('tga-inp');
+      if(!inp)return;
+      inp.value=body; inp.focus(); inp.dispatchEvent(new Event('input'));
     }
-    function renderTgaScripts(scripts) {
-      var box = document.getElementById('tga-scripts-list');
-      if(!box) return;
-      if(!scripts || !scripts.length) {
-        box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:.8rem">\u041d\u0435\u0442 \u0441\u043a\u0440\u0438\u043f\u0442\u043e\u0432.<br><a href="/scripts" target="_blank" style="color:var(--orange)">\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u2192</a></div>';
+    function renderTgaScripts(data) {
+      var box=document.getElementById('tga-scripts-list');
+      if(!box)return;
+      if(!data||!data.length){
+        box.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.8rem">\u041d\u0435\u0442 \u0441\u043a\u0440\u0438\u043f\u0442\u043e\u0432.<br><a href="/scripts" target="_blank" style="color:var(--orange)">\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c</a></div>';
         return;
       }
-      var cats = {};
-      scripts.forEach(function(s){ (cats[s.category] = cats[s.category]||[]).push(s); });
-      var html = '';
-      Object.keys(cats).sort().forEach(function(cat) {
-        html += '<div style="margin-bottom:10px"><div style="font-size:.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:4px 6px">' + cat + '</div>';
-        cats[cat].forEach(function(s) {
-          var safeTitle = (s.title||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-          var safePreview = (s.body||'').substring(0,60).replace(/</g,'&lt;').replace(/>/g,'&gt;');
-          var safeBody = (s.body||'').replace(/"/g,'&quot;');
-          html += '<div class="script-item tga-script-item"'
-            + ' data-title="' + safeTitle.toLowerCase() + '"'
-            + ' data-body="' + (s.body||'').toLowerCase().replace(/"/g,'&quot;') + '"'
-            + ' data-body-full="' + safeBody + '"'
-            + ' onclick="injectTgaScript(this)"'
-            + ' style="cursor:pointer;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1px solid var(--border);background:var(--bg3)">'
-            + '<div style="font-size:.8rem;font-weight:600;color:var(--text);margin-bottom:2px">' + safeTitle + '</div>'
-            + '<div style="font-size:.73rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + safePreview + (s.body&&s.body.length>60?'\u2026':'') + '</div>'
-            + '</div>';
+      var html='';
+      data.forEach(function(proj){
+        // Заголовок проекта
+        html+='<div style="margin-bottom:14px">'
+          +'<div style="font-size:.72rem;font-weight:700;color:var(--orange);padding:6px 8px 4px;border-bottom:1px solid var(--border);margin-bottom:4px">\u25B8 '+proj.project+'</div>';
+        // Группируем по категориям
+        var cats={};
+        proj.scripts.forEach(function(s){(cats[s.category]=cats[s.category]||[]).push(s);});
+        Object.keys(cats).sort().forEach(function(cat){
+          html+='<div style="margin-bottom:6px">'
+            +'<div style="font-size:.65rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;padding:2px 8px">'+cat+'</div>';
+          cats[cat].forEach(function(s){
+            var st=(s.title||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            var sp=(s.body||'').substring(0,55).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            var sb=(s.body||'').replace(/"/g,'&quot;');
+            html+='<div class="script-item tga-script-item"'
+              +' data-title="'+(s.title||'').toLowerCase().replace(/"/g,'&quot;')+'"'
+              +' data-body-full="'+sb+'"'
+              +' onclick="injectTgaScript(this)"'
+              +' style="cursor:pointer;padding:7px 10px;border-radius:7px;margin:2px 4px;border:1px solid var(--border);background:var(--bg3)">'
+              +'<div style="font-size:.79rem;font-weight:600;color:var(--text);margin-bottom:1px">'+st+'</div>'
+              +'<div style="font-size:.71rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+sp+(s.body&&s.body.length>55?'\u2026':'')+'</div>'
+              +'</div>';
+          });
+          html+='</div>';
         });
-        html += '</div>';
+        html+='</div>';
       });
-      box.innerHTML = html;
+      box.innerHTML=html;
     }
-    function filterTgaScripts(q) {
-      var items = document.querySelectorAll('#tga-scripts-list .tga-script-item');
-      var qLow = (q||'').toLowerCase();
+    function filterTgaScripts(q){
+      var items=document.querySelectorAll('#tga-scripts-list .tga-script-item');
+      var qLow=(q||'').toLowerCase();
       items.forEach(function(el){
-        el.style.display = (!qLow||(el.dataset.title||'').includes(qLow)||(el.dataset.body||'').includes(qLow)) ? '' : 'none';
+        var match=!qLow||(el.dataset.title||'').includes(qLow)||(el.getAttribute('data-body-full')||'').toLowerCase().includes(qLow);
+        el.style.display=match?'':'none';
       });
       document.querySelectorAll('#tga-scripts-list > div').forEach(function(c){
-        c.style.display = Array.from(c.querySelectorAll('.tga-script-item')).some(function(i){ return i.style.display!=='none'; }) ? '' : 'none';
+        c.style.display=Array.from(c.querySelectorAll('.tga-script-item')).some(function(i){return i.style.display!=='none';})?'':'none';
       });
     }
-    async function loadTgaScripts(pid) {
-      if(!pid) { document.getElementById('tga-scripts-list').innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.8rem">\u0421\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u043f\u0440\u043e\u0435\u043a\u0442</div>'; return; }
-      try {
-        var r = await fetch('/api/scripts?project_id='+pid);
-        if(!r.ok) throw new Error(r.status);
-        var d = await r.json();
-        renderTgaScripts(d.scripts||[]);
-      } catch(e) {
-        document.getElementById('tga-scripts-list').innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.8rem">\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438</div>';
-      }
-    }
-    loadTgaScripts(_tgaScriptsProjectId);
-    </script>""".replace("TGA_PROJECT_ID_PLACEHOLDER", str(scripts_project_id))
+    renderTgaScripts(_tgaAllScripts);
+    </script>""").replace("TGA_SCRIPTS_JSON_PLACEHOLDER", _scripts_json)
     tga_search_script = _tga_scripts_js
     return HTMLResponse(base(tga_search_script + content_html, "tg_account_chat", request))
 

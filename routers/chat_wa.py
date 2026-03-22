@@ -501,6 +501,18 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         f"{header_html}<div class='no-conv'><div>Чат закрыт</div></div>" if active_conv else
         '<div class="no-conv"><div style="font-size:2.5rem">💚</div><div>Выбери диалог WhatsApp</div></div>'
     )
+    # Определяем project_id для скриптов по utm_campaign активного диалога
+    wa_scripts_project_id = 0
+    if conv_id and active_conv:
+        _utm_cam = (active_conv.get("utm_campaign") or "").strip()
+        _proj = db.get_project_by_utm(_utm_cam) if _utm_cam else None
+        if _proj:
+            wa_scripts_project_id = _proj["id"]
+    if not wa_scripts_project_id:
+        _all_projects = db.get_projects()
+        if _all_projects:
+            wa_scripts_project_id = _all_projects[0]["id"]
+
     content = f"""{WA_CSS}<div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
       <div class="conv-list">
         <div class="conv-search">{status_bar}{status_tabs}<input type="text" id="wa-search-input" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
@@ -796,7 +808,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
 
     // ── Панель скриптов WA ────────────────────────────────────────────────────
     var _waScriptsPanelOpen = true;
-    var _waScriptsData = [];
+    var _waScriptsProjectId = {wa_scripts_project_id};
 
     function toggleWaScriptsPanel() {{
       var panel = document.getElementById('wa-scripts-panel');
@@ -833,15 +845,14 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
       var html = '';
       Object.keys(cats).sort().forEach(function(cat) {{
         html += '<div style="margin-bottom:10px">'
-          + '<div style="font-size:.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:4px 6px">'
-          + cat + '</div>';
+          + '<div style="font-size:.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:4px 6px">' + cat + '</div>';
         cats[cat].forEach(function(s) {{
-          html += '<div class="wa-script-item" data-title="'+(s.title||'').toLowerCase()+'" data-body="'+(s.body||'').toLowerCase()+'"'
-            + ' onclick="injectWaScript('+JSON.stringify(s.body)+')"'
-            + ' style="cursor:pointer;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1px solid var(--border);background:var(--bg3);transition:background .15s"'
-            + ' onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'var(--bg3)\'">'
-            + '<div style="font-size:.8rem;font-weight:600;color:var(--text);margin-bottom:2px">' + (s.title||'') + '</div>'
-            + '<div style="font-size:.73rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (s.body||'').substring(0,60) + (s.body&&s.body.length>60?'…':'') + '</div>'
+          html += '<div class="wa-script-item" data-title="' + (s.title||'').toLowerCase() + '" data-body="' + (s.body||'').toLowerCase() + '"' 
+            + ' onclick="injectWaScript(' + JSON.stringify(s.body) + ')"' 
+            + ' style="cursor:pointer;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1px solid var(--border);background:var(--bg3)"' 
+            + ' onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'var(--bg3)\'">' 
+            + '<div style="font-size:.8rem;font-weight:600;color:var(--text);margin-bottom:2px">' + (s.title||'') + '</div>' 
+            + '<div style="font-size:.73rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (s.body||'').substring(0,60) + (s.body&&s.body.length>60?'…':'') + '</div>' 
             + '</div>';
         }});
         html += '</div>';
@@ -864,12 +875,6 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
 
     async function loadWaScripts(projectId) {{
       if(!projectId) {{
-        try {{
-          var r = await fetch('/api/projects_list');
-          if(r.ok){{ var d=await r.json(); if(d.projects&&d.projects.length) projectId=d.projects[0].id; }}
-        }} catch(e){{}}
-      }}
-      if(!projectId) {{
         document.getElementById('wa-scripts-list').innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Создайте проект в Настройках</div>';
         return;
       }}
@@ -877,24 +882,13 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         var r = await fetch('/api/scripts?project_id=' + projectId);
         if(!r.ok) throw new Error(r.status);
         var d = await r.json();
-        _waScriptsData = d.scripts || [];
-        renderWaScripts(_waScriptsData);
+        renderWaScripts(d.scripts || []);
       }} catch(e) {{
         document.getElementById('wa-scripts-list').innerHTML = '<div style="color:var(--text3);font-size:.8rem;text-align:center;padding:20px">Ошибка загрузки</div>';
       }}
     }}
 
-    (function(){{
-      var cid = ACTIVE_CONV_ID || 0;
-      if(cid) {{
-        fetch('/api/wa_conv_project?conv_id=' + cid)
-          .then(function(r){{ return r.ok ? r.json() : null; }})
-          .then(function(d){{ loadWaScripts(d && d.project_id ? d.project_id : 0); }})
-          .catch(function(){{ loadWaScripts(0); }});
-      }} else {{
-        loadWaScripts(0);
-      }}
-    }})();
+    loadWaScripts(_waScriptsProjectId);
         </script>"""
     return HTMLResponse(base(content, "wa_chat", request))
 

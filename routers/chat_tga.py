@@ -573,6 +573,10 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             scripts_project_id = _all_projects[0]["id"]
 
     _tga_scripts_js = """
+    <style>
+    .tga-script-item:hover { background: var(--bg) !important; }
+    .wa-script-item:hover  { background: var(--bg) !important; }
+    </style>
     <script>
     function filterTgConvs(q){
       var list=document.getElementById('tg-conv-items');
@@ -615,7 +619,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
       Object.keys(cats).sort().forEach(function(cat) {
         html += '<div style="margin-bottom:10px"><div style="font-size:.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:4px 6px">' + cat + '</div>';
         cats[cat].forEach(function(s) {
-          html += '<div class="tga-script-item" data-title="'+(s.title||'').toLowerCase()+'" data-body="'+(s.body||'').toLowerCase()+'" onclick="injectTgaScript('+JSON.stringify(s.body)+')" style="cursor:pointer;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1px solid var(--border);background:var(--bg3)" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'var(--bg3)\'">'
+          html += '<div class="tga-script-item" data-title="'+(s.title||'').toLowerCase()+'" data-body="'+(s.body||'').toLowerCase()+'" onclick="injectTgaScript('+JSON.stringify(s.body)+')" style="cursor:pointer;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1px solid var(--border);background:var(--bg3)" >'
             + '<div style="font-size:.8rem;font-weight:600;color:var(--text);margin-bottom:2px">'+(s.title||'')+'</div>'
             + '<div style="font-size:.73rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(s.body||'').substring(0,60)+(s.body&&s.body.length>60?'\u2026':'')+'</div></div>';
         });

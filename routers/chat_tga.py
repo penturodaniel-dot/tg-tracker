@@ -656,7 +656,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
         c.style.display=Array.from(c.querySelectorAll('.tga-script-item')).some(function(i){return i.style.display!=='none';})?'':'none';
       });
     }
-    renderTgaScripts(_tgaAllScripts);
+    document.addEventListener("DOMContentLoaded", function(){ renderTgaScripts(_tgaAllScripts); });
     </script>""").replace("TGA_SCRIPTS_JSON_PLACEHOLDER", _scripts_json)
     tga_search_script = _tga_scripts_js
     return HTMLResponse(base(tga_search_script + content_html, "tg_account_chat", request))

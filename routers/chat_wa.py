@@ -118,12 +118,13 @@ def _resolve_pixels(conv: dict) -> dict:
         proj_name = ""
 
     return {
-        "fb_pixel":        fb_pixel,
-        "fb_token":        fb_token,
-        "tt_pixel":        tt_pixel,
-        "tt_token":        tt_token,
-        "test_event_code": (project.get("test_event_code") if project else None) or db.get_setting("test_event_code") or None,
-        "project_name":    proj_name,
+        "fb_pixel":           fb_pixel,
+        "fb_token":           fb_token,
+        "tt_pixel":           tt_pixel,
+        "tt_token":           tt_token,
+        "test_event_code":    (project.get("test_event_code") if project else None) or db.get_setting("test_event_code") or None,
+        "tt_test_event_code": (project.get("tt_test_event_code") if project else None) or db.get_setting("tt_test_event_code") or None,
+        "project_name":       proj_name,
     }
 
 
@@ -274,7 +275,9 @@ async def wa_webhook(request: Request):
                             px["tt_pixel"], px["tt_token"],
                             user_id=wa_number,
                             utm_source=_utm_src, utm_campaign=_campaign,
-                            ttclid=_fresh_conv.get("ttclid") or _fbclid or None,
+                            ttclid=_fresh_conv.get("ttclid",
+                            test_event_code=px["tt_test_event_code"],
+                        ) or _fbclid or None,
                             ttp=_fresh_conv.get("ttp") or None,
                             event_source_url=f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/",
                         )
@@ -1068,7 +1071,9 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
             user_id=wa_number,
             ip=request.client.host if request.client else None,
             utm_source=utm_src, utm_campaign=campaign,
-            ttclid=conv.get("ttclid") or fbclid or None,
+            ttclid=conv.get("ttclid",
+                            test_event_code=px["tt_test_event_code"],
+                        ) or fbclid or None,
             event_source_url=f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/",
         )
     return RedirectResponse(f"/wa/chat?conv_id={conv_id}", 303)

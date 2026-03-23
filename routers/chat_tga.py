@@ -94,12 +94,13 @@ def _resolve_pixels(conv: dict) -> dict:
         proj_name = ""
 
     return {
-        "fb_pixel":        fb_pixel,
-        "fb_token":        fb_token,
-        "tt_pixel":        tt_pixel,
-        "tt_token":        tt_token,
-        "test_event_code": (project.get("test_event_code") if project else None) or db.get_setting("test_event_code") or None,
-        "project_name":    proj_name,
+        "fb_pixel":           fb_pixel,
+        "fb_token":           fb_token,
+        "tt_pixel":           tt_pixel,
+        "tt_token":           tt_token,
+        "test_event_code":    (project.get("test_event_code") if project else None) or db.get_setting("test_event_code") or None,
+        "tt_test_event_code": (project.get("tt_test_event_code") if project else None) or db.get_setting("tt_test_event_code") or None,
+        "project_name":       proj_name,
     }
 
 
@@ -954,7 +955,9 @@ async def tg_account_webhook(request: Request):
                     if px["tt_pixel"] and px["tt_token"] and tiktok_capi:
                         await tiktok_capi.send_lead_event(
                             px["tt_pixel"], px["tt_token"],
-                            user_id=str(tg_user_id),
+                            user_id=str(tg_user_id,
+                            test_event_code=px["tt_test_event_code"],
+                        ),
                             utm_source=_utm_src, utm_campaign=_campaign,
                             ttclid=_fresh_conv.get("ttclid") or _fbclid or None,
                             ttp=_fresh_conv.get("ttp") or None,
@@ -1062,7 +1065,9 @@ async def tg_account_send_lead(request: Request, conv_id: int = Form(...)):
     if px["tt_pixel"] and px["tt_token"] and tiktok_capi:
         await tiktok_capi.send_lead_event(
             px["tt_pixel"], px["tt_token"],
-            user_id=conv.get("tg_user_id", ""),
+            user_id=conv.get("tg_user_id", "",
+                            test_event_code=px["tt_test_event_code"],
+                        ),
             ip=request.client.host if request.client else None,
             utm_source=utm_src, utm_campaign=campaign,
             ttclid=conv.get("ttclid") or fbclid or None,

@@ -112,6 +112,11 @@ def _project_card(p: dict, msg: str = "", err: str = "") -> str:
               <input type="text" name="test_event_code" value="{p.get('test_event_code','')}" placeholder="TEST12345"/>
               <div style="font-size:.72rem;color:var(--text3);margin-top:4px">Найди в Events Manager → Test Events → скопируй код</div>
             </div>
+            <div class="field-group" style="flex:1;min-width:200px">
+              <div class="field-label">🎵 TikTok Test Event Code <span style="color:var(--text3);font-weight:400">(пусто = отключено)</span></div>
+              <input type="text" name="tt_test_event_code" value="{p.get('tt_test_event_code','')}" placeholder="Вставь tt_test_id"/>
+              <div style="font-size:.72rem;color:var(--text3);margin-top:4px">Найди в Events Manager → Test Events → скопируй tt_test_id</div>
+            </div>
           </div>
 
           <div style="margin-top:14px">
@@ -191,7 +196,8 @@ async def projects_update(request: Request,
                           tt_pixel_id: str = Form(""),
                           tt_token: str = Form(""),
                           utm_campaigns: str = Form(""),
-                          test_event_code: str = Form("")):
+                          test_event_code: str = Form(""),
+                          tt_test_event_code: str = Form("")):
     user, e = require_auth(request, role="admin")
     if e: return e
     kwargs = dict(
@@ -200,6 +206,7 @@ async def projects_update(request: Request,
         tt_pixel_id=tt_pixel_id,
         utm_campaigns=utm_campaigns,
         test_event_code=test_event_code,
+        tt_test_event_code=tt_test_event_code,
     )
     if fb_token.strip():  kwargs["fb_token"]  = fb_token.strip()
     if tt_token.strip():  kwargs["tt_token"]  = tt_token.strip()

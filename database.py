@@ -267,6 +267,8 @@ class Database:
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbp TEXT",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS fbc TEXT",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS ttclid TEXT",
+                    "ALTER TABLE projects ADD COLUMN IF NOT EXISTS tt_test_event_code TEXT DEFAULT ''",
+                    "ALTER TABLE projects ADD COLUMN IF NOT EXISTS tt_token TEXT DEFAULT ''",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS ttp TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
                     "ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
@@ -1928,14 +1930,16 @@ class Database:
     def update_project(self, project_id: int, name: str = None,
                        fb_pixel_id: str = None, fb_token: str = None,
                        tt_pixel_id: str = None, tt_token: str = None,
-                       utm_campaigns: str = None, test_event_code: str = None):
+                       utm_campaigns: str = None, test_event_code: str = None,
+                       tt_test_event_code: str = None):
         fields, vals = [], []
         if name         is not None: fields.append("name=%s");          vals.append(name.strip())
         if fb_pixel_id  is not None: fields.append("fb_pixel_id=%s");   vals.append(fb_pixel_id.strip())
         if fb_token     is not None: fields.append("fb_token=%s");      vals.append(fb_token.strip())
         if tt_pixel_id  is not None: fields.append("tt_pixel_id=%s");   vals.append(tt_pixel_id.strip())
         if tt_token     is not None: fields.append("tt_token=%s");      vals.append(tt_token.strip())
-        if utm_campaigns    is not None: fields.append("utm_campaigns=%s");    vals.append(utm_campaigns.strip())
+        if utm_campaigns         is not None: fields.append("utm_campaigns=%s");         vals.append(utm_campaigns.strip())
+        if tt_test_event_code is not None: fields.append("tt_test_event_code=%s"); vals.append(tt_test_event_code or "")
         if test_event_code  is not None: fields.append("test_event_code=%s"); vals.append(test_event_code.strip())
         if not fields: return
         vals.append(project_id)

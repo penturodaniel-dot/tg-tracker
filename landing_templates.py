@@ -80,7 +80,10 @@ def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = 
     .cta-btn{{display:flex;align-items:center;justify-content:center;width:100%;padding:15px;border-radius:13px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;font-weight:600;font-size:.9rem;text-decoration:none;margin-bottom:10px;cursor:pointer;transition:background .15s}}
     .cta-btn:hover{{background:rgba(255,255,255,.16)}}
     .msg-book{{text-align:center;font-size:1rem;color:rgba(255,255,255,.6);padding:20px;border-top:1px solid rgba(255,255,255,.07)}}
-    </style></head><body>
+    </style>
+    {pixel_js}
+    {_tiktok_pixel_js(tt_pixel)}
+    </head><body>
     <div class="top-bar">⚠️ No Fake Service 💯</div>
     <div class="hero"><div class="hero-inner">
       <h1>Relaxation and Balance 🌿✨</h1>
@@ -115,8 +118,6 @@ def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = 
         {btn_html}
       </div>
     </div>
-    {pixel_js}
-    {_tiktok_pixel_js(tt_pixel)}
     <script>
     // Сохраняем fbp cookie если нет (нужен для CAPI matching)
     (function(){{
@@ -245,15 +246,14 @@ document.addEventListener('click',function(e){{
 
 
 def _tiktok_pixel_js(pixel_id: str) -> str:
-    """TikTok Pixel код"""
+    """TikTok Pixel код (актуальная версия)"""
     if not pixel_id:
         return ""
-    return f"""<!-- TikTok Pixel -->
+    return f"""<!-- TikTok Pixel Code Start -->
 <script>
-!function(w,d,t){{w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"],ttq.setAndDefer=function(t,e){{t[e]=function(){{t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}}}; for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){{for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e}},ttq.load=function(e,n){{var i="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{{}},ttq._i[e]=[],ttq._i[e]._u=i,ttq._t=ttq._t||{{}},ttq._t[e]=+new Date,ttq._o=ttq._o||{{}},ttq._o[e]=n||{{}};var o=document.createElement("script");o.type="text/javascript",o.async=!0,o.src=i+"?sdkid="+e+"&lib="+t;var a=document.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)}};ttq.load('{pixel_id}');ttq.page();}}(window,document,'ttq');
+!function(w,d,t){{w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){{t[e]=function(){{t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){{for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e}},ttq.load=function(e,n){{var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;ttq._i=ttq._i||{{}},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{{}},ttq._t[e]=+new Date,ttq._o=ttq._o||{{}},ttq._o[e]=n||{{}};n=document.createElement("script");n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=document.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)}};ttq.load('{pixel_id}');ttq.page();}}(window,document,'ttq');
 </script>
-<!-- End TikTok Pixel -->"""
-
+<!-- TikTok Pixel Code End -->"""
 
 def _t(texts: dict, key: str, default: str = "") -> str:
     """Получить текст из словаря texts. Если пустой — вернуть default."""

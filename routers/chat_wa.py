@@ -444,6 +444,8 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T"," ")
         ucount = f'<span class="unread-num unread-badge" style="background:#25d366">{c["unread_count"]}</span>' if c["unread_count"] > 0 else ""
         dot = "🟢" if c["status"] == "open" else "⚫"
+        _wa_is_fb = bool(c.get("fbclid") or c.get("utm_source") in ("facebook", "fb"))
+        _wa_is_tt = bool(c.get("utm_source") in ("tiktok", "tt"))
         if c.get("fbclid"):
             src_badge = '<span class="source-badge source-fb">🔵 FB</span>'
         elif _wa_is_tt:
@@ -452,8 +454,6 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             src_badge = f'<span class="source-badge source-tg">{c["utm_source"][:12]}</span>'
         else:
             src_badge = '<span class="source-badge source-organic">organic</span>'
-        _wa_is_fb = bool(c.get("fbclid") or c.get("utm_source") in ("facebook", "fb"))
-        _wa_is_tt = bool(c.get("utm_source") in ("tiktok", "tt"))
         wa_utm_parts = []
         if _wa_is_fb:  # Задача 14: UTM только если не органика
             if c.get("utm_campaign"):  wa_utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {c["utm_campaign"][:30]}</span>')

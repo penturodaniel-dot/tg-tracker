@@ -413,7 +413,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 var bdg=c.unread_count>0?'<span class="unread-num unread-badge">'+c.unread_count+'</span>':'';
                 var inBase=c.in_staff?'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>':'';
                 var isFb=!!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));
-                var src=isFb?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
+                var isTt=!!(c.utm_source&&(c.utm_source==='tiktok'||c.utm_source==='tt'));var src=isFb?'<span class="source-badge source-fb">🔵 FB</span>':isTt?'<span class="source-badge" style="background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a">🎵 TT</span>':'<span class="source-badge source-organic">organic</span>';
                 var uname=c.username?'@'+escTga(c.username):'';
                 var utm='';
                 if(isFb){{
@@ -518,7 +518,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                     var bdg=c.unread_count>0?'<span class="unread-num unread-badge">'+c.unread_count+'</span>':'';
                     var inBase=c.in_staff?'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>':'';
                     var isFb=!!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));
-                    var src=isFb?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
+                    var isTt=!!(c.utm_source&&(c.utm_source==='tiktok'||c.utm_source==='tt'));var src=isFb?'<span class="source-badge source-fb">🔵 FB</span>':isTt?'<span class="source-badge" style="background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a">🎵 TT</span>':'<span class="source-badge source-organic">organic</span>';
                     var uname=c.username?'@'+escTga(c.username):'';
                     var utm='';
                     if(isFb){{
@@ -957,13 +957,12 @@ async def tg_account_webhook(request: Request):
                     if px["tt_pixel"] and px["tt_token"] and tiktok_capi:
                         await tiktok_capi.send_lead_event(
                             px["tt_pixel"], px["tt_token"],
-                            user_id=str(tg_user_id,
-                            test_event_code=px["tt_test_event_code"],
-                        ),
+                            user_id=str(tg_user_id),
                             utm_source=_utm_src, utm_campaign=_campaign,
                             ttclid=_fresh_conv.get("ttclid") or _fbclid or None,
                             ttp=_fresh_conv.get("ttp") or None,
                             event_source_url="https://t.me/",
+                            test_event_code=px["tt_test_event_code"],
                         )
                 except Exception as _e:
                     log.error(f"[AutoLead/TGA] error: {_e}")
@@ -1067,13 +1066,12 @@ async def tg_account_send_lead(request: Request, conv_id: int = Form(...)):
     if px["tt_pixel"] and px["tt_token"] and tiktok_capi:
         await tiktok_capi.send_lead_event(
             px["tt_pixel"], px["tt_token"],
-            user_id=conv.get("tg_user_id", "",
-                            test_event_code=px["tt_test_event_code"],
-                        ),
+            user_id=str(conv.get("tg_user_id", "")),
             ip=request.client.host if request.client else None,
             utm_source=utm_src, utm_campaign=campaign,
             ttclid=conv.get("ttclid") or fbclid or None,
             event_source_url="https://t.me/",
+            test_event_code=px["tt_test_event_code"],
         )
     return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
 

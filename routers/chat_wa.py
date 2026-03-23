@@ -278,11 +278,10 @@ async def wa_webhook(request: Request):
                             px["tt_pixel"], px["tt_token"],
                             user_id=wa_number,
                             utm_source=_utm_src, utm_campaign=_campaign,
-                            ttclid=_fresh_conv.get("ttclid",
-                            test_event_code=px["tt_test_event_code"],
-                        ) or _fbclid or None,
+                            ttclid=_fresh_conv.get("ttclid") or _fbclid or None,
                             ttp=_fresh_conv.get("ttp") or None,
                             event_source_url=f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/",
+                            test_event_code=px["tt_test_event_code"],
                         )
                 except Exception as _e:
                     log.error(f"[AutoLead/WA] error: {_e}")
@@ -447,11 +446,14 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         dot = "🟢" if c["status"] == "open" else "⚫"
         if c.get("fbclid"):
             src_badge = '<span class="source-badge source-fb">🔵 FB</span>'
+        elif _wa_is_tt:
+            src_badge = '<span class="source-badge" style="background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a">🎵 TT</span>'
         elif c.get("utm_source"):
             src_badge = f'<span class="source-badge source-tg">{c["utm_source"][:12]}</span>'
         else:
             src_badge = '<span class="source-badge source-organic">organic</span>'
         _wa_is_fb = bool(c.get("fbclid") or c.get("utm_source") in ("facebook", "fb"))
+        _wa_is_tt = bool(c.get("utm_source") in ("tiktok", "tt"))
         wa_utm_parts = []
         if _wa_is_fb:  # Задача 14: UTM только если не органика
             if c.get("utm_campaign"):  wa_utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {c["utm_campaign"][:30]}</span>')
@@ -659,7 +661,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             var isFb=!!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));
             var dot=c.status==='open'?'🟢':'⚫';
             var bdg=c.unread_count>0?'<span class="unread-num unread-badge" style="background:#25d366">'+c.unread_count+'</span>':'';
-            var src=isFb?'<span class="source-badge source-fb">🔵 FB</span>':'<span class="source-badge source-organic">organic</span>';
+            var isTt=!!(c.utm_source&&(c.utm_source==='tiktok'||c.utm_source==='tt'));var src=isFb?'<span class="source-badge source-fb">🔵 FB</span>':isTt?'<span class="source-badge" style="background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a">🎵 TT</span>':'<span class="source-badge source-organic">organic</span>';
             var utm=isFb&&c.utm_campaign?'<span class="utm-tag">🎯 '+esc(c.utm_campaign.substring(0,25))+'</span>':'';
             var el=document.createElement('a');
             el.href='/wa/chat?conv_id='+c.id+'&status_filter='+encodeURIComponent(WA_SF);
@@ -1074,10 +1076,9 @@ async def wa_send_lead(request: Request, conv_id: int = Form(...)):
             user_id=wa_number,
             ip=request.client.host if request.client else None,
             utm_source=utm_src, utm_campaign=campaign,
-            ttclid=conv.get("ttclid",
-                            test_event_code=px["tt_test_event_code"],
-                        ) or fbclid or None,
+            ttclid=conv.get("ttclid") or fbclid or None,
             event_source_url=f"https://wa.me/{wa_number}" if wa_number else "https://wa.me/",
+            test_event_code=px["tt_test_event_code"],
         )
     return RedirectResponse(f"/wa/chat?conv_id={conv_id}", 303)
 

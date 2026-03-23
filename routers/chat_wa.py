@@ -201,6 +201,7 @@ async def wa_webhook(request: Request):
                 ref_id = ref_match.group(1)
                 click_data = db.get_staff_click(ref_id)
                 if click_data and not click_data.get("used"):
+                    log.info(f"[WA webhook] Applying UTM by ref:{ref_id} src={click_data.get('utm_source')} campaign={click_data.get('utm_campaign')} ttclid={'✓' if click_data.get('ttclid') else '—'}")
                     db.apply_utm_to_wa_conv(conv["id"],
                         fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),
                         fbc=click_data.get("fbc"),
@@ -212,7 +213,7 @@ async def wa_webhook(request: Request):
                         ttclid=click_data.get("ttclid"), ttp=click_data.get("ttp"))
                     db.mark_staff_click_used(ref_id)
                     conv = db.get_wa_conversation(conv["id"]) or conv
-                    log.info(f"[WA webhook] UTM by ref:{ref_id} utm={click_data.get('utm_campaign')} fbc={'✓' if click_data.get('fbc') else '—'}")
+                    log.info(f"[WA webhook] UTM applied: src={conv.get('utm_source')} campaign={conv.get('utm_campaign')}")
             elif is_new_conv:
                 # Трекинг по временному окну — ищем последний клик за 30 минут
                 click_data = db.get_staff_click_recent_any(minutes=15)
@@ -236,12 +237,14 @@ async def wa_webhook(request: Request):
             log.info(f"[WA webhook] saved msg conv={conv['id']} from={wa_number}: {text[:50]}")
 
             # ── Авто-отправка Lead при первом сообщении (только FB/TikTok трафик) ──
+            # Перечитываем conv после apply_utm чтобы увидеть обновлённые UTM
+            conv = db.get_wa_conversation(conv["id"]) or conv
             _is_paid_traffic = bool(
                 conv.get("fbclid") or
                 (conv.get("utm_source") or "").lower() in ("facebook", "fb", "tiktok", "tt")
             )
-            _is_fb_traffic = _is_paid_traffic  # оставляем имя для совместимости
-            _fresh_conv = db.get_wa_conversation(conv["id"]) or conv
+            _is_fb_traffic = _is_paid_traffic
+            _fresh_conv = conv
             _is_first_msg = (_fresh_conv.get("unread_count") or 0) == 1
             if _is_fb_traffic and _is_first_msg and not _fresh_conv.get("fb_event_sent"):
                 try:

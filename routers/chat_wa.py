@@ -401,10 +401,13 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             else:
                 wa_card_link = f'<a href="/staff/create_from_wa?conv_id={conv_id}" style="display:inline-flex;align-items:center;gap:4px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:.73rem;text-decoration:none">+ Создать карточку</a>'
             wa_utm_tags = ""
-            _is_wa_fb = bool(active_conv.get("fbclid") or active_conv.get("utm_source") in ("facebook", "fb"))
+            _is_wa_fb = bool(active_conv.get("fbclid") or (active_conv.get("utm_source") or "") in ("facebook", "fb"))
+            _is_wa_tt = bool((active_conv.get("utm_source") or "") in ("tiktok", "tt"))
             utm_parts = []
             if _is_wa_fb:
                 utm_parts.append('<span style="background:#1e3a5f;color:#60a5fa;padding:2px 8px;border-radius:5px;font-size:.72rem">🔵 Facebook</span>')
+            elif _is_wa_tt:
+                utm_parts.append('<span style="background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a;padding:2px 8px;border-radius:5px;font-size:.72rem">🎵 TikTok</span>')
             elif active_conv.get("utm_source"):
                 utm_parts.append(f'<span style="background:var(--border);color:var(--text2);padding:2px 8px;border-radius:5px;font-size:.72rem">{active_conv["utm_source"]}</span>')
             if active_conv.get("utm_campaign"):
@@ -458,7 +461,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         else:
             src_badge = '<span class="source-badge source-organic">organic</span>'
         wa_utm_parts = []
-        if _wa_is_fb:  # Задача 14: UTM только если не органика
+        if _wa_is_fb or _wa_is_tt:  # UTM для FB и TikTok трафика
             if c.get("utm_campaign"):  wa_utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {c["utm_campaign"][:30]}</span>')
             if c.get("utm_content"):   wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 {c["utm_content"][:20]}</span>')
             if c.get("utm_term"):      wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {c["utm_term"][:20]}</span>')

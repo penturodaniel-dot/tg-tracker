@@ -713,7 +713,8 @@ class Database:
             conn.commit()
 
     def apply_utm_to_wa_conv(self, conv_id, fbclid=None, fbp=None, fbc=None, utm_source=None,
-                              utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None):
+                              utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None,
+                              ttclid=None, ttp=None):
         """Применяет UTM к существующему WA диалогу (если ещё не заполнен)"""
         with self._conn() as conn:
             with conn.cursor() as cur:
@@ -723,10 +724,14 @@ class Database:
                     WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
                     (fbclid, fbp, fbc, utm_source, utm_medium, utm_campaign,
                      utm_content, utm_term, conv_id))
+                if ttclid or ttp:
+                    cur.execute("UPDATE wa_conversations SET ttclid=%s, ttp=%s WHERE id=%s",
+                                (ttclid or '', ttp or '', conv_id))
             conn.commit()
 
     def apply_utm_to_tg_conv(self, conv_id, fbclid=None, fbp=None, fbc=None, utm_source=None,
-                              utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None):
+                              utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None,
+                              ttclid=None, ttp=None):
         """Применяет UTM к существующему TG аккаунт диалогу"""
         with self._conn() as conn:
             with conn.cursor() as cur:
@@ -736,6 +741,9 @@ class Database:
                     WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
                     (fbclid, fbp, fbc, utm_source, utm_medium, utm_campaign,
                      utm_content, utm_term, conv_id))
+                if ttclid or ttp:
+                    cur.execute("UPDATE tg_account_conversations SET ttclid=%s, ttp=%s WHERE id=%s",
+                                (ttclid or '', ttp or '', conv_id))
             conn.commit()
 
     def save_utm(self, click_data, conversation_id=None, join_id=None):

@@ -134,12 +134,16 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T", " ")
         ucount = f'<span class="unread-num unread-badge">{c["unread_count"]}</span>' if c.get("unread_count", 0) > 0 else ""
         dot = "🟢" if c["status"] == "open" else "⚫"
-        # Задача 3: FB только если fbclid или utm_source=facebook
-        is_fb = bool(c.get("fbclid") or c.get("utm_source") in ("facebook", "fb"))
-        src_badge = '<span class="source-badge source-fb">🔵 FB</span>' if is_fb else '<span class="source-badge source-organic">organic</span>'
-        # Задача 14: UTM только если не органика
-        utm_parts = []
+        is_fb = bool(c.get("fbclid") or (c.get("utm_source") or "") in ("facebook", "fb"))
+        is_tt = bool((c.get("utm_source") or "") in ("tiktok", "tt"))
         if is_fb:
+            src_badge = '<span class="source-badge source-fb">🔵 FB</span>'
+        elif is_tt:
+            src_badge = '<span class="source-badge" style="background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a">🎵 TT</span>'
+        else:
+            src_badge = '<span class="source-badge source-organic">organic</span>'
+        utm_parts = []
+        if is_fb or is_tt:
             if c.get("utm_campaign"): utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {c["utm_campaign"][:25]}</span>')
             if c.get("utm_content"):  utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 {c["utm_content"][:20]}</span>')
             if c.get("utm_term"):     utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {c["utm_term"][:20]}</span>')

@@ -907,7 +907,7 @@ async def tg_account_webhook(request: Request):
                         log.info(f"[TG webhook] UTM by ref_code: ref={_ref_id} utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
                 # Шаг 2: fallback — ищем любой клик за последние 15 минут
                 if not click_data:
-                    click_data = db.get_staff_click_recent_any(minutes=15)
+                    click_data = db.get_staff_click_recent_any(minutes=15, target_type="telegram")
                     if click_data:
                         log.info(f"[TG webhook] UTM by time-window utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
                 if click_data and not click_data.get("used"):

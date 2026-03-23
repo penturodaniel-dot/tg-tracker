@@ -216,7 +216,7 @@ async def wa_webhook(request: Request):
                     log.info(f"[WA webhook] UTM applied: src={conv.get('utm_source')} campaign={conv.get('utm_campaign')}")
             elif is_new_conv:
                 # Трекинг по временному окну — ищем последний клик за 30 минут
-                click_data = db.get_staff_click_recent_any(minutes=15)
+                click_data = db.get_staff_click_recent_any(minutes=15, target_type="whatsapp")
                 if click_data:
                     db.apply_utm_to_wa_conv(conv["id"],
                         fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),

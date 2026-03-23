@@ -208,7 +208,8 @@ async def wa_webhook(request: Request):
                         utm_medium=click_data.get("utm_medium"),
                         utm_campaign=click_data.get("utm_campaign"),
                         utm_content=click_data.get("utm_content"),
-                        utm_term=click_data.get("utm_term"))
+                        utm_term=click_data.get("utm_term"),
+                        ttclid=click_data.get("ttclid"), ttp=click_data.get("ttp"))
                     db.mark_staff_click_used(ref_id)
                     conv = db.get_wa_conversation(conv["id"]) or conv
                     log.info(f"[WA webhook] UTM by ref:{ref_id} utm={click_data.get('utm_campaign')} fbc={'✓' if click_data.get('fbc') else '—'}")
@@ -223,7 +224,8 @@ async def wa_webhook(request: Request):
                         utm_medium=click_data.get("utm_medium"),
                         utm_campaign=click_data.get("utm_campaign"),
                         utm_content=click_data.get("utm_content"),
-                        utm_term=click_data.get("utm_term"))
+                        utm_term=click_data.get("utm_term"),
+                        ttclid=click_data.get("ttclid"), ttp=click_data.get("ttp"))
                     db.mark_staff_click_used(click_data["ref_id"])
                     conv = db.get_wa_conversation(conv["id"]) or conv
                     log.info(f"[WA webhook] UTM by time-window utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'} fbc={'✓' if click_data.get('fbc') else '—'}")
@@ -236,7 +238,7 @@ async def wa_webhook(request: Request):
             # ── Авто-отправка Lead при первом сообщении (только FB/TikTok трафик) ──
             _is_paid_traffic = bool(
                 conv.get("fbclid") or
-                conv.get("utm_source", "").lower() in ("facebook", "fb", "tiktok", "tt")
+                (conv.get("utm_source") or "").lower() in ("facebook", "fb", "tiktok", "tt")
             )
             _is_fb_traffic = _is_paid_traffic  # оставляем имя для совместимости
             _fresh_conv = db.get_wa_conversation(conv["id"]) or conv
@@ -378,7 +380,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
                 wa_avatar = '<div style="width:40px;height:40px;border-radius:50%;background:#052e16;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">💚</div>'
 
             fb_sent = active_conv.get("fb_event_sent")
-            _is_fb_conv = bool(active_conv.get("fbclid") or active_conv.get("utm_source","").lower() in ("facebook","fb"))
+            _is_fb_conv = bool(active_conv.get("fbclid") or active_(conv.get("utm_source") or "").lower() in ("facebook","fb"))
             if fb_sent:
                 fb_btn = '<span class="badge-green">✅ Lead отправлен (авто)</span>'
             elif _is_fb_conv:

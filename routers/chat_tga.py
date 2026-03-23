@@ -200,7 +200,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 '<span class="badge-green">✅ Lead отправлен (авто)</span>'
                 if fb_sent else (
                     '<span style="color:var(--text3);font-size:.73rem;opacity:.7">⏳ Ждём первого сообщения...</span>'
-                    if (active_conv.get("fbclid") or active_conv.get("utm_source","").lower() in ("facebook","fb"))
+                    if (active_conv.get("fbclid") or (active_conv.get("utm_source") or "").lower() in ("facebook","fb","tiktok","tt"))
                     else f'<form method="post" action="/tg_account/send_lead" style="display:inline"><input type="hidden" name="conv_id" value="{conv_id}"/><button class="btn btn-sm" style="font-size:.73rem;background:#1e3a5f;border:1px solid #3b5998;color:#93c5fd">📤 Lead → FB</button></form>'
                 )
             )
@@ -919,7 +919,7 @@ async def tg_account_webhook(request: Request):
             # ── Авто-отправка Lead при первом сообщении (только FB/TikTok трафик) ──
             _is_paid_traffic = bool(
                 conv.get("fbclid") or
-                conv.get("utm_source", "").lower() in ("facebook", "fb", "tiktok", "tt")
+                (conv.get("utm_source") or "").lower() in ("facebook", "fb", "tiktok", "tt")
             )
             _is_fb_traffic = _is_paid_traffic  # оставляем имя для совместимости
             _fresh_conv = db.get_tg_account_conversation(conv["id"]) or conv
@@ -1149,7 +1149,7 @@ async def api_tga_chat_panel(request: Request, conv_id: int = 0, status_filter: 
     active_tag_ids = {tg["id"] for tg in active_ctags}
     tga_tags_html = _render_conv_tags_picker(active_ctags, all_tags, active_tag_ids, "tga", conv_id)
     fb_sent = active_conv.get("fb_event_sent")
-    _is_fb_tga = bool(active_conv.get("fbclid") or active_conv.get("utm_source","").lower() in ("facebook","fb"))
+    _is_fb_tga = bool(active_conv.get("fbclid") or (active_conv.get("utm_source") or "").lower() in ("facebook","fb","tiktok","tt"))
     if fb_sent:
         lead_btn = '<span class="badge-green">✅ Lead отправлен (авто)</span>'
     elif _is_fb_tga:

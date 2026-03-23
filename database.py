@@ -266,6 +266,8 @@ class Database:
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS fbp TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbp TEXT",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS fbc TEXT",
+                    "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS ttclid TEXT",
+                    "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS ttp TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
                     "ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_medium TEXT",
@@ -652,17 +654,19 @@ class Database:
     # ── Staff Clicks (HR landing UTM tracking) ────────────────────────────────
     def save_staff_click(self, ref_id, target_url, target_type="wa", landing_slug="",
                          fbclid=None, fbp=None, fbc=None, utm_source=None, utm_medium=None,
-                         utm_campaign=None, utm_content=None, utm_term=None):
+                         utm_campaign=None, utm_content=None, utm_term=None,
+                         ttclid=None, ttp=None):
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""INSERT INTO staff_clicks
                     (ref_id,target_url,target_type,landing_slug,fbclid,fbp,fbc,
-                     utm_source,utm_medium,utm_campaign,utm_content,utm_term,created_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                     utm_source,utm_medium,utm_campaign,utm_content,utm_term,
+                     ttclid,ttp,created_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (ref_id) DO NOTHING""",
                     (ref_id, target_url, target_type, landing_slug, fbclid, fbp, fbc,
                      utm_source, utm_medium, utm_campaign, utm_content, utm_term,
-                     datetime.utcnow().isoformat()))
+                     ttclid, ttp, datetime.utcnow().isoformat()))
             conn.commit()
 
     def get_staff_click(self, ref_id):

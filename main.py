@@ -1749,7 +1749,8 @@ async def landing_contact_delete(request: Request, contact_id: int = Form(...), 
 async def public_landing(request: Request, slug: str,
                           fbclid: str = None, utm_source: str = None,
                           utm_medium: str = None, utm_campaign: str = None,
-                          utm_content: str = None, utm_term: str = None):
+                          utm_content: str = None, utm_term: str = None,
+                          ttclid: str = None, tt_test_id: str = None):
     # Глобальные пиксели (fallback)
     pixel_clients = db.get_setting("pixel_id_clients") or db.get_setting("pixel_id", "")
     pixel_staff   = db.get_setting("pixel_id_staff", "")
@@ -1814,6 +1815,9 @@ async def public_landing(request: Request, slug: str,
         utm_term=utm_term or "",
         landing_slug=slug,
     )
+    # TikTok click ID — для CAPI matching
+    _ttclid = ttclid or request.query_params.get("ttclid", "")
+    _ttp = request.cookies.get("_ttp", "")
     tracked_contacts = []
     for c in raw_contacts:
         if c.get("url"):
@@ -1831,7 +1835,8 @@ async def public_landing(request: Request, slug: str,
                 import time as _time
                 _fbc = f"fb.1.{int(_time.time()*1000)}.{utm_params['fbclid']}"
             db.save_staff_click(ref_id, c["url"], c_type, slug,
-                fbc=_fbc, **{k:v for k,v in utm_params.items() if k!='landing_slug'})
+                fbc=_fbc, ttclid=_ttclid, ttp=_ttp,
+                **{k:v for k,v in utm_params.items() if k!='landing_slug'})
             go_url = f"{app_url}/go-staff?ref={ref_id}"
             tracked_contacts.append({**c, "url": go_url, "type": c_type})
         else:
@@ -1878,7 +1883,40 @@ async def go_staff_redirect(request: Request, ref: str = ""):
         pre_text = _urlparse.quote(f"ref:{ref} Приветствую! Я по поводу работы. Увидела ваше объявление, подскажите, пожалуйста, какие условия работы?")
         destination = f"{target_url}{sep}text={pre_text}"
 
-    log.info(f"[/go-staff] ref={ref} type={target_type} utm={click.get('utm_campaign')} fbclid={'✓' if click.get('fbclid') else '—'}")
+    log.info(f"[/go-staff] ref={ref} type={target_type} utm={click.get('utm_campaign')} fbclid={'✓' if click.get('fbclid') else '—'} ttclid={'✓' if click.get('ttclid') else '—'}")
+
+    # TikTok CAPI — Subscribe событие при клике на кнопку лендинга
+    try:
+        _landing_slug = click.get('landing_slug', '')
+        _landing_obj = db.get_landing_by_slug(_landing_slug) if _landing_slug else None
+        _tt_pixel, _tt_token = '', ''
+        if _landing_obj and _landing_obj.get('project_id'):
+            _proj = db.get_project(int(_landing_obj['project_id']))
+            if _proj:
+                _tt_pixel = _proj.get('tt_pixel_id', '') or ''
+                _tt_token = _proj.get('tt_token', '') or ''
+        if not _tt_pixel:
+            _tt_pixel = db.get_setting('tiktok_pixel_id', '') or ''
+            _tt_token = db.get_setting('tt_access_token', '') or ''
+        if _tt_pixel and _tt_token:
+            import asyncio as _asyncio
+            _app_url_tt = db.get_setting('app_url', '').rstrip('/')
+            _asyncio.create_task(tiktok_capi.send_event(
+                pixel_id=_tt_pixel,
+                access_token=_tt_token,
+                event_name='Subscribe',
+                user_id=str(click.get('ref_id', '')),
+                ip=request.client.host if request.client else None,
+                user_agent=request.headers.get('user-agent', ''),
+                ttclid=click.get('ttclid') or '',
+                ttp=click.get('ttp') or '',
+                utm_source=click.get('utm_source') or '',
+                utm_campaign=click.get('utm_campaign') or '',
+                event_source_url=f"{_app_url_tt}/l/{_landing_slug}" if _landing_slug else '',
+            ))
+            log.info(f"[/go-staff] TT CAPI Subscribe queued pixel={_tt_pixel[:8]}...")
+    except Exception as _tt_err:
+        log.warning(f"[/go-staff] TT CAPI error: {_tt_err}")
 
     return HTMLResponse(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
     <meta http-equiv="refresh" content="0;url={destination}">

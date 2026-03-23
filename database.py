@@ -268,6 +268,10 @@ class Database:
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS fbc TEXT",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS ttclid TEXT",
                     "ALTER TABLE projects ADD COLUMN IF NOT EXISTS tt_test_event_code TEXT DEFAULT ''",
+                    "ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS ttclid TEXT DEFAULT ''",
+                    "ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS ttp TEXT DEFAULT ''",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS ttclid TEXT DEFAULT ''",
+                    "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS ttp TEXT DEFAULT ''",
                     "ALTER TABLE projects ADD COLUMN IF NOT EXISTS tt_token TEXT DEFAULT ''",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS ttp TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
@@ -1843,7 +1847,8 @@ class Database:
         _cache.invalidate_prefix('tga_convs:')
 
     def apply_utm_to_tg_account_conv(self, conv_id, fbclid=None, fbp=None, utm_source=None,
-                                      utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None):
+                                      utm_medium=None, utm_campaign=None, utm_content=None, utm_term=None,
+                                      ttclid=None, ttp=None):
         self._init_tg_account_tables()
         with self._conn() as conn:
             with conn.cursor() as cur:
@@ -1852,6 +1857,11 @@ class Database:
                         utm_campaign=%s, utm_content=%s, utm_term=%s
                     WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
                     (fbclid, fbp, utm_source, utm_medium, utm_campaign, utm_content, utm_term, conv_id))
+                # ttclid/ttp сохраняем всегда если есть
+                if ttclid or ttp:
+                    cur.execute("""UPDATE tg_account_conversations
+                        SET ttclid=%s, ttp=%s WHERE id=%s""",
+                        (ttclid or '', ttp or '', conv_id))
             conn.commit()
         _cache.invalidate_prefix('tga_convs:')
 

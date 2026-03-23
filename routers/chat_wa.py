@@ -382,7 +382,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
                 wa_avatar = '<div style="width:40px;height:40px;border-radius:50%;background:#052e16;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">💚</div>'
 
             fb_sent = active_conv.get("fb_event_sent")
-            _is_fb_conv = bool(active_conv.get("fbclid") or active_(conv.get("utm_source") or "").lower() in ("facebook","fb"))
+            _is_fb_conv = bool(active_conv.get("fbclid") or (active_conv.get("utm_source") or "").lower() in ("facebook","fb","tiktok","tt"))
             if fb_sent:
                 fb_btn = '<span class="badge-green">✅ Lead отправлен (авто)</span>'
             elif _is_fb_conv:

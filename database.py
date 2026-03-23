@@ -721,7 +721,7 @@ class Database:
                 cur.execute("""UPDATE wa_conversations
                     SET fbclid=%s, fbp=%s, fbc=%s, utm_source=%s, utm_medium=%s,
                         utm_campaign=%s, utm_content=%s, utm_term=%s
-                    WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
+                    WHERE id=%s AND (utm_source IS NULL OR utm_source='')""",
                     (fbclid, fbp, fbc, utm_source, utm_medium, utm_campaign,
                      utm_content, utm_term, conv_id))
                 if ttclid or ttp:
@@ -738,7 +738,7 @@ class Database:
                 cur.execute("""UPDATE tg_account_conversations
                     SET fbclid=%s, fbp=%s, fbc=%s, utm_source=%s, utm_medium=%s,
                         utm_campaign=%s, utm_content=%s, utm_term=%s
-                    WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
+                    WHERE id=%s AND (utm_source IS NULL OR utm_source='')""",
                     (fbclid, fbp, fbc, utm_source, utm_medium, utm_campaign,
                      utm_content, utm_term, conv_id))
                 if ttclid or ttp:
@@ -1863,7 +1863,7 @@ class Database:
                 cur.execute("""UPDATE tg_account_conversations
                     SET fbclid=%s, fbp=%s, utm_source=%s, utm_medium=%s,
                         utm_campaign=%s, utm_content=%s, utm_term=%s
-                    WHERE id=%s AND (fbclid IS NULL OR fbclid='')""",
+                    WHERE id=%s AND (utm_source IS NULL OR utm_source='')""",
                     (fbclid, fbp, utm_source, utm_medium, utm_campaign, utm_content, utm_term, conv_id))
                 # ttclid/ttp сохраняем всегда если есть
                 if ttclid or ttp:

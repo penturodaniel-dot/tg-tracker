@@ -1883,7 +1883,7 @@ async def go_staff_redirect(request: Request, ref: str = ""):
         pre_text = _urlparse.quote(f"ref:{ref} Приветствую! Я по поводу работы. Увидела ваше объявление, подскажите, пожалуйста, какие условия работы?")
         destination = f"{target_url}{sep}text={pre_text}"
 
-    log.info(f"[/go-staff] ref={ref} type={target_type} utm={click.get('utm_campaign')} fbclid={'✓' if click.get('fbclid') else '—'} ttclid={'✓' if click.get('ttclid') else '—'}")
+    log.info(f"[/go-staff] ref={ref} type={target_type} src={click.get('utm_source')} utm={click.get('utm_campaign')} fbclid={'✓' if click.get('fbclid') else '—'} ttclid={'✓' if click.get('ttclid') else '—'} ttp={'✓' if click.get('ttp') else '—'}")
 
     # TikTok CAPI — Subscribe событие при клике на кнопку лендинга
     try:

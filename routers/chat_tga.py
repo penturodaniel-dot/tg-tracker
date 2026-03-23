@@ -903,6 +903,7 @@ async def tg_account_webhook(request: Request):
                     if click_data:
                         log.info(f"[TG webhook] UTM by time-window utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
                 if click_data and not click_data.get("used"):
+                    log.info(f"[TG webhook] Applying UTM: src={click_data.get('utm_source')} campaign={click_data.get('utm_campaign')} ttclid={'✓' if click_data.get('ttclid') else '—'}")
                     db.apply_utm_to_tg_conv(conv["id"],
                         fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),
                         fbc=click_data.get("fbc"),

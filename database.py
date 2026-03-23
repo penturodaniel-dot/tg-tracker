@@ -694,16 +694,22 @@ class Database:
                     (landing_slug, cutoff))
                 r = cur.fetchone(); return dict(r) if r else None
 
-    def get_staff_click_recent_any(self, minutes: int = 30):
-        """Ищет любой последний неиспользованный клик за последние N минут"""
+    def get_staff_click_recent_any(self, minutes: int = 30, target_type: str = None):
+        """Ищет последний неиспользованный клик за последние N минут, опционально по типу"""
         from datetime import timedelta
         cutoff = (datetime.utcnow() - timedelta(minutes=minutes)).isoformat()
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("""SELECT * FROM staff_clicks
-                    WHERE used=0 AND created_at>=%s
-                    ORDER BY created_at DESC LIMIT 1""",
-                    (cutoff,))
+                if target_type:
+                    cur.execute("""SELECT * FROM staff_clicks
+                        WHERE used=0 AND created_at>=%s AND target_type=%s
+                        ORDER BY created_at DESC LIMIT 1""",
+                        (cutoff, target_type))
+                else:
+                    cur.execute("""SELECT * FROM staff_clicks
+                        WHERE used=0 AND created_at>=%s
+                        ORDER BY created_at DESC LIMIT 1""",
+                        (cutoff,))
                 r = cur.fetchone(); return dict(r) if r else None
 
     def mark_staff_click_used(self, ref_id):

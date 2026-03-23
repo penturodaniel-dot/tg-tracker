@@ -908,7 +908,8 @@ async def tg_account_webhook(request: Request):
                         fbc=click_data.get("fbc"),
                         utm_source=click_data.get("utm_source"), utm_medium=click_data.get("utm_medium"),
                         utm_campaign=click_data.get("utm_campaign"), utm_content=click_data.get("utm_content"),
-                        utm_term=click_data.get("utm_term"))
+                        utm_term=click_data.get("utm_term"),
+                        ttclid=click_data.get("ttclid"), ttp=click_data.get("ttp"))
                     db.mark_staff_click_used(click_data["ref_id"])
                     conv = db.get_tg_account_conversation(conv["id"]) or conv
 
@@ -916,10 +917,11 @@ async def tg_account_webhook(request: Request):
             db.update_tg_account_last_message(tg_user_id, text, increment_unread=True)
 
             # ── Авто-отправка Lead при первом сообщении (только FB/TikTok трафик) ──
-            _is_fb_traffic = bool(
+            _is_paid_traffic = bool(
                 conv.get("fbclid") or
-                conv.get("utm_source", "").lower() in ("facebook", "fb")
+                conv.get("utm_source", "").lower() in ("facebook", "fb", "tiktok", "tt")
             )
+            _is_fb_traffic = _is_paid_traffic  # оставляем имя для совместимости
             _fresh_conv = db.get_tg_account_conversation(conv["id"]) or conv
             _is_first_msg = (_fresh_conv.get("unread_count") or 0) == 1
             if _is_fb_traffic and _is_first_msg and not _fresh_conv.get("fb_event_sent"):

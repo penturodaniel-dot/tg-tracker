@@ -234,10 +234,11 @@ async def wa_webhook(request: Request):
             log.info(f"[WA webhook] saved msg conv={conv['id']} from={wa_number}: {text[:50]}")
 
             # ── Авто-отправка Lead при первом сообщении (только FB/TikTok трафик) ──
-            _is_fb_traffic = bool(
+            _is_paid_traffic = bool(
                 conv.get("fbclid") or
-                conv.get("utm_source", "").lower() in ("facebook", "fb")
+                conv.get("utm_source", "").lower() in ("facebook", "fb", "tiktok", "tt")
             )
+            _is_fb_traffic = _is_paid_traffic  # оставляем имя для совместимости
             _fresh_conv = db.get_wa_conversation(conv["id"]) or conv
             _is_first_msg = (_fresh_conv.get("unread_count") or 0) == 1
             if _is_fb_traffic and _is_first_msg and not _fresh_conv.get("fb_event_sent"):

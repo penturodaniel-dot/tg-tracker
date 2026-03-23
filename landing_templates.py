@@ -287,7 +287,7 @@ def _build_buttons(contacts: list) -> str:
     return html
 
 
-def _render_staff_landing(landing: dict, contacts: list, pixel_id: str = "", db=None) -> str:
+def _render_staff_landing(landing: dict, contacts: list, pixel_id: str = "", tt_pixel: str = "", db=None) -> str:
     """Диспетчер шаблонов HR лендингов"""
     import json as _json
     try:
@@ -296,7 +296,7 @@ def _render_staff_landing(landing: dict, contacts: list, pixel_id: str = "", db=
     except:
         template = "massage_job"
 
-    tt_pixel_id = (db.get_setting("tiktok_pixel_id", "") if db else "") or (db.get_setting("tt_pixel_id", "") if db else "")
+    tt_pixel_id = tt_pixel or (db.get_setting("tiktok_pixel_id", "") if db else "") or (db.get_setting("tt_pixel_id", "") if db else "")
     px   = _pixel_js(pixel_id) + _tiktok_pixel_js(tt_pixel_id)
     year = __import__('datetime').datetime.now().year
     name = landing.get("name","HR")

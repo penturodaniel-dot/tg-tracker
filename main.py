@@ -1837,7 +1837,7 @@ async def public_landing(request: Request, slug: str,
         else:
             tracked_contacts.append(c)
 
-    return HTMLResponse(_render_staff_landing(landing, tracked_contacts, pixel_id=fb_pixel_staff, db=db))
+    return HTMLResponse(_render_staff_landing(landing, tracked_contacts, pixel_id=fb_pixel_staff, tt_pixel=tt_pixel_staff, db=db))
 
 
 @app.get("/go-staff")

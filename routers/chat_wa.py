@@ -465,7 +465,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             if c.get("utm_campaign"):  wa_utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {c["utm_campaign"][:30]}</span>')
             if c.get("utm_content"):   wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 {c["utm_content"][:20]}</span>')
             if c.get("utm_term"):      wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {c["utm_term"][:20]}</span>')
-        utm_line = '<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">' + "".join(wa_utm_parts) + '</div>' if wa_utm_parts else ""
+        utm_line = ""  # UTM скрыты из списка — видны внутри чата
         # Задача 5: отметка "уже в базе"
         wa_staff_info = wa_in_staff.get(c["id"])
         wa_in_base = f'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>' if wa_staff_info else ""
@@ -479,7 +479,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         conv_items += f"""<a href="/wa/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}" data-conv-id="{c['id']}">
           <div class="conv-name"><span>{dot} {wa_display_name}</span>{ucount}{wa_in_base}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
-          <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +{c['wa_number'][:10]} · {t[-5:]} {src_badge}</div>
+          <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +{c['wa_number'][:10]} · {t[3:10].replace("-",".")} {t[-5:]} {src_badge}</div>
           {utm_line}{wa_tags_line}</div></a>"""
     if not conv_items:
         conv_items = '<div class="empty" style="padding:36px 14px">Нет WA диалогов.<br><br>Подключи WhatsApp<br>в разделе WA Настройка</div>'
@@ -674,7 +674,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             el.innerHTML='<div class="conv-item" data-conv-id="'+c.id+'">'
               +'<div class="conv-name"><span>'+dot+' '+esc(c.visitor_name||c.wa_number)+'</span>'+bdg+'</div>'
               +'<div class="conv-preview">'+(c.last_message||'Нет сообщений').substring(0,50)+'</div>'
-              +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +'+esc(c.wa_number||'')+' · '+c.last_message_at.substring(11,16)+' '+src+'</div>'
+              +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +'+esc(c.wa_number||'')+' · '+(c.last_message_at?c.last_message_at.substring(5,10).replace(/-/g,'.')+' ':'')+c.last_message_at.substring(11,16)+' '+src+'</div>'
               +(utm?'<div class="conv-meta">'+utm+'</div>':'')
               +'</div>';
             list.insertBefore(el,sentinel);
@@ -745,8 +745,8 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             el.innerHTML='<a href="/wa/chat?conv_id='+c.id+'&status_filter='+WA_SF+'"><div class="conv-item" data-conv-id="'+c.id+'">'
               +'<div class="conv-name"><span>'+dot+' '+esc(c.visitor_name)+'</span>'+bdg+inBase+'</div>'
               +'<div class="conv-preview">'+esc(c.last_message||'Нет сообщений')+'</div>'
-              +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +'+c.wa_number.substring(0,10)+' · '+c.last_message_at.substring(11,16)+' '+srcBadge+'</div>'
-              +utmLine+tagsLine
+              +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +'+c.wa_number.substring(0,10)+' · '+(c.last_message_at?c.last_message_at.substring(5,10).replace(/-/g,'.')+' ':'')+c.last_message_at.substring(11,16)+' '+srcBadge+'</div>'
+              +tagsLine
               +'</div></a>';
             list.insertBefore(el.firstChild, list.firstChild);
           }});

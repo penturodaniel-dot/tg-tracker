@@ -142,12 +142,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             src_badge = '<span class="source-badge" style="background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a">🎵 TT</span>'
         else:
             src_badge = '<span class="source-badge source-organic">organic</span>'
-        utm_parts = []
-        if is_fb or is_tt:
-            if c.get("utm_campaign"): utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {c["utm_campaign"][:25]}</span>')
-            if c.get("utm_content"):  utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 {c["utm_content"][:20]}</span>')
-            if c.get("utm_term"):     utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {c["utm_term"][:20]}</span>')
-        utm_line = '<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">' + "".join(utm_parts) + '</div>' if utm_parts else ""
+        utm_line = ""  # UTM скрыты из списка — видны внутри чата
         tg_uname = c.get("username") or ""
         uname_str = ("@" + tg_uname) if tg_uname else str(c.get("tg_user_id", ""))
         # Задача 5: отметка "уже в базе"
@@ -160,7 +155,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             tags_html = "".join(f'<span class="conv-tag" style="background:{tg["color"]}22;color:{tg["color"]};border-color:{tg["color"]}55">{tg["name"]}</span>' for tg in ctags)
             tags_line = f'<div class="tags-row">{tags_html}</div>'
         # Задача 6: порядок как в WA
-        conv_items += (f'<a href="/tg_account/chat?conv_id={c["id"]}&status_filter={status_filter}">' + f'<div class="{cls}" data-conv-id="{c["id"]}">' + f'<div class="conv-name"><span>{dot} {c["visitor_name"]}</span>{ucount}{in_base_badge}</div>' + f'<div class="conv-preview">{(c.get("last_message") or "Нет сообщений")[:50]}</div>' + f'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 {uname_str} · {t[-5:]} {src_badge}</div>' + utm_line + tags_line + '</div></a>')
+        conv_items += (f'<a href="/tg_account/chat?conv_id={c["id"]}&status_filter={status_filter}">' + f'<div class="{cls}" data-conv-id="{c["id"]}">' + f'<div class="conv-name"><span>{dot} {c["visitor_name"]}</span>{ucount}{in_base_badge}</div>' + f'<div class="conv-preview">{(c.get("last_message") or "Нет сообщений")[:50]}</div>' + f'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 {uname_str} · {t[3:10].replace("-",".")} {t[-5:]} {src_badge}</div>' + utm_line + tags_line + '</div></a>')
 
     if not conv_items:
         conv_items = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Нет диалогов</div>'
@@ -433,8 +428,8 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 return '<a href="/tg_account/chat?conv_id='+c.id+'"><div class="conv-item'+active+'" data-conv-id="'+c.id+'">'
                   +'<div class="conv-name"><span>'+dot+' '+escTga(c.visitor_name)+'</span>'+bdg+inBase+'</div>'
                   +'<div class="conv-preview">'+escTga((c.last_message||'Нет сообщений').substring(0,50))+'</div>'
-                  +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 '+uname+' · '+(c.last_message_at||'').substring(11,16)+' '+src+'</div>'
-                  +utmLine+'</div></a>';
+                  +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 '+uname+' · '+(c.last_message_at?c.last_message_at.substring(5,10).replace(/-/g,'.')+' ':'')+( c.last_message_at||'').substring(11,16)+' '+src+'</div>'
+                  +'</div></a>';
               }}).join('')||'<div style="padding:20px;text-align:center;color:var(--text3)">Нет диалогов</div>';
             }}
 
@@ -470,7 +465,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                     el.innerHTML='<div class="conv-item" data-conv-id="'+c.id+'">'
                       +'<div class="conv-name"><span>'+dot+' '+escTga(c.visitor_name)+'</span>'+bdg+'</div>'
                       +'<div class="conv-preview">'+escTga((c.last_message||'Нет сообщений').substring(0,50))+'</div>'
-                      +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 '+uname+' · '+c.last_message_at.substring(11,16)+' '+src+'</div>'
+                      +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 '+uname+' · '+(c.last_message_at?c.last_message_at.substring(5,10).replace(/-/g,'.')+' ':'')+c.last_message_at.substring(11,16)+' '+src+'</div>'
                       +(utm?'<div class="conv-meta">'+utm+'</div>':'')
                       +'</div>';
                     list.insertBefore(el, sentinel);
@@ -538,8 +533,8 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                     return '<a href="/tg_account/chat?conv_id='+c.id+'"><div class="conv-item'+active+'" data-conv-id="'+c.id+'">'
                       +'<div class="conv-name"><span>'+dot+' '+escTga(c.visitor_name)+'</span>'+bdg+inBase+'</div>'
                       +'<div class="conv-preview">'+escTga((c.last_message||'Нет сообщений').substring(0,50))+'</div>'
-                      +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 '+uname+' · '+c.last_message_at.substring(11,16)+' '+src+'</div>'
-                      +utmLine+'</div></a>';
+                      +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 '+uname+' · '+(c.last_message_at?c.last_message_at.substring(5,10).replace(/-/g,'.')+' ':'')+c.last_message_at.substring(11,16)+' '+src+'</div>'
+                      +'</div></a>';
                   }}).join('')||'<div style="padding:20px;text-align:center;color:var(--text3)">Нет диалогов</div>';
                   if(ACTIVE_TGA_CONV_ID===0&&data.convs.length>0){{
                     window.location.href='/tg_account/chat?conv_id='+data.convs[0].id;

@@ -136,7 +136,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             f'style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid {tg["color"]}55;background:{tg["color"]}22;color:{tg["color"]};font-size:.72rem;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;opacity:.55">#{tg["name"]}</button>'
             for tg in all_tags
         )
-        tag_filter_html = f'''<div id="tag-filter-bar" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:6px;scrollbar-width:none">
+        tag_filter_html = f'''<div id="tag-filter-bar" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-right:8px">
             <button onclick="filterByTag(0,this)" id="tag-all-btn" style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:var(--orange);color:#fff;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">Все</button>
             {tag_btns}
         </div>'''

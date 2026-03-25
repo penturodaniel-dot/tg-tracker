@@ -127,6 +127,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
     tabs_html = f'<div style="display:flex;gap:4px;margin-bottom:8px">{tab("open","Открытые")}{tab("closed","Закрытые")}{tab("all","Все")}</div>'
 
     # Панель фильтрации по тегам
+    all_tags = db.get_all_tags()
     if all_tags:
         tag_btns = ''.join(
             f'<button onclick="filterByTag({tg["id"]},this)" '
@@ -146,7 +147,6 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
     conv_items = ""
     tga_in_staff = db.get_tga_conv_ids_in_staff()
     tga_tags_map = db.get_all_conv_tags_map("tga")
-    all_tags = db.get_all_tags()
     for c in convs:
         cls = "conv-item active" if c["id"] == conv_id else "conv-item"
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T", " ")

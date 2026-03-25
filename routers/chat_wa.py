@@ -506,7 +506,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             f'style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid {tg["color"]}55;background:{tg["color"]}22;color:{tg["color"]};font-size:.72rem;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;opacity:.55">#{tg["name"]}</button>'
             for tg in wa_all_tags
         )
-        wa_tag_filter_html = f'<div id="wa-tag-filter-bar" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-right:8px"><button onclick="filterByTagWa(0,this)" id="wa-tag-all-btn" style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:#25d366;color:#fff;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">Все</button>{wa_tag_btns}</div>'
+        wa_tag_filter_html = f'<div id="wa-tag-filter-bar" style="display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch"><button onclick="filterByTagWa(0,this)" id="wa-tag-all-btn" style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:#25d366;color:#fff;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">Все</button>{wa_tag_btns}</div>'
     else:
         wa_tag_filter_html = ''
 
@@ -543,7 +543,8 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
 
     content = f"""{WA_CSS}<style>.wa-script-item:hover{{background:var(--bg)!important;}}</style><div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
       <div class="conv-list" id="wa-conv-list">
-        <div class="conv-search">{status_bar}{status_tabs}{wa_tag_filter_html}<input type="text" id="wa-search-input" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
+        <div class="conv-search">{status_bar}{status_tabs}<input type="text" id="wa-search-input" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
+        {"<div style=\"padding:6px 12px 4px;border-bottom:1px solid var(--border)\">" + wa_tag_filter_html + "</div>" if wa_tag_filter_html else ""}
         <div id="conv-items">{conv_items}<div id="wa-scroll-sentinel" style="height:1px"></div></div>
       </div>
       <div class="chat-window">{right}</div>

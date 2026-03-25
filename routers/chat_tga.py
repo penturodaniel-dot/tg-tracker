@@ -136,7 +136,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             f'style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid {tg["color"]}55;background:{tg["color"]}22;color:{tg["color"]};font-size:.72rem;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;opacity:.55">#{tg["name"]}</button>'
             for tg in all_tags
         )
-        tag_filter_html = f'''<div id="tag-filter-bar" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-right:8px">
+        tag_filter_html = f'''<div id="tag-filter-bar" style="display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch">
             <button onclick="filterByTag(0,this)" id="tag-all-btn" style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:var(--orange);color:#fff;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">Все</button>
             {tag_btns}
         </div>'''
@@ -596,7 +596,8 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
 
     content_html = f"""<div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
       <div class="conv-list" id="conv-list">
-        <div class="conv-search">{conn_badge}{tabs_html}{tag_filter_html}<input type="text" id="tga-search-input" placeholder="🔍 Поиск..." oninput="filterTgConvs(this.value)" style="width:100%;margin-top:6px"/></div>
+        <div class="conv-search">{conn_badge}{tabs_html}<input type="text" id="tga-search-input" placeholder="🔍 Поиск..." oninput="filterTgConvs(this.value)" style="width:100%;margin-top:6px"/></div>
+        {"<div style=\"padding:6px 12px 4px;border-bottom:1px solid var(--border);overflow:visible\">" + tag_filter_html + "</div>" if tag_filter_html else ""}
         <div id="tg-conv-items" style="overflow-y:auto;flex:1">{conv_items}<div id="tga-scroll-sentinel" style="height:1px"></div></div>
       </div>
       <div class="chat-window">{chat_area}</div>

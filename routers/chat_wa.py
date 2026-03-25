@@ -544,7 +544,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     content = f"""{WA_CSS}<style>.wa-script-item:hover{{background:var(--bg)!important;}}</style><div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
       <div class="conv-list" id="wa-conv-list">
         <div class="conv-search">{status_bar}{status_tabs}<input type="text" id="wa-search-input" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
-        {"<div style=\"padding:6px 12px 4px;border-bottom:1px solid var(--border)\">" + wa_tag_filter_html + "</div>" if wa_tag_filter_html else ""}
+        {_wa_tag_wrap}
         <div id="conv-items">{conv_items}<div id="wa-scroll-sentinel" style="height:1px"></div></div>
       </div>
       <div class="chat-window">{right}</div>
@@ -1150,4 +1150,5 @@ async def api_wa_messages(request: Request, conv_id: int, after: int = 0):
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
     return JSONResponse({"messages": db.get_new_wa_messages(conv_id, after)})
 
+    _wa_tag_wrap = ('<div style="padding:6px 12px 4px;border-bottom:1px solid var(--border)">' + wa_tag_filter_html + '</div>') if wa_tag_filter_html else ""
 

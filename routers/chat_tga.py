@@ -136,12 +136,12 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             f'style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid {tg["color"]}55;background:{tg["color"]}22;color:{tg["color"]};font-size:.72rem;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;opacity:.55">#{tg["name"]}</button>'
             for tg in all_tags
         )
-        tag_filter_html = f'''<div id="tag-filter-bar" style="display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch">
+        tag_filter_html = f'''<div id="tag-filter-bar" style="display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 12px 8px;border-bottom:1px solid var(--border);box-sizing:border-box">
             <button onclick="filterByTag(0,this)" id="tag-all-btn" style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:var(--orange);color:#fff;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">Все</button>
             {tag_btns}
         </div>'''
     else:
-        tag_filter_html = ''''''''''''
+        tag_filter_html = ''
 
 
     conv_items = ""
@@ -594,7 +594,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             }})();
                         </script>"""
 
-    _tga_tag_wrap = ('<div style="padding:6px 12px 4px;border-bottom:1px solid var(--border)">' + tag_filter_html + '</div>') if tag_filter_html else ""
+    _tga_tag_wrap = tag_filter_html  # без wrapper - стили прямо на tag-filter-bar
     content_html = f"""<div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
       <div class="conv-list" id="conv-list">
         <div class="conv-search">{conn_badge}{tabs_html}<input type="text" id="tga-search-input" placeholder="🔍 Поиск..." oninput="filterTgConvs(this.value)" style="width:100%;margin-top:6px"/></div>

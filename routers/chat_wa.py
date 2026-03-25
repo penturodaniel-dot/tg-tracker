@@ -506,7 +506,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             f'style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid {tg["color"]}55;background:{tg["color"]}22;color:{tg["color"]};font-size:.72rem;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;opacity:.55">#{tg["name"]}</button>'
             for tg in wa_all_tags
         )
-        wa_tag_filter_html = f'<div id="wa-tag-filter-bar" style="display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch"><button onclick="filterByTagWa(0,this)" id="wa-tag-all-btn" style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:#25d366;color:#fff;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">Все</button>{wa_tag_btns}</div>'
+        wa_tag_filter_html = f'<div id="wa-tag-filter-bar" style="display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 12px 8px;border-bottom:1px solid var(--border);box-sizing:border-box"><button onclick="filterByTagWa(0,this)" id="wa-tag-all-btn" style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:#25d366;color:#fff;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">Все</button>{wa_tag_btns}</div>'
     else:
         wa_tag_filter_html = ''
 
@@ -540,7 +540,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             _all_sc_wa.append({"project": _p["name"], "scripts": _sc})
     import json as _json_wa
     _wa_scripts_json = _json_wa.dumps(_all_sc_wa, ensure_ascii=False)
-    _wa_tag_wrap = ('<div style="padding:6px 12px 4px;border-bottom:1px solid var(--border)">' + wa_tag_filter_html + '</div>') if wa_tag_filter_html else ""
+    _wa_tag_wrap = wa_tag_filter_html  # без wrapper
 
     content = f"""{WA_CSS}<style>.wa-script-item:hover{{background:var(--bg)!important;}}</style><div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
       <div class="conv-list" id="wa-conv-list">

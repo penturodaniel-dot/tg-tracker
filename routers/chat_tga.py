@@ -294,31 +294,6 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             var lastTgAId=(function(){{var m=document.querySelectorAll('#tga-msgs .msg[data-id]');return m.length?m[m.length-1].dataset.id:0;}})();
             function escTga(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}}
 
-    var _activeTagFilter=0;
-    function filterByTag(tagId,btn){{
-      _activeTagFilter=tagId;
-      var bar=document.getElementById('tag-filter-bar');
-      if(!bar)return;
-      bar.querySelectorAll('button').forEach(function(b){{
-        var isActive=(tagId===0&&b.id==='tag-all-btn')||(String(tagId)===String(b.dataset.tagId));
-        if(isActive){{
-          b.style.opacity='1';
-          b.style.fontWeight='700';
-          if(b.id==='tag-all-btn'){{b.style.background='var(--orange)';b.style.color='#fff';}}
-          else{{b.style.background=b.getAttribute('data-color');b.style.color='#fff';b.style.borderColor=b.getAttribute('data-color');}}
-        }}else{{
-          b.style.opacity='0.55';b.style.fontWeight='500';
-          if(b.id==='tag-all-btn'){{b.style.background='';b.style.color='var(--text3)';}}
-          else{{b.style.background=b.getAttribute('data-bg');b.style.color=b.getAttribute('data-color');b.style.borderColor=b.getAttribute('data-border');}}
-        }}
-      }});
-      document.querySelectorAll('#conv-list .conv-item').forEach(function(el){{
-        var wrap=el.closest('a')||el.parentElement;
-        if(tagId===0){{wrap.style.display='';return;}}
-        var tags=(el.dataset.tags||'').split('|').filter(Boolean);
-        wrap.style.display=tags.indexOf(String(tagId))>=0?'':'none';
-      }});
-    }}
             function showTgaError(msg){{
               var errDiv=document.getElementById('tga-send-error');
               var errTxt=document.getElementById('tga-send-error-text');
@@ -595,7 +570,33 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                         </script>"""
 
     _tga_tag_wrap = tag_filter_html  # без wrapper - стили прямо на tag-filter-bar
-    content_html = f"""<div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
+    _tag_filter_script = """<script>var _activeTagFilter=0;
+    function filterByTag(tagId,btn){
+      _activeTagFilter=tagId;
+      var bar=document.getElementById('tag-filter-bar');
+      if(!bar)return;
+      bar.querySelectorAll('button').forEach(function(b){
+        var isActive=(tagId===0&&b.id==='tag-all-btn')||(String(tagId)===String(b.dataset.tagId));
+        if(isActive){
+          b.style.opacity='1';
+          b.style.fontWeight='700';
+          if(b.id==='tag-all-btn'){b.style.background='var(--orange)';b.style.color='#fff';}
+          else{b.style.background=b.getAttribute('data-color');b.style.color='#fff';b.style.borderColor=b.getAttribute('data-color');}
+        }else{
+          b.style.opacity='0.55';b.style.fontWeight='500';
+          if(b.id==='tag-all-btn'){b.style.background='';b.style.color='var(--text3)';}
+          else{b.style.background=b.getAttribute('data-bg');b.style.color=b.getAttribute('data-color');b.style.borderColor=b.getAttribute('data-border');}
+        }
+      });
+      document.querySelectorAll('#conv-list .conv-item').forEach(function(el){
+        var wrap=el.closest('a')||el.parentElement;
+        if(tagId===0){wrap.style.display='';return;}
+        var tags=(el.dataset.tags||'').split('|').filter(Boolean);
+        wrap.style.display=tags.indexOf(String(tagId))>=0?'':'none';
+      });
+    }</script>
+    """
+    content_html = _tag_filter_script + f"""<div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
       <div class="conv-list" id="conv-list">
         <div class="conv-search">{conn_badge}{tabs_html}<input type="text" id="tga-search-input" placeholder="🔍 Поиск..." oninput="filterTgConvs(this.value)" style="width:100%;margin-top:6px"/></div>
         {_tga_tag_wrap}

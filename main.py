@@ -380,7 +380,7 @@ textarea{resize:vertical;min-height:80px;line-height:1.5}
 
 /* ── CHAT ────────────────────────────────────────── */
 .chat-layout{display:grid;grid-template-columns:300px 1fr;height:100vh}
-.conv-list{background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.conv-list{background:var(--bg2);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column}
 .conv-search{padding:12px;border-bottom:1px solid var(--border)}
 .conv-search input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);font-size:.82rem;outline:none;font-family:inherit}
 .conv-search input:focus{border-color:var(--orange)}

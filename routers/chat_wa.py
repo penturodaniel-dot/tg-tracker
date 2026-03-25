@@ -445,6 +445,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     conv_items = ""
     wa_in_staff  = db.get_wa_conv_ids_in_staff()
     wa_tags_map  = db.get_all_conv_tags_map("wa")
+    wa_all_tags  = db.get_all_tags()
     for c in convs:
         cls = "conv-item active" if c["id"] == conv_id else "conv-item"
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T"," ")
@@ -476,7 +477,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         if wctags:
             wt_html = "".join(f'<span class="conv-tag" style="background:{tg["color"]}22;color:{tg["color"]};border-color:{tg["color"]}55">{tg["name"]}</span>' for tg in wctags)
             wa_tags_line = f'<div class="tags-row">{wt_html}</div>'
-        conv_items += f"""<a href="/wa/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}" data-conv-id="{c['id']}">
+        conv_items += f"""<a href="/wa/chat?conv_id={c['id']}&status_filter={status_filter}"><div class="{cls}" data-conv-id="{c['id']}" data-tags="{"|".join(str(tg["id"]) for tg in wctags)}">
           <div class="conv-name"><span>{dot} {wa_display_name}</span>{ucount}{wa_in_base}</div>
           <div class="conv-preview">{c.get('last_message') or 'Нет сообщений'}</div>
           <div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">💚 +{c['wa_number'][:10]} · {t[3:10].replace("-",".")} {t[-5:]} {src_badge}</div>
@@ -496,6 +497,18 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         active_tab = "background:#25d366;color:#fff" if val == status_filter else "background:var(--bg3);color:var(--text3)"
         return f'<a href="/wa/chat?status_filter={val}" style="flex:1;text-align:center;padding:5px 0;border-radius:7px;font-size:.78rem;font-weight:600;text-decoration:none;{active_tab}">{label}</a>'
     status_tabs = f'<div style="display:flex;gap:4px;background:var(--bg2);border-radius:9px;padding:3px;margin-bottom:8px">{wa_stab("🟢 Открытые","open")}{wa_stab("⚫ Закрытые","closed")}{wa_stab("Все","all")}</div>'
+
+    if wa_all_tags:
+        wa_tag_btns = ''.join(
+            f'<button onclick="filterByTagWa({tg["id"]},this)" '
+            f'data-tag-id="{tg["id"]}" data-color="{tg["color"]}" '
+            f'data-bg="{tg["color"]}22" data-border="{tg["color"]}55" '
+            f'style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid {tg["color"]}55;background:{tg["color"]}22;color:{tg["color"]};font-size:.72rem;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;opacity:.55">#{tg["name"]}</button>'
+            for tg in wa_all_tags
+        )
+        wa_tag_filter_html = f'<div id="wa-tag-filter-bar" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:6px;scrollbar-width:none"><button onclick="filterByTagWa(0,this)" id="wa-tag-all-btn" style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:#25d366;color:#fff;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">Все</button>{wa_tag_btns}</div>'
+    else:
+        wa_tag_filter_html = ''
 
     WA_CSS = "<style>.send-btn-green{background:#25d366;color:#fff;border:none;border-radius:10px;padding:10px 18px;cursor:pointer;font-size:.87rem;font-weight:600;height:42px;flex-shrink:0}.send-btn-green:hover{background:#128c7e}.btn-green{background:#059669;color:#fff;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:.85rem;font-weight:600;white-space:nowrap}.btn-green:hover{background:#047857}</style>"
     right = f"""{header_html}
@@ -529,8 +542,8 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     _wa_scripts_json = _json_wa.dumps(_all_sc_wa, ensure_ascii=False)
 
     content = f"""{WA_CSS}<style>.wa-script-item:hover{{background:var(--bg)!important;}}</style><div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
-      <div class="conv-list">
-        <div class="conv-search">{status_bar}{status_tabs}<input type="text" id="wa-search-input" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
+      <div class="conv-list" id="wa-conv-list">
+        <div class="conv-search">{status_bar}{status_tabs}{wa_tag_filter_html}<input type="text" id="wa-search-input" placeholder="🔍 Поиск..." oninput="filterConvs(this.value)"/></div>
         <div id="conv-items">{conv_items}<div id="wa-scroll-sentinel" style="height:1px"></div></div>
       </div>
       <div class="chat-window">{right}</div>
@@ -788,6 +801,31 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
     }}
 
     function esc(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>');}}
+
+    var _activeWaTagFilter=0;
+    function filterByTagWa(tagId,btn){{
+      _activeWaTagFilter=tagId;
+      var bar=document.getElementById('wa-tag-filter-bar');
+      if(!bar)return;
+      bar.querySelectorAll('button').forEach(function(b){{
+        var isActive=(tagId===0&&b.id==='wa-tag-all-btn')||(String(tagId)===String(b.dataset.tagId));
+        if(isActive){{
+          b.style.opacity='1';b.style.fontWeight='700';
+          if(b.id==='wa-tag-all-btn'){{b.style.background='#25d366';b.style.color='#fff';}}
+          else{{b.style.background=b.getAttribute('data-color');b.style.color='#fff';b.style.borderColor=b.getAttribute('data-color');}}
+        }}else{{
+          b.style.opacity='0.55';b.style.fontWeight='500';
+          if(b.id==='wa-tag-all-btn'){{b.style.background='';b.style.color='var(--text3)';}}
+          else{{b.style.background=b.getAttribute('data-bg');b.style.color=b.getAttribute('data-color');b.style.borderColor=b.getAttribute('data-border');}}
+        }}
+      }});
+      document.querySelectorAll('#wa-conv-list .conv-item').forEach(function(el){{
+        var wrap=el.closest('a')||el.parentElement;
+        if(tagId===0){{wrap.style.display='';return;}}
+        var tags=(el.dataset.tags||'').split('|').filter(Boolean);
+        wrap.style.display=tags.indexOf(String(tagId))>=0?'':'none';
+      }});
+    }}
     function filterConvs(q){{
       var list=document.getElementById('conv-items');
       if(!list)return;

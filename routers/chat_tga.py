@@ -126,9 +126,27 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
         return f'<a href="/tg_account/chat?status_filter={val}" style="flex:1;text-align:center;padding:5px 0;border-radius:7px;font-size:.78rem;font-weight:600;text-decoration:none;{active}">{label}</a>'
     tabs_html = f'<div style="display:flex;gap:4px;margin-bottom:8px">{tab("open","Открытые")}{tab("closed","Закрытые")}{tab("all","Все")}</div>'
 
+    # Панель фильтрации по тегам
+    if all_tags:
+        tag_btns = ''.join(
+            f'<button onclick="filterByTag({tg["id"]},this)" '
+            f'data-tag-id="{tg["id"]}" data-color="{tg["color"]}" '
+            f'data-bg="{tg["color"]}22" data-border="{tg["color"]}55" '
+            f'style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid {tg["color"]}55;background:{tg["color"]}22;color:{tg["color"]};font-size:.72rem;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;opacity:.55">#{tg["name"]}</button>'
+            for tg in all_tags
+        )
+        tag_filter_html = f'''<div id="tag-filter-bar" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:6px;scrollbar-width:none">
+            <button onclick="filterByTag(0,this)" id="tag-all-btn" style="flex-shrink:0;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:var(--orange);color:#fff;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">Все</button>
+            {tag_btns}
+        </div>'''
+    else:
+        tag_filter_html = ''''''''''''
+
+
     conv_items = ""
     tga_in_staff = db.get_tga_conv_ids_in_staff()
     tga_tags_map = db.get_all_conv_tags_map("tga")
+    all_tags = db.get_all_tags()
     for c in convs:
         cls = "conv-item active" if c["id"] == conv_id else "conv-item"
         t = (c.get("last_message_at") or c["created_at"])[:16].replace("T", " ")
@@ -155,7 +173,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             tags_html = "".join(f'<span class="conv-tag" style="background:{tg["color"]}22;color:{tg["color"]};border-color:{tg["color"]}55">{tg["name"]}</span>' for tg in ctags)
             tags_line = f'<div class="tags-row">{tags_html}</div>'
         # Задача 6: порядок как в WA
-        conv_items += (f'<a href="/tg_account/chat?conv_id={c["id"]}&status_filter={status_filter}">' + f'<div class="{cls}" data-conv-id="{c["id"]}">' + f'<div class="conv-name"><span>{dot} {c["visitor_name"]}</span>{ucount}{in_base_badge}</div>' + f'<div class="conv-preview">{(c.get("last_message") or "Нет сообщений")[:50]}</div>' + f'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 {uname_str} · {t[3:10].replace("-",".")} {t[-5:]} {src_badge}</div>' + utm_line + tags_line + '</div></a>')
+        conv_items += (f'<a href="/tg_account/chat?conv_id={c["id"]}&status_filter={status_filter}">' + f'<div class="{cls}" data-conv-id="{c["id"]}" data-tags="{"|".join(str(tg["id"]) for tg in ctags)}">' + f'<div class="conv-name"><span>{dot} {c["visitor_name"]}</span>{ucount}{in_base_badge}</div>' + f'<div class="conv-preview">{(c.get("last_message") or "Нет сообщений")[:50]}</div>' + f'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 {uname_str} · {t[3:10].replace("-",".")} {t[-5:]} {src_badge}</div>' + utm_line + tags_line + '</div></a>')
 
     if not conv_items:
         conv_items = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:.85rem">Нет диалогов</div>'
@@ -275,6 +293,32 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             if(tgaMsgBox) tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
             var lastTgAId=(function(){{var m=document.querySelectorAll('#tga-msgs .msg[data-id]');return m.length?m[m.length-1].dataset.id:0;}})();
             function escTga(t){{return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}}
+
+    var _activeTagFilter=0;
+    function filterByTag(tagId,btn){{
+      _activeTagFilter=tagId;
+      var bar=document.getElementById('tag-filter-bar');
+      if(!bar)return;
+      bar.querySelectorAll('button').forEach(function(b){{
+        var isActive=(tagId===0&&b.id==='tag-all-btn')||(String(tagId)===String(b.dataset.tagId));
+        if(isActive){{
+          b.style.opacity='1';
+          b.style.fontWeight='700';
+          if(b.id==='tag-all-btn'){{b.style.background='var(--orange)';b.style.color='#fff';}}
+          else{{b.style.background=b.getAttribute('data-color');b.style.color='#fff';b.style.borderColor=b.getAttribute('data-color');}}
+        }}else{{
+          b.style.opacity='0.55';b.style.fontWeight='500';
+          if(b.id==='tag-all-btn'){{b.style.background='';b.style.color='var(--text3)';}}
+          else{{b.style.background=b.getAttribute('data-bg');b.style.color=b.getAttribute('data-color');b.style.borderColor=b.getAttribute('data-border');}}
+        }}
+      }});
+      document.querySelectorAll('#conv-list .conv-item').forEach(function(el){{
+        var wrap=el.closest('a')||el.parentElement;
+        if(tagId===0){{wrap.style.display='';return;}}
+        var tags=(el.dataset.tags||'').split('|').filter(Boolean);
+        wrap.style.display=tags.indexOf(String(tagId))>=0?'':'none';
+      }});
+    }}
             function showTgaError(msg){{
               var errDiv=document.getElementById('tga-send-error');
               var errTxt=document.getElementById('tga-send-error-text');
@@ -551,8 +595,8 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                         </script>"""
 
     content_html = f"""<div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
-      <div class="conv-list">
-        <div class="conv-search">{conn_badge}{tabs_html}<input type="text" id="tga-search-input" placeholder="🔍 Поиск..." oninput="filterTgConvs(this.value)" style="width:100%;margin-top:6px"/></div>
+      <div class="conv-list" id="conv-list">
+        <div class="conv-search">{conn_badge}{tabs_html}{tag_filter_html}<input type="text" id="tga-search-input" placeholder="🔍 Поиск..." oninput="filterTgConvs(this.value)" style="width:100%;margin-top:6px"/></div>
         <div id="tg-conv-items" style="overflow-y:auto;flex:1">{conv_items}<div id="tga-scroll-sentinel" style="height:1px"></div></div>
       </div>
       <div class="chat-window">{chat_area}</div>

@@ -540,6 +540,7 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             _all_sc_wa.append({"project": _p["name"], "scripts": _sc})
     import json as _json_wa
     _wa_scripts_json = _json_wa.dumps(_all_sc_wa, ensure_ascii=False)
+    _wa_tag_wrap = ('<div style="padding:6px 12px 4px;border-bottom:1px solid var(--border)">' + wa_tag_filter_html + '</div>') if wa_tag_filter_html else ""
 
     content = f"""{WA_CSS}<style>.wa-script-item:hover{{background:var(--bg)!important;}}</style><div class="chat-layout" style="grid-template-columns:300px 1fr 260px">
       <div class="conv-list" id="wa-conv-list">
@@ -1150,5 +1151,4 @@ async def api_wa_messages(request: Request, conv_id: int, after: int = 0):
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
     return JSONResponse({"messages": db.get_new_wa_messages(conv_id, after)})
 
-    _wa_tag_wrap = ('<div style="padding:6px 12px 4px;border-bottom:1px solid var(--border)">' + wa_tag_filter_html + '</div>') if wa_tag_filter_html else ""
 

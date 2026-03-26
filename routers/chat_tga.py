@@ -949,7 +949,8 @@ async def tg_account_webhook(request: Request):
                         log.info(f"[TG webhook] UTM by ref_code: ref={_ref_id} utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
                 # Шаг 2: time-window отключён — только точный ref_ матчинг
                 # (иначе органические пользователи получают чужие UTM)
-                if click_data and not click_data.get("used"):
+                if click_data:
+                    # Для точного ref_ матчинга игнорируем used — ref уникален
                     log.info(f"[TG webhook] Applying UTM: src={click_data.get('utm_source')} campaign={click_data.get('utm_campaign')} ttclid={'✓' if click_data.get('ttclid') else '—'}")
                     db.apply_utm_to_tg_conv(conv["id"],
                         fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),

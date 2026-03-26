@@ -409,9 +409,9 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             if active_conv.get("utm_campaign"):
                 utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {active_conv["utm_campaign"][:25]}</span>')
             if active_conv.get("utm_content"):
-                utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 {active_conv["utm_content"][:20]}</span>')
+                utm_parts.append(f'<span class="utm-tag" style="color:#86efac;border-color:#166534" title="Объявление">📌 {active_conv["utm_content"][:20]}</span>')
             if active_conv.get("utm_term"):
-                utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {active_conv["utm_term"][:20]}</span>')
+                utm_parts.append(f'<span class="utm-tag" style="color:#a5b4fc;border-color:#3730a3" title="Адсет">📂 {active_conv["utm_term"][:20]}</span>')
             if active_conv.get("fbclid"):
                 utm_parts.append('<span class="utm-tag badge-green">fbclid ✓</span>')
             if utm_parts:
@@ -460,8 +460,8 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
         wa_utm_parts = []
         if _wa_is_fb or _wa_is_tt:  # UTM для FB и TikTok трафика
             if c.get("utm_campaign"):  wa_utm_parts.append(f'<span class="utm-tag" title="Кампания">🎯 {c["utm_campaign"][:30]}</span>')
-            if c.get("utm_content"):   wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a2a1a;color:#86efac" title="Объявление">📌 {c["utm_content"][:20]}</span>')
-            if c.get("utm_term"):      wa_utm_parts.append(f'<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc" title="Адсет">📂 {c["utm_term"][:20]}</span>')
+            if c.get("utm_content"):   wa_utm_parts.append(f'<span class="utm-tag" style="color:#86efac;border-color:#166534" title="Объявление">📌 {c["utm_content"][:20]}</span>')
+            if c.get("utm_term"):      wa_utm_parts.append(f'<span class="utm-tag" style="color:#a5b4fc;border-color:#3730a3" title="Адсет">📂 {c["utm_term"][:20]}</span>')
         utm_line = ""  # UTM скрыты из списка — видны внутри чата
         # Задача 5: отметка "уже в базе"
         wa_staff_info = wa_in_staff.get(c["id"])
@@ -744,8 +744,8 @@ async def wa_chat_page(request: Request, conv_id: int = 0, status_filter: str = 
             let utmHtml='';
             if(isFb){{
               if(c.utm_campaign)utmHtml+='<span class="utm-tag">🎯 '+esc(c.utm_campaign.substring(0,25))+'</span>';
-              if(c.utm_content)utmHtml+='<span class="utm-tag" style="background:#1a2a1a;color:#86efac">📌 '+esc(c.utm_content.substring(0,20))+'</span>';
-              if(c.utm_term)utmHtml+='<span class="utm-tag" style="background:#1a1a2a;color:#a5b4fc">📂 '+esc(c.utm_term.substring(0,20))+'</span>';
+              if(c.utm_content)utmHtml+='<span class="utm-tag" style="color:#86efac;border-color:#166534">📌 '+esc(c.utm_content.substring(0,20))+'</span>';
+              if(c.utm_term)utmHtml+='<span class="utm-tag" style="color:#a5b4fc;border-color:#3730a3">📂 '+esc(c.utm_term.substring(0,20))+'</span>';
             }}
             const utmLine=utmHtml?'<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">'+utmHtml+'</div>':'';
             let tagsHtml='';

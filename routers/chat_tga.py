@@ -960,18 +960,17 @@ async def tg_account_webhook(request: Request):
                     if click_data:
                         log.info(f"[TG webhook] UTM by ref_code: ref={_ref_id}")
 
-                # Шаг 2: матчинг по tg_user_id — юзер уже приходил с рекламы раньше
+                # Шаг 2: time-window 3 мин — свежий клик (приоритет над старыми)
+                _tw_click = db.get_staff_click_recent_any(minutes=3, target_type="telegram")
+                if _tw_click and _tw_click.get("utm_source"):
+                    click_data = _tw_click
+                    log.info(f"[TG webhook] UTM by time-window src={_tw_click.get('utm_source')} utm={_tw_click.get('utm_campaign')}")
+
+                # Шаг 3: матчинг по tg_user_id — только если нет свежего клика
                 if not click_data:
                     click_data = db.get_staff_click_by_tg_user(str(tg_user_id), minutes=43200)
                     if click_data:
                         log.info(f"[TG webhook] UTM by tg_user_id={tg_user_id} src={click_data.get('utm_source')}")
-
-                # Шаг 3: time-window 3 мин — только платный трафик (utm_source присутствует)
-                if not click_data:
-                    _tw_click = db.get_staff_click_recent_any(minutes=3, target_type="telegram")
-                    if _tw_click and _tw_click.get("utm_source"):
-                        click_data = _tw_click
-                        log.info(f"[TG webhook] UTM by time-window src={_tw_click.get('utm_source')} utm={_tw_click.get('utm_campaign')}")
 
                 if click_data:
                     log.info(f"[TG webhook] Applying UTM: src={click_data.get('utm_source')} campaign={click_data.get('utm_campaign')} ttclid={'✓' if click_data.get('ttclid') else '—'}")

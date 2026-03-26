@@ -947,8 +947,13 @@ async def tg_account_webhook(request: Request):
                     click_data = db.get_staff_click(_ref_id)
                     if click_data:
                         log.info(f"[TG webhook] UTM by ref_code: ref={_ref_id} utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
-                # Шаг 2: time-window отключён — только точный ref_ матчинг
-                # (иначе органические пользователи получают чужие UTM)
+                # Шаг 2: time-window — только если есть utm_source (платный трафик)
+                # Органика не получит чужие UTM т.к. у органики нет кликов в staff_clicks
+                if not click_data:
+                    _tw_click = db.get_staff_click_recent_any(minutes=15, target_type="telegram")
+                    if _tw_click and _tw_click.get("utm_source"):
+                        click_data = _tw_click
+                        log.info(f"[TG webhook] UTM by time-window src={_tw_click.get('utm_source')} utm={_tw_click.get('utm_campaign')}")
                 if click_data:
                     # Для точного ref_ матчинга игнорируем used — ref уникален
                     log.info(f"[TG webhook] Applying UTM: src={click_data.get('utm_source')} campaign={click_data.get('utm_campaign')} ttclid={'✓' if click_data.get('ttclid') else '—'}")

@@ -1342,7 +1342,7 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
         +'<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='📋'},1500)})" style="padding:7px 12px;background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a;border-radius:6px;cursor:pointer;font-size:.85rem">📋</button></div></div>';}
       document.getElementById('utm-links-content').innerHTML=html;
       document.getElementById('utm-links-modal').style.display='flex';
-    }"""
+    }</script>"""
     return f"""<div class="page-wrap"><div class="page-title">{title}</div>
     <div class="page-sub">{sub}</div>{_copy_modal}{_utm_script}{alert}
     <div class="section"><div class="section-head"><h3>➕ Создать лендинг</h3></div><div class="section-body">

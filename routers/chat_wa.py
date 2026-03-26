@@ -214,22 +214,8 @@ async def wa_webhook(request: Request):
                     db.mark_staff_click_used(ref_id)
                     conv = db.get_wa_conversation(conv["id"]) or conv
                     log.info(f"[WA webhook] UTM applied: src={conv.get('utm_source')} campaign={conv.get('utm_campaign')}")
-            elif is_new_conv:
-                # Трекинг по временному окну — ищем последний клик за 30 минут
-                click_data = db.get_staff_click_recent_any(minutes=15, target_type="whatsapp")
-                if click_data:
-                    db.apply_utm_to_wa_conv(conv["id"],
-                        fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),
-                        fbc=click_data.get("fbc"),
-                        utm_source=click_data.get("utm_source"),
-                        utm_medium=click_data.get("utm_medium"),
-                        utm_campaign=click_data.get("utm_campaign"),
-                        utm_content=click_data.get("utm_content"),
-                        utm_term=click_data.get("utm_term"),
-                        ttclid=click_data.get("ttclid"), ttp=click_data.get("ttp"))
-                    db.mark_staff_click_used(click_data["ref_id"])
-                    conv = db.get_wa_conversation(conv["id"]) or conv
-                    log.info(f"[WA webhook] UTM by time-window utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'} fbc={'✓' if click_data.get('fbc') else '—'}")
+            # time-window отключён — только точный ref: матчинг
+            # (иначе органические пользователи получают чужие UTM)
 
             db.save_wa_message(conv["id"], wa_chat_id, "visitor", text,
                                media_url=media_url, media_type=media_type)

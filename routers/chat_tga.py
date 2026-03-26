@@ -947,11 +947,8 @@ async def tg_account_webhook(request: Request):
                     click_data = db.get_staff_click(_ref_id)
                     if click_data:
                         log.info(f"[TG webhook] UTM by ref_code: ref={_ref_id} utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
-                # Шаг 2: fallback — ищем любой клик за последние 15 минут
-                if not click_data:
-                    click_data = db.get_staff_click_recent_any(minutes=15, target_type="telegram")
-                    if click_data:
-                        log.info(f"[TG webhook] UTM by time-window utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
+                # Шаг 2: time-window отключён — только точный ref_ матчинг
+                # (иначе органические пользователи получают чужие UTM)
                 if click_data and not click_data.get("used"):
                     log.info(f"[TG webhook] Applying UTM: src={click_data.get('utm_source')} campaign={click_data.get('utm_campaign')} ttclid={'✓' if click_data.get('ttclid') else '—'}")
                     db.apply_utm_to_tg_conv(conv["id"],

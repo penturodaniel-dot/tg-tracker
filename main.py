@@ -748,43 +748,6 @@ def base(content: str, active: str, request: Request) -> str:
 {CSS}
 </head><body>{nav_html(active, request)}<div class="main">{content}</div>
 <script>
-// ── UTM Links modal ─────────────────────────────────────────────────────────
-function showUtmLinks(btn) {{
-  var fb = btn.getAttribute('data-fb') || '';
-  var tt = btn.getAttribute('data-tt') || '';
-  var modal = document.getElementById('utm-links-modal');
-  if (!modal) {{
-    modal = document.createElement('div');
-    modal.id = 'utm-links-modal';
-    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1001;align-items:center;justify-content:center';
-    modal.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;min-width:360px;max-width:560px;width:90%">'
-      + '<div style="font-weight:700;font-size:1rem;margin-bottom:16px">🔗 UTM ссылки для рекламы</div>'
-      + '<div id="utm-links-content"></div>'
-      + '<div style="margin-top:16px;text-align:right"><button onclick="document.getElementById(\'utm-links-modal\').style.display=\'none\'" style="padding:8px 18px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:7px;cursor:pointer">Закрыть</button></div>'
-      + '</div>';
-    document.body.appendChild(modal);
-  }}
-  var html = '';
-  if (fb) {{
-    html += '<div style="margin-bottom:14px">'
-      + '<div style="font-size:.75rem;font-weight:700;color:#60a5fa;margin-bottom:6px">🔵 Facebook Ads — URL объявления:</div>'
-      + '<div style="display:flex;gap:6px">'
-      + '<input readonly value="' + fb + '" onclick="this.select()" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:.72rem;font-family:monospace"/>'
-      + '<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(function(){{this.textContent=\'✓\';setTimeout(function(){{document.querySelectorAll(\'#utm-links-modal button\')[0].textContent=\'📋\'}},1500)}}.bind(this))" style="padding:7px 12px;background:#1e3a5f;color:#60a5fa;border:1px solid #3b5998;border-radius:6px;cursor:pointer">📋</button>'
-      + '</div></div>';
-  }}
-  if (tt) {{
-    html += '<div>'
-      + '<div style="font-size:.75rem;font-weight:700;color:#69c9d0;margin-bottom:6px">🎵 TikTok Ads — URL объявления:</div>'
-      + '<div style="display:flex;gap:6px">'
-      + '<input readonly value="' + tt + '" onclick="this.select()" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:.72rem;font-family:monospace"/>'
-      + '<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(function(){{this.textContent=\'✓\';setTimeout(function(){{document.querySelectorAll(\'#utm-links-modal button\')[1].textContent=\'📋\'}},1500)}}.bind(this))" style="padding:7px 12px;background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a;border-radius:6px;cursor:pointer">📋</button>'
-      + '</div></div>';
-  }}
-  document.getElementById('utm-links-content').innerHTML = html;
-  modal.style.display = 'flex';
-}}
-
 // ── Глобальные функции пикера тегов ─────────────────────────────────────────
 function toggleTagPicker(ct, cid) {{
   var dd = document.getElementById('tpd-' + ct + '-' + cid);
@@ -1303,32 +1266,37 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
         _cdomain = l.get("custom_domain") or ""
         _domain_badge = f'<div style="margin-top:4px"><span style="font-family:monospace;font-size:.68rem;background:#052e16;color:#86efac;border:1px solid #166534;border-radius:4px;padding:1px 6px">🌐 {_cdomain}</span></div>' if _cdomain else ""
 
-        # UTM ссылки по проекту
+        # UTM ссылки
         _proj = db.get_project(int(l["project_id"])) if l.get("project_id") else None
-        _utm_btn = ""
+        _utm_links_html = ""
         if _proj:
             _src = (_proj.get("traffic_source") or "").lower()
             _utms = [u.strip() for u in (_proj.get("utm_campaigns") or "").split(",") if u.strip()]
             _utm_val = _utms[0] if _utms else "campaign"
-            if _src == "tiktok":
-                _tt_url = f"{full_url}?utm_source=tiktok&utm_medium=paid&utm_campaign={_utm_val}&utm_content=__CID__&utm_term=__AID__&ttclid=__CLICKID__"
-                _utm_btn = f'<button onclick="showUtmLinks(this)" data-tt="{_tt_url}" class="btn-gray btn-sm" style="background:#1a1a2a;border-color:#2a2a4a;color:#69c9d0">🎵 UTM</button>'
-            elif _src == "facebook":
-                _fb_url = f"{full_url}?utm_source=facebook&utm_medium=paid&utm_campaign={_utm_val}&utm_content={{{{ad.name}}}}&utm_term={{{{adset.name}}}}&fbclid={{{{fbclid}}}}"
-                _utm_btn = f'<button onclick="showUtmLinks(this)" data-fb="{_fb_url}" class="btn-gray btn-sm" style="background:#1e3a5f;border-color:#3b5998;color:#93c5fd">🔵 UTM</button>'
-            else:
-                _fb_url = f"{full_url}?utm_source=facebook&utm_medium=paid&utm_campaign={_utm_val}&utm_content={{{{ad.name}}}}&utm_term={{{{adset.name}}}}&fbclid={{{{fbclid}}}}"
-                _tt_url = f"{full_url}?utm_source=tiktok&utm_medium=paid&utm_campaign={_utm_val}&utm_content=__CID__&utm_term=__AID__&ttclid=__CLICKID__"
-                _utm_btn = f'<button onclick="showUtmLinks(this)" data-fb="{_fb_url}" data-tt="{_tt_url}" class="btn-gray btn-sm" style="background:#1a2a1a;border-color:#166534;color:#86efac">🔗 UTM</button>'
-
+            _tt_u = full_url + "?utm_source=tiktok&utm_medium=paid&utm_campaign=" + _utm_val + "&utm_content=__CID__&utm_term=__AID__&ttclid=__CLICKID__"
+            _fb_u = full_url + "?utm_source=facebook&utm_medium=paid&utm_campaign=" + _utm_val + "&utm_content={ad.name}&utm_term={adset.name}&fbclid={fbclid}"
+            _tt_row = ("<div style=\"margin-top:3px;display:flex;gap:3px\">"
+                + "<span style=\"color:#69c9d0;font-size:.65rem\">🎵</span>"
+                + "<input readonly value=\"" + _tt_u + "\" onclick=\"this.select()\""
+                + " style=\"flex:1;min-width:0;background:var(--bg);border:1px solid #2a2a4a;border-radius:4px;padding:2px 5px;color:#69c9d0;font-size:.6rem;font-family:monospace\"/>"
+                + "<button onclick=\"navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='✓'\""
+                + " style=\"padding:1px 5px;background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a;border-radius:4px;cursor:pointer;font-size:.65rem\">📋</button></div>")
+            _fb_row = ("<div style=\"margin-top:3px;display:flex;gap:3px\">"
+                + "<span style=\"color:#60a5fa;font-size:.65rem\">🔵</span>"
+                + "<input readonly value=\"" + _fb_u + "\" onclick=\"this.select()\""
+                + " style=\"flex:1;min-width:0;background:var(--bg);border:1px solid #1e3a5f;border-radius:4px;padding:2px 5px;color:#60a5fa;font-size:.6rem;font-family:monospace\"/>"
+                + "<button onclick=\"navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='✓'\""
+                + " style=\"padding:1px 5px;background:#1e3a5f;color:#60a5fa;border:1px solid #3b5998;border-radius:4px;cursor:pointer;font-size:.65rem\">📋</button></div>")
+            if _src == "tiktok": _utm_links_html = _tt_row
+            elif _src == "facebook": _utm_links_html = _fb_row
+            else: _utm_links_html = _tt_row + _fb_row
         rows += f"""<tr>
           <td><b>{l['name']}</b>{_domain_badge}</td>
           <td><span class="badge-gray" style="font-size:.68rem">{tpl_name}</span></td>
-          <td><a href="{slug_url}" target="_blank" class="link-box" style="display:inline-block">{slug_url}</a></td>
+          <td><a href="{slug_url}" target="_blank" class="link-box" style="display:inline-block">{slug_url}</a>{_utm_links_html}</td>
           <td><span class="{'badge-green' if l['active'] else 'badge-gray'}">{'Активен' if l['active'] else 'Скрыт'}</span></td>
           <td>
             <a href="/landings/edit?id={l['id']}" class="btn-gray btn-sm">✏️ Редакт.</a>
-            {_utm_btn}
             <button onclick="copyLanding({l['id']},'{l['name']}')" class="btn-gray btn-sm" style="background:#1a2a1a;border-color:#166534;color:#86efac">📋 Копия</button>
             <form method="post" action="/landings/delete" style="display:inline"><input type="hidden" name="id" value="{l['id']}"/><button class="del-btn btn-sm">✕</button></form>
           </td></tr>"""

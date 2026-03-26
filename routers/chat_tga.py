@@ -938,24 +938,31 @@ async def tg_account_webhook(request: Request):
                     log.warning(f"[TG webhook] photo fetch error: {_e}")
             is_new = not conv.get("utm_source") and not conv.get("fbclid")
             if is_new:
-                # Шаг 1: точный матчинг по ref_XXX из текста сообщения (/start ref_XXX)
                 import re as _re
-                _ref_match = _re.search(r'ref_([A-Za-z0-9_\-]{8,20})', raw_text)
                 click_data = None
+
+                # Шаг 1: точный матчинг по ref_XXX в тексте
+                _ref_match = _re.search(r'ref_([A-Za-z0-9_\-]{8,20})', raw_text)
                 if _ref_match:
                     _ref_id = _ref_match.group(1)
                     click_data = db.get_staff_click(_ref_id)
                     if click_data:
-                        log.info(f"[TG webhook] UTM by ref_code: ref={_ref_id} utm={click_data.get('utm_campaign')} fbclid={'✓' if click_data.get('fbclid') else '—'}")
-                # Шаг 2: time-window — только если есть utm_source (платный трафик)
-                # Органика не получит чужие UTM т.к. у органики нет кликов в staff_clicks
+                        log.info(f"[TG webhook] UTM by ref_code: ref={_ref_id}")
+
+                # Шаг 2: матчинг по tg_user_id — юзер уже приходил с рекламы раньше
                 if not click_data:
-                    _tw_click = db.get_staff_click_recent_any(minutes=15, target_type="telegram")
+                    click_data = db.get_staff_click_by_tg_user(str(tg_user_id), minutes=43200)
+                    if click_data:
+                        log.info(f"[TG webhook] UTM by tg_user_id={tg_user_id} src={click_data.get('utm_source')}")
+
+                # Шаг 3: time-window 3 мин — только платный трафик (utm_source присутствует)
+                if not click_data:
+                    _tw_click = db.get_staff_click_recent_any(minutes=3, target_type="telegram")
                     if _tw_click and _tw_click.get("utm_source"):
                         click_data = _tw_click
                         log.info(f"[TG webhook] UTM by time-window src={_tw_click.get('utm_source')} utm={_tw_click.get('utm_campaign')}")
+
                 if click_data:
-                    # Для точного ref_ матчинга игнорируем used — ref уникален
                     log.info(f"[TG webhook] Applying UTM: src={click_data.get('utm_source')} campaign={click_data.get('utm_campaign')} ttclid={'✓' if click_data.get('ttclid') else '—'}")
                     db.apply_utm_to_tg_conv(conv["id"],
                         fbclid=click_data.get("fbclid"), fbp=click_data.get("fbp"),
@@ -964,6 +971,8 @@ async def tg_account_webhook(request: Request):
                         utm_campaign=click_data.get("utm_campaign"), utm_content=click_data.get("utm_content"),
                         utm_term=click_data.get("utm_term"),
                         ttclid=click_data.get("ttclid"), ttp=click_data.get("ttp"))
+                    # Привязываем клик к tg_user_id для будущего матчинга
+                    db.bind_staff_click_to_tg_user(click_data["ref_id"], str(tg_user_id))
                     db.mark_staff_click_used(click_data["ref_id"])
                     conv = db.get_tg_account_conversation(conv["id"]) or conv
 

@@ -1284,14 +1284,35 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
           <td><span class="{'badge-green' if l['active'] else 'badge-gray'}">{'Активен' if l['active'] else 'Скрыт'}</span></td>
           <td>
             <a href="/landings/edit?id={l['id']}" class="btn-gray btn-sm">✏️ Редакт.</a>
+            <button onclick="copyLanding({l['id']},'{l['name']}')" class="btn-gray btn-sm" style="background:#1a2a1a;border-color:#166534;color:#86efac">📋 Копия</button>
             <form method="post" action="/landings/delete" style="display:inline"><input type="hidden" name="id" value="{l['id']}"/><button class="del-btn btn-sm">✕</button></form>
           </td></tr>"""
     rows = rows or f'<tr><td colspan="5"><div class="empty">Нет шаблонов — создай первый</div></td></tr>'
 
     tpl_th = '<th>Шаблон</th>' if ltype == "staff" else ""
 
+    _copy_modal = '''<div id="copy-landing-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;min-width:320px;max-width:400px">
+        <div style="font-weight:700;margin-bottom:16px">📋 Копировать лендинг</div>
+        <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--text3)">Название новой копии</label>
+          <input id="copy-name" type="text" style="width:100%;margin-top:4px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text)"/></div>
+        <div style="margin-bottom:16px"><label style="font-size:.8rem;color:var(--text3)">Slug (url)</label>
+          <input id="copy-slug" type="text" style="width:100%;margin-top:4px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text)"/></div>
+        <div style="display:flex;gap:8px">
+          <button onclick="submitCopyLanding()" style="flex:1;padding:9px;background:var(--orange);color:#fff;border:none;border-radius:7px;font-weight:600;cursor:pointer">Создать копию</button>
+          <button onclick="document.getElementById('copy-landing-modal').style.display='none'" style="padding:9px 16px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:7px;cursor:pointer">Отмена</button>
+        </div>
+      </div>
+    </div>
+    <script>
+    var _copyLandingId=0;
+    function copyLanding(id,name){_copyLandingId=id;document.getElementById('copy-name').value=name+' (копия)';document.getElementById('copy-slug').value='';document.getElementById('copy-landing-modal').style.display='flex';}
+    function submitCopyLanding(){var n=document.getElementById('copy-name').value.trim();var s=document.getElementById('copy-slug').value.trim();if(!n||!s){alert('Заполни название и slug');return;}
+    fetch('/landings/copy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:_copyLandingId,name:n,slug:s})})
+    .then(r=>r.json()).then(d=>{if(d.ok){window.location.reload();}else{alert(d.error||'Ошибка');}});}
+    </script>'''
     return f"""<div class="page-wrap"><div class="page-title">{title}</div>
-    <div class="page-sub">{sub}</div>{alert}
+    <div class="page-sub">{sub}</div>{_copy_modal}{alert}
     <div class="section"><div class="section-head"><h3>➕ Создать лендинг</h3></div><div class="section-body">
     <form method="post" action="/landings/create"><input type="hidden" name="ltype" value="{ltype}"/>
     <input type="hidden" name="redirect" value="/landings{'_staff' if ltype=='staff' else ''}"/>
@@ -1332,6 +1353,27 @@ async def landings_create(request: Request, name: str = Form(...), slug: str = F
                     return RedirectResponse(f"{redirect}?msg=Ошибка:+slug+{clean_slug}+уже+занят", 303)
             else:
                 return RedirectResponse(f"{redirect}?msg=Ошибка:+{str(e)[:60]}", 303)
+
+
+@app.post("/landings/copy")
+async def landings_copy(request: Request):
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    try:
+        data = await request.json()
+        landing_id = int(data.get("id", 0))
+        new_name = data.get("name", "").strip()
+        new_slug = data.get("slug", "").strip()
+        if not landing_id or not new_name or not new_slug:
+            return JSONResponse({"ok": False, "error": "Не заполнены поля"})
+        # Проверяем что slug не занят
+        existing = db.get_landing_by_slug(new_slug)
+        if existing:
+            return JSONResponse({"ok": False, "error": f"Slug '{new_slug}' уже занят"})
+        new_id = db.copy_landing(landing_id, new_name, new_slug)
+        return JSONResponse({"ok": True, "id": new_id})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
 
 
 @app.post("/landings/delete")

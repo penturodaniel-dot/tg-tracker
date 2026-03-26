@@ -273,6 +273,8 @@ class Database:
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS ttclid TEXT DEFAULT ''",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS ttp TEXT DEFAULT ''",
                     "ALTER TABLE projects ADD COLUMN IF NOT EXISTS tt_token TEXT DEFAULT ''",
+                    "ALTER TABLE projects ADD COLUMN IF NOT EXISTS traffic_source TEXT DEFAULT ''",
+                    "ALTER TABLE landings ADD COLUMN IF NOT EXISTS traffic_source TEXT DEFAULT ''",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS ttp TEXT",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS tg_user_id TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
@@ -1232,6 +1234,37 @@ class Database:
                 cur.execute("SELECT * FROM landings WHERE id=%s", (landing_id,))
                 r = cur.fetchone(); return dict(r) if r else None
 
+    def copy_landing(self, landing_id: int, new_name: str, new_slug: str) -> int:
+        """Копирует лендинг с новым именем и slug"""
+        landing = self.get_landing(landing_id)
+        if not landing:
+            raise ValueError(f"Landing {landing_id} not found")
+        contacts = self.get_landing_contacts(landing_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO landings (name, type, slug, content, active, project_id, traffic_source, created_at)
+                       VALUES (%s, %s, %s, %s, 1, %s, %s, %s) RETURNING id""",
+                    (new_name.strip(), landing.get("type", "staff"), new_slug.strip(),
+                     landing.get("content", "{}"), landing.get("project_id"),
+                     landing.get("traffic_source", ""),
+                     __import__("datetime").datetime.utcnow().isoformat())
+                )
+                new_id = cur.fetchone()["id"]
+                for c in contacts:
+                    cur.execute(
+                        "INSERT INTO landing_contacts (landing_id, type, label, url, position) VALUES (%s,%s,%s,%s,%s)",
+                        (new_id, c["type"], c["label"], c["url"], c.get("position", 0))
+                    )
+            conn.commit()
+        return new_id
+
+    def update_landing_traffic_source(self, landing_id: int, traffic_source: str):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE landings SET traffic_source=%s WHERE id=%s", (traffic_source, landing_id))
+            conn.commit()
+
     def get_landing_by_slug(self, slug):
         with self._conn() as conn:
             with conn.cursor() as cur:
@@ -1976,7 +2009,7 @@ class Database:
                        fb_pixel_id: str = None, fb_token: str = None,
                        tt_pixel_id: str = None, tt_token: str = None,
                        utm_campaigns: str = None, test_event_code: str = None,
-                       tt_test_event_code: str = None):
+                       tt_test_event_code: str = None, traffic_source: str = None, **kwargs):
         fields, vals = [], []
         if name         is not None: fields.append("name=%s");          vals.append(name.strip())
         if fb_pixel_id  is not None: fields.append("fb_pixel_id=%s");   vals.append(fb_pixel_id.strip())
@@ -1985,6 +2018,8 @@ class Database:
         if tt_token     is not None: fields.append("tt_token=%s");      vals.append(tt_token.strip())
         if utm_campaigns         is not None: fields.append("utm_campaigns=%s");         vals.append(utm_campaigns.strip())
         if tt_test_event_code is not None: fields.append("tt_test_event_code=%s"); vals.append(tt_test_event_code or "")
+        if "traffic_source" in kwargs and kwargs.get("traffic_source") is not None:
+            fields.append("traffic_source=%s"); vals.append(kwargs.pop("traffic_source", "") or "")
         if test_event_code  is not None: fields.append("test_event_code=%s"); vals.append(test_event_code.strip())
         if not fields: return
         vals.append(project_id)

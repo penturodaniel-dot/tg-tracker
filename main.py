@@ -748,6 +748,43 @@ def base(content: str, active: str, request: Request) -> str:
 {CSS}
 </head><body>{nav_html(active, request)}<div class="main">{content}</div>
 <script>
+// ── UTM Links modal ─────────────────────────────────────────────────────────
+function showUtmLinks(btn) {{
+  var fb = btn.getAttribute('data-fb') || '';
+  var tt = btn.getAttribute('data-tt') || '';
+  var modal = document.getElementById('utm-links-modal');
+  if (!modal) {{
+    modal = document.createElement('div');
+    modal.id = 'utm-links-modal';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1001;align-items:center;justify-content:center';
+    modal.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;min-width:360px;max-width:560px;width:90%">'
+      + '<div style="font-weight:700;font-size:1rem;margin-bottom:16px">🔗 UTM ссылки для рекламы</div>'
+      + '<div id="utm-links-content"></div>'
+      + '<div style="margin-top:16px;text-align:right"><button onclick="document.getElementById(\'utm-links-modal\').style.display=\'none\'" style="padding:8px 18px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:7px;cursor:pointer">Закрыть</button></div>'
+      + '</div>';
+    document.body.appendChild(modal);
+  }}
+  var html = '';
+  if (fb) {{
+    html += '<div style="margin-bottom:14px">'
+      + '<div style="font-size:.75rem;font-weight:700;color:#60a5fa;margin-bottom:6px">🔵 Facebook Ads — URL объявления:</div>'
+      + '<div style="display:flex;gap:6px">'
+      + '<input readonly value="' + fb + '" onclick="this.select()" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:.72rem;font-family:monospace"/>'
+      + '<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(function(){{this.textContent=\'✓\';setTimeout(function(){{document.querySelectorAll(\'#utm-links-modal button\')[0].textContent=\'📋\'}},1500)}}.bind(this))" style="padding:7px 12px;background:#1e3a5f;color:#60a5fa;border:1px solid #3b5998;border-radius:6px;cursor:pointer">📋</button>'
+      + '</div></div>';
+  }}
+  if (tt) {{
+    html += '<div>'
+      + '<div style="font-size:.75rem;font-weight:700;color:#69c9d0;margin-bottom:6px">🎵 TikTok Ads — URL объявления:</div>'
+      + '<div style="display:flex;gap:6px">'
+      + '<input readonly value="' + tt + '" onclick="this.select()" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:.72rem;font-family:monospace"/>'
+      + '<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(function(){{this.textContent=\'✓\';setTimeout(function(){{document.querySelectorAll(\'#utm-links-modal button\')[1].textContent=\'📋\'}},1500)}}.bind(this))" style="padding:7px 12px;background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a;border-radius:6px;cursor:pointer">📋</button>'
+      + '</div></div>';
+  }}
+  document.getElementById('utm-links-content').innerHTML = html;
+  modal.style.display = 'flex';
+}}
+
 // ── Глобальные функции пикера тегов ─────────────────────────────────────────
 function toggleTagPicker(ct, cid) {{
   var dd = document.getElementById('tpd-' + ct + '-' + cid);
@@ -1319,33 +1356,8 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
     fetch('/landings/copy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:_copyLandingId,name:n,slug:s})})
     .then(r=>r.json()).then(d=>{if(d.ok){window.location.reload();}else{alert(d.error||'Ошибка');}});}
     </script>'''
-    _utm_script = """<script>
-    // UTM Links modal
-    var _utmModal = document.createElement('div');
-    _utmModal.id='utm-links-modal';
-    _utmModal.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1001;align-items:center;justify-content:center';
-    _utmModal.innerHTML='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;min-width:360px;max-width:560px;width:90%">'
-      +'<div style="font-weight:700;font-size:1rem;margin-bottom:16px">🔗 UTM ссылки для рекламы</div>'
-      +'<div id="utm-links-content"></div>'
-      +'<div style="margin-top:16px;text-align:right"><button onclick="document.getElementById(\'utm-links-modal\').style.display=\'none\'" style="padding:8px 18px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:7px;cursor:pointer">Закрыть</button></div>'
-      +'</div>';
-    document.body.appendChild(_utmModal);
-
-    function showUtmLinks(btn){
-      var fb=btn.getAttribute('data-fb')||'';
-      var tt=btn.getAttribute('data-tt')||'';
-      var html='';
-      if(fb){html+='<div style="margin-bottom:14px"><div style="font-size:.75rem;font-weight:700;color:#60a5fa;margin-bottom:6px">🔵 Facebook Ads — URL объявления:</div>'
-        +'<div style="display:flex;gap:6px;align-items:center"><input readonly value="'+fb+'" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:.72rem;font-family:monospace" onclick="this.select()"/>'
-        +'<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='📋'},1500)})" style="padding:7px 12px;background:#1e3a5f;color:#60a5fa;border:1px solid #3b5998;border-radius:6px;cursor:pointer;font-size:.85rem">📋</button></div></div>';}
-      if(tt){html+='<div><div style="font-size:.75rem;font-weight:700;color:#69c9d0;margin-bottom:6px">🎵 TikTok Ads — URL объявления:</div>'
-        +'<div style="display:flex;gap:6px;align-items:center"><input readonly value="'+tt+'" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:.72rem;font-family:monospace" onclick="this.select()"/>'
-        +'<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='📋'},1500)})" style="padding:7px 12px;background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a;border-radius:6px;cursor:pointer;font-size:.85rem">📋</button></div></div>';}
-      document.getElementById('utm-links-content').innerHTML=html;
-      document.getElementById('utm-links-modal').style.display='flex';
-    }</script>"""
     return f"""<div class="page-wrap"><div class="page-title">{title}</div>
-    <div class="page-sub">{sub}</div>{_copy_modal}{_utm_script}{alert}
+    <div class="page-sub">{sub}</div>{_copy_modal}{alert}
     <div class="section"><div class="section-head"><h3>➕ Создать лендинг</h3></div><div class="section-body">
     <form method="post" action="/landings/create"><input type="hidden" name="ltype" value="{ltype}"/>
     <input type="hidden" name="redirect" value="/landings{'_staff' if ltype=='staff' else ''}"/>

@@ -664,15 +664,59 @@ def _tpl_tiktok_spa(name: str, contacts: list, pixel_js: str, tt_pixel_id: str, 
     TG_ICO = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>'
     WA_ICO  = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5Z"/></svg>'
 
-    def _cta_btn(c):
-        track = f"if(typeof ttq!=='undefined')ttq.track('SubmitApplication');"
+    # Строим кнопки мессенджеров для попапа
+    _popup_btns = ""
+    for c in contacts:
+        _track = "if(typeof ttq!=='undefined')ttq.track('SubmitApplication');"
+        _close = "document.getElementById('tt-popup').style.display='none';"
         if c["type"] == "telegram":
-            return f'<a class="tt-btn" href="{c["url"]}" target="_blank" rel="noopener" onclick="{track}">{TG_ICO} {c["label"]}</a>'
+            _ico = TG_ICO
+            _lbl = c.get("label") or "Написать в Telegram"
+            _style = "background:linear-gradient(135deg,#2AABEE,#229ED9)"
         elif c["type"] == "whatsapp":
-            return f'<a class="tt-btn tt-btn-wa" href="{c["url"]}" target="_blank" rel="noopener" onclick="{track}">{WA_ICO} {c["label"]}</a>'
-        return f'<a class="tt-btn" href="{c["url"]}" target="_blank" rel="noopener" onclick="{track}">{c["label"]}</a>'
+            _ico = WA_ICO
+            _lbl = c.get("label") or "Написать в WhatsApp"
+            _style = "background:linear-gradient(135deg,#25D366,#128C7E)"
+        else:
+            _ico = ""
+            _lbl = c.get("label") or "Написать"
+            _style = "background:linear-gradient(135deg,#DA27BD,#9333ea)"
+        _popup_btns += (
+            f'<a class="tt-btn" href="{c["url"]}" target="_blank" rel="noopener" '
+            f'onclick="{_close}{_track}" style="{_style};margin-bottom:10px;max-width:none">'
+            f'{_ico} {_lbl}</a>'
+        )
 
-    cta_btns = "\n".join(_cta_btn(c) for c in contacts) if contacts else '<a class="tt-btn" href="#">Написать нам</a>'
+    # Попап выбора мессенджера
+    _popup_html = (
+        '<div id="tt-popup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);'
+        'z-index:999;align-items:flex-end;justify-content:center">'
+        '<div style="background:#1a1a2a;border:1px solid rgba(218,39,189,.35);border-radius:24px 24px 0 0;'
+        'padding:28px 20px 32px;width:min(420px,100%);display:flex;flex-direction:column">'
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:1.1rem;text-align:center;margin-bottom:6px">Выберите мессенджер</div>'
+        '<div style="font-size:.82rem;color:rgba(255,255,255,.5);text-align:center;margin-bottom:20px">Мы ответим в течение 5 минут ⚡</div>'
+        + _popup_btns +
+        '<button onclick="document.getElementById(\'tt-popup\').style.display=\'none\'" '
+        'style="background:none;border:none;color:rgba(255,255,255,.3);font-size:.82rem;'
+        'cursor:pointer;text-align:center;padding:8px">✕ Закрыть</button>'
+        '</div></div>'
+    )
+
+    # Одна кнопка — открывает попап
+    if len(contacts) > 1:
+        cta_btns = (
+            '<button class="tt-btn" onclick="document.getElementById(\'tt-popup\').style.display=\'flex\'">'
+            '💬 Написать нам</button>'
+            + _popup_html
+        )
+    else:
+        # Одна кнопка — прямая ссылка
+        if contacts:
+            c = contacts[0]
+            _track = "if(typeof ttq!=='undefined')ttq.track('SubmitApplication');"
+            cta_btns = f'<a class="tt-btn" href="{c["url"]}" target="_blank" rel="noopener" onclick="{_track}">💬 {c.get("label","Написать нам")}</a>'
+        else:
+            cta_btns = '<button class="tt-btn">💬 Написать нам</button>'
 
     # ViewContent при загрузке — стандартное событие TikTok для лендингов
     tt_view_event = ""

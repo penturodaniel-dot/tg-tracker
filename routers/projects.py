@@ -73,6 +73,17 @@ def _project_card(p: dict, msg: str = "", err: str = "") -> str:
               <input type="text" name="utm_campaigns" value="{utms}" placeholder="usa_massage, massage_usa, us_spa"/>
               <div style="margin-top:6px">{utm_tags}</div>
             </div>
+
+            <div class="field-group" style="flex:1;min-width:180px">
+              <div class="field-label">📢 Площадка трафика</div>
+              <select name="traffic_source" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);font-size:.82rem">
+                <option value="" {'selected' if not p.get('traffic_source') else ''}>🌐 Все / Не указано</option>
+                <option value="facebook" {'selected' if p.get('traffic_source') == 'facebook' else ''}>🔵 Facebook</option>
+                <option value="tiktok" {'selected' if p.get('traffic_source') == 'tiktok' else ''}>🎵 TikTok</option>
+                <option value="organic" {'selected' if p.get('traffic_source') == 'organic' else ''}>🌿 Органика</option>
+              </select>
+              <div style="font-size:.72rem;color:var(--text3);margin-top:3px">Определяет какой CAPI использовать</div>
+            </div>
           </div>
 
           <div style="font-size:.72rem;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:.08em;margin:14px 0 8px">
@@ -197,7 +208,8 @@ async def projects_update(request: Request,
                           tt_token: str = Form(""),
                           utm_campaigns: str = Form(""),
                           test_event_code: str = Form(""),
-                          tt_test_event_code: str = Form("")):
+                          tt_test_event_code: str = Form(""),
+                          traffic_source: str = Form("")):
     user, e = require_auth(request, role="admin")
     if e: return e
     kwargs = dict(
@@ -207,6 +219,7 @@ async def projects_update(request: Request,
         utm_campaigns=utm_campaigns,
         test_event_code=test_event_code,
         tt_test_event_code=tt_test_event_code,
+        traffic_source=traffic_source,
     )
     if fb_token.strip():  kwargs["fb_token"]  = fb_token.strip()
     if tt_token.strip():  kwargs["tt_token"]  = tt_token.strip()

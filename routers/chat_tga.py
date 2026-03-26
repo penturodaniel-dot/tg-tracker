@@ -93,11 +93,22 @@ def _resolve_pixels(conv: dict) -> dict:
         tt_token  = db.get_setting("tt_access_token")
         proj_name = ""
 
+    # traffic_source проекта определяет какой CAPI использовать
+    _src = (project.get("traffic_source") or "").lower() if project else ""
+    # Если площадка задана — отключаем пиксель другой платформы
+    if _src == "facebook":
+        tt_pixel = ""  # не слать в TikTok
+        tt_token = ""
+    elif _src == "tiktok":
+        fb_pixel = ""  # не слать в Facebook
+        fb_token = ""
+
     return {
         "fb_pixel":           fb_pixel,
         "fb_token":           fb_token,
         "tt_pixel":           tt_pixel,
         "tt_token":           tt_token,
+        "traffic_source":     _src,
         "test_event_code":    (project.get("test_event_code") if project else None) or db.get_setting("test_event_code") or None,
         "tt_test_event_code": (project.get("tt_test_event_code") if project else None) or db.get_setting("tt_test_event_code") or None,
         "project_name":       proj_name,

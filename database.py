@@ -2018,8 +2018,8 @@ class Database:
         if tt_token     is not None: fields.append("tt_token=%s");      vals.append(tt_token.strip())
         if utm_campaigns         is not None: fields.append("utm_campaigns=%s");         vals.append(utm_campaigns.strip())
         if tt_test_event_code is not None: fields.append("tt_test_event_code=%s"); vals.append(tt_test_event_code or "")
-        if "traffic_source" in kwargs and kwargs.get("traffic_source") is not None:
-            fields.append("traffic_source=%s"); vals.append(kwargs.pop("traffic_source", "") or "")
+        if traffic_source is not None:
+            fields.append("traffic_source=%s"); vals.append(traffic_source or "")
         if test_event_code  is not None: fields.append("test_event_code=%s"); vals.append(test_event_code.strip())
         if not fields: return
         vals.append(project_id)

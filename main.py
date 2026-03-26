@@ -1356,8 +1356,8 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
     fetch('/landings/copy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:_copyLandingId,name:n,slug:s})})
     .then(r=>r.json()).then(d=>{if(d.ok){window.location.reload();}else{alert(d.error||'Ошибка');}});}
     </script>'''
-    return f"""<div class="page-wrap"><div class="page-title">{title}</div>
-    <div class="page-sub">{sub}</div>{_copy_modal}{alert}
+    return (f"""<div class="page-wrap"><div class="page-title">{title}</div>
+    <div class="page-sub">{sub}</div>""" + _copy_modal + f"""{alert}
     <div class="section"><div class="section-head"><h3>➕ Создать лендинг</h3></div><div class="section-body">
     <form method="post" action="/landings/create"><input type="hidden" name="ltype" value="{ltype}"/>
     <input type="hidden" name="redirect" value="/landings{'_staff' if ltype=='staff' else ''}"/>
@@ -1369,7 +1369,7 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
     </div></form></div></div>
     <div class="section"><div class="section-head"><h3>Шаблоны ({len(landings)})</h3></div>
     <table><thead><tr><th>Название</th>{tpl_th}<th>URL</th><th>Статус</th><th>Действия</th></tr></thead>
-    <tbody>{rows}</tbody></table></div></div>"""
+    <tbody>{rows}</tbody></table></div></div>""")
 
 
 @app.post("/landings/create")

@@ -639,6 +639,11 @@ def _tpl_tiktok_spa(name: str, contacts: list, pixel_js: str, tt_pixel_id: str, 
     _tt_badge = texts.get("badge_text","")
     _tt_cta_h = texts.get("cta_title","")
     _tt_cta_s = texts.get("cta_subtitle","")
+    _tt_sec_benefits = texts.get("sec_benefits_title","") or "Что ты получаешь"
+    _tt_sec_steps    = texts.get("sec_steps_title","")    or "Как начать за 3 шага"
+    _tt_sec_reviews  = texts.get("sec_reviews_title","")  or "Девушки о работе с нами"
+    _tt_popup_title  = texts.get("popup_title","")        or "Выберите мессенджер"
+    _tt_popup_sub    = texts.get("popup_subtitle","")     or "Мы ответим в течение 5 минут ⚡"
     _tt_icons = ["💵","🏠","🎓","🛡","🕐","👁"]
     _tt_bens_html = "".join(
         f'<div class="tt-card"><div class="tt-card-icon">{_tt_icons[i]}</div><div><div class="tt-card-title">{texts.get(f"ben_{i}_title","")}</div><div class="tt-card-desc">{texts.get(f"ben_{i}_text","")}</div></div></div>'
@@ -693,8 +698,8 @@ def _tpl_tiktok_spa(name: str, contacts: list, pixel_js: str, tt_pixel_id: str, 
         'z-index:999;align-items:flex-end;justify-content:center">'
         '<div style="background:#1a1a2a;border:1px solid rgba(218,39,189,.35);border-radius:24px 24px 0 0;'
         'padding:28px 20px 32px;width:min(420px,100%);display:flex;flex-direction:column">'
-        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:1.1rem;text-align:center;margin-bottom:6px">Выберите мессенджер</div>'
-        '<div style="font-size:.82rem;color:rgba(255,255,255,.5);text-align:center;margin-bottom:20px">Мы ответим в течение 5 минут ⚡</div>'
+        '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:1.1rem;text-align:center;margin-bottom:6px">' + _tt_popup_title + '</div>'
+        '<div style="font-size:.82rem;color:rgba(255,255,255,.5);text-align:center;margin-bottom:20px">' + _tt_popup_sub + '</div>'
         + _popup_btns +
         '<button onclick="document.getElementById(\'tt-popup\').style.display=\'none\'" '
         'style="background:none;border:none;color:rgba(255,255,255,.3);font-size:.82rem;'
@@ -817,7 +822,7 @@ a{{text-decoration:none;color:inherit}}
 <!-- BENEFITS -->
 <section class="tt-sec">
   <div class="wrap">
-    {f'<div class="tt-sec-title">Что ты получаешь</div>' if _tt_bens_html else ""}
+    {f'<div class="tt-sec-title">{_tt_sec_benefits}</div>' if _tt_bens_html else ""}
     {f'<div class="tt-cards">{_tt_bens_html}</div>' if _tt_bens_html else ""}
   </div>
 </section>
@@ -825,7 +830,7 @@ a{{text-decoration:none;color:inherit}}
 <!-- HOW TO START -->
 <section class="tt-sec">
   <div class="wrap">
-    {f'<div class="tt-sec-title">Как начать за 3 шага</div>' if _tt_steps_html else ""}
+    {f'<div class="tt-sec-title">{_tt_sec_steps}</div>' if _tt_steps_html else ""}
     {f'<div class="tt-steps">{_tt_steps_html}</div>' if _tt_steps_html else ""}
     <div style="margin-top:28px;display:flex;flex-direction:column;align-items:center;gap:12px">
       {cta_btns}
@@ -836,7 +841,7 @@ a{{text-decoration:none;color:inherit}}
 <!-- REVIEWS -->
 <section class="tt-sec">
   <div class="wrap">
-    {f'<div class="tt-sec-title">Девушки о работе с нами</div>' if _tt_revs_html else ""}
+    {f'<div class="tt-sec-title">{_tt_sec_reviews}</div>' if _tt_revs_html else ""}
     {f'<div class="tt-reviews">{_tt_revs_html}</div>' if _tt_revs_html else ""}
   </div>
 </section>

@@ -1539,6 +1539,23 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
         _has_steps = cur_tpl == "tiktok_spa"
         _step_btn  = _tab_btn("steps", "👣 Шаги") if _has_steps else ""
         _step_div  = _tab_div("steps", _steps_fields) if _has_steps else ""
+
+        # Поля заголовков секций и попапа (только tiktok_spa)
+        _tt_extra_fields = ""
+        _tt_extra_btn = ""
+        _tt_extra_div = ""
+        if cur_tpl == "tiktok_spa":
+            _tt_extra_fields = (
+                '<div style="font-size:.78rem;font-weight:600;color:var(--text2);margin:8px 0 6px">Заголовки секций</div>' +
+                _tf("sec_benefits_title", "Заголовок секции преимуществ", "Что ты получаешь") +
+                _tf("sec_steps_title",    "Заголовок секции шагов",       "Как начать за 3 шага") +
+                _tf("sec_reviews_title",  "Заголовок секции отзывов",     "Девушки о работе с нами") +
+                '<div style="font-size:.78rem;font-weight:600;color:var(--text2);margin:12px 0 6px">Попап выбора мессенджера</div>' +
+                _tf("popup_title",    "Заголовок попапа",    "Выберите мессенджер") +
+                _tf("popup_subtitle", "Подзаголовок попапа", "Мы ответим в течение 5 минут ⚡")
+            )
+            _tt_extra_btn = _tab_btn("ttextra", "🎵 Попап")
+            _tt_extra_div = _tab_div("ttextra", _tt_extra_fields)
         _texts_fields = f"""
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">
           {_tab_btn("hero",  "🎯 Герой",        True)}
@@ -1548,6 +1565,7 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
           {_tab_btn("faq",   "❓ FAQ")}
           {_tab_btn("cta",   "🔔 CTA")}
           {''+_tab_btn("trust","🔢 Цифры") if _trust_fields else ''}
+          {_tt_extra_btn}
         </div>
         {_tab_div("hero",  _hero_fields,  True)}
         {_tab_div("ben",   _ben_fields)}
@@ -1556,9 +1574,10 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
         {_tab_div("faq",   _faq_fields)}
         {_tab_div("cta",   _cta_fields)}
         {_tab_div("trust", _trust_fields) if _trust_fields else ''}
+        {_tt_extra_div}
         <script>
         function showTab(id) {{
-          ['hero','ben','steps','rev','faq','cta','trust'].forEach(function(t) {{
+          ['hero','ben','steps','rev','faq','cta','trust','ttextra'].forEach(function(t) {{
             var d=document.getElementById('tab-'+t);
             var b=document.getElementById('tab-btn-'+t);
             if(d) d.style.display=(t===id)?'block':'none';

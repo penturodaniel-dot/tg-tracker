@@ -1252,6 +1252,7 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
         });
         </script>"""
 
+    app_url_base = db.get_setting("app_url", "").rstrip("/")
     rows = ""
     for l in landings:
         import json as _json
@@ -1261,8 +1262,28 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
         except:
             tpl_name = "Dark Spa"
         slug_url = f"/l/{l['slug']}"
+        full_url = f"{app_url_base}/l/{l['slug']}"
         _cdomain = l.get("custom_domain") or ""
         _domain_badge = f'<div style="margin-top:4px"><span style="font-family:monospace;font-size:.68rem;background:#052e16;color:#86efac;border:1px solid #166534;border-radius:4px;padding:1px 6px">🌐 {_cdomain}</span></div>' if _cdomain else ""
+
+        # UTM ссылки по проекту
+        _proj = db.get_project(int(l["project_id"])) if l.get("project_id") else None
+        _utm_btn = ""
+        if _proj:
+            _src = (_proj.get("traffic_source") or "").lower()
+            _utms = [u.strip() for u in (_proj.get("utm_campaigns") or "").split(",") if u.strip()]
+            _utm_val = _utms[0] if _utms else "campaign"
+            if _src == "tiktok":
+                _tt_url = f"{full_url}?utm_source=tiktok&utm_medium=paid&utm_campaign={_utm_val}&utm_content=__CID__&utm_term=__AID__&ttclid=__CLICKID__"
+                _utm_btn = f'<button onclick="showUtmLinks(this)" data-tt="{_tt_url}" class="btn-gray btn-sm" style="background:#1a1a2a;border-color:#2a2a4a;color:#69c9d0">🎵 UTM</button>'
+            elif _src == "facebook":
+                _fb_url = f"{full_url}?utm_source=facebook&utm_medium=paid&utm_campaign={_utm_val}&utm_content={{{{ad.name}}}}&utm_term={{{{adset.name}}}}&fbclid={{{{fbclid}}}}"
+                _utm_btn = f'<button onclick="showUtmLinks(this)" data-fb="{_fb_url}" class="btn-gray btn-sm" style="background:#1e3a5f;border-color:#3b5998;color:#93c5fd">🔵 UTM</button>'
+            else:
+                _fb_url = f"{full_url}?utm_source=facebook&utm_medium=paid&utm_campaign={_utm_val}&utm_content={{{{ad.name}}}}&utm_term={{{{adset.name}}}}&fbclid={{{{fbclid}}}}"
+                _tt_url = f"{full_url}?utm_source=tiktok&utm_medium=paid&utm_campaign={_utm_val}&utm_content=__CID__&utm_term=__AID__&ttclid=__CLICKID__"
+                _utm_btn = f'<button onclick="showUtmLinks(this)" data-fb="{_fb_url}" data-tt="{_tt_url}" class="btn-gray btn-sm" style="background:#1a2a1a;border-color:#166534;color:#86efac">🔗 UTM</button>'
+
         rows += f"""<tr>
           <td><b>{l['name']}</b>{_domain_badge}</td>
           <td><span class="badge-gray" style="font-size:.68rem">{tpl_name}</span></td>
@@ -1270,6 +1291,7 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
           <td><span class="{'badge-green' if l['active'] else 'badge-gray'}">{'Активен' if l['active'] else 'Скрыт'}</span></td>
           <td>
             <a href="/landings/edit?id={l['id']}" class="btn-gray btn-sm">✏️ Редакт.</a>
+            {_utm_btn}
             <button onclick="copyLanding({l['id']},'{l['name']}')" class="btn-gray btn-sm" style="background:#1a2a1a;border-color:#166534;color:#86efac">📋 Копия</button>
             <form method="post" action="/landings/delete" style="display:inline"><input type="hidden" name="id" value="{l['id']}"/><button class="del-btn btn-sm">✕</button></form>
           </td></tr>"""
@@ -1291,6 +1313,30 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
       </div>
     </div>
     <script>
+    // UTM Links modal
+    var _utmModal = document.createElement('div');
+    _utmModal.id='utm-links-modal';
+    _utmModal.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1001;align-items:center;justify-content:center';
+    _utmModal.innerHTML='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;min-width:360px;max-width:560px;width:90%">'
+      +'<div style="font-weight:700;font-size:1rem;margin-bottom:16px">🔗 UTM ссылки для рекламы</div>'
+      +'<div id="utm-links-content"></div>'
+      +'<div style="margin-top:16px;text-align:right"><button onclick="document.getElementById(\'utm-links-modal\').style.display=\'none\'" style="padding:8px 18px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:7px;cursor:pointer">Закрыть</button></div>'
+      +'</div>';
+    document.body.appendChild(_utmModal);
+
+    function showUtmLinks(btn){
+      var fb=btn.getAttribute('data-fb')||'';
+      var tt=btn.getAttribute('data-tt')||'';
+      var html='';
+      if(fb){html+='<div style="margin-bottom:14px"><div style="font-size:.75rem;font-weight:700;color:#60a5fa;margin-bottom:6px">🔵 Facebook Ads — URL объявления:</div>'
+        +'<div style="display:flex;gap:6px;align-items:center"><input readonly value="'+fb+'" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:.72rem;font-family:monospace" onclick="this.select()"/>'
+        +'<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='📋'},1500)})" style="padding:7px 12px;background:#1e3a5f;color:#60a5fa;border:1px solid #3b5998;border-radius:6px;cursor:pointer;font-size:.85rem">📋</button></div></div>';}
+      if(tt){html+='<div><div style="font-size:.75rem;font-weight:700;color:#69c9d0;margin-bottom:6px">🎵 TikTok Ads — URL объявления:</div>'
+        +'<div style="display:flex;gap:6px;align-items:center"><input readonly value="'+tt+'" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:.72rem;font-family:monospace" onclick="this.select()"/>'
+        +'<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='📋'},1500)})" style="padding:7px 12px;background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a;border-radius:6px;cursor:pointer;font-size:.85rem">📋</button></div></div>';}
+      document.getElementById('utm-links-content').innerHTML=html;
+      document.getElementById('utm-links-modal').style.display='flex';
+    }
     var _copyLandingId=0;
     function copyLanding(id,name){_copyLandingId=id;document.getElementById('copy-name').value=name+' (копия)';document.getElementById('copy-slug').value='';document.getElementById('copy-landing-modal').style.display='flex';}
     function submitCopyLanding(){var n=document.getElementById('copy-name').value.trim();var s=document.getElementById('copy-slug').value.trim();if(!n||!s){alert('Заполни название и slug');return;}

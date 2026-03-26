@@ -462,7 +462,11 @@ input[type=date]:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 
 
 /* ── UTM TAGS ────────────────────────────────────── */
 .utm-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
-.utm-tag{background:#0c1e38;border:1px solid #1e3a5f;border-radius:4px;padding:2px 8px;font-size:.7rem;color:#7dd3fc;font-family:monospace}
+.utm-tag{background:#0c1e38;border:1px solid #1e3a5f;border-radius:4px;padding:2px 8px;font-size:.72rem;color:#7dd3fc;font-family:inherit;font-weight:500}
+.source-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:600;white-space:nowrap;border:1px solid transparent}
+.source-fb{background:#1e3a5f;color:#60a5fa;border-color:#1e3a5f}
+.source-organic{background:var(--bg3);color:var(--text3);border-color:var(--border)}
+.source-tg{background:#0d2137;color:#7dd3fc;border-color:#1e3a5f}
 
 /* ── CHARTS ──────────────────────────────────────── */
 .chart-wrap{height:150px;display:flex;align-items:flex-end;gap:3px;padding:4px 0}

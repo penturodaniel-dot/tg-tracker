@@ -274,6 +274,7 @@ class Database:
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS ttp TEXT DEFAULT ''",
                     "ALTER TABLE projects ADD COLUMN IF NOT EXISTS tt_token TEXT DEFAULT ''",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS ttp TEXT",
+                    "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS tg_user_id TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
                     "ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_medium TEXT",
@@ -711,6 +712,26 @@ class Database:
                         ORDER BY created_at DESC LIMIT 1""",
                         (cutoff,))
                 r = cur.fetchone(); return dict(r) if r else None
+
+    def get_staff_click_by_tg_user(self, tg_user_id: str, minutes: int = 1440):
+        """Ищет клик привязанный к конкретному tg_user_id (за последние N минут)"""
+        from datetime import timedelta
+        cutoff = (datetime.utcnow() - timedelta(minutes=minutes)).isoformat()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT * FROM staff_clicks
+                    WHERE tg_user_id=%s AND target_type='telegram' AND created_at>=%s
+                    ORDER BY created_at DESC LIMIT 1""",
+                    (str(tg_user_id), cutoff))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def bind_staff_click_to_tg_user(self, ref_id: str, tg_user_id: str):
+        """Привязываем клик к tg_user_id после первого сообщения"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE staff_clicks SET tg_user_id=%s WHERE ref_id=%s",
+                            (str(tg_user_id), ref_id))
+            conn.commit()
 
     def mark_staff_click_used(self, ref_id):
         with self._conn() as conn:

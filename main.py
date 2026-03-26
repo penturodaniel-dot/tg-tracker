@@ -1312,6 +1312,7 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
         </div>
       </div>
     </div>
+    <script>
     var _copyLandingId=0;
     function copyLanding(id,name){_copyLandingId=id;document.getElementById('copy-name').value=name+' (копия)';document.getElementById('copy-slug').value='';document.getElementById('copy-landing-modal').style.display='flex';}
     function submitCopyLanding(){var n=document.getElementById('copy-name').value.trim();var s=document.getElementById('copy-slug').value.trim();if(!n||!s){alert('Заполни название и slug');return;}

@@ -1145,27 +1145,9 @@ async def landings_client(request: Request, msg: str = ""):
 async def landings_staff_page(request: Request, msg: str = ""):
     user, err = require_auth(request)
     if err: return err
-    staff_welcome = db.get_setting("staff_welcome", "Привет! Напиши своё имя и должность 👋")
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
-    welcome_block = f"""
-    <div class="section" style="border-left:3px solid #f97316">
-      <div class="section-head"><h3>👔 Текст бота сотрудников (/start)</h3></div>
-      <div class="section-body">
-        <form method="post" action="/settings/staff_welcome">
-          <div class="field-group" style="margin-bottom:12px">
-            <div class="field-label">Первое сообщение когда сотрудник пишет /start боту</div>
-            <textarea name="staff_welcome" rows="4" style="min-height:90px">{staff_welcome}</textarea>
-            <span style="font-size:.75rem;color:var(--text3);margin-top:4px;display:block">Это сообщение видит кандидат при первом контакте с ботом сотрудников</span>
-          </div>
-          <button class="btn-orange">💾 Сохранить текст</button>
-        </form>
-      </div>
-    </div>
-    {alert}"""
-    page_content = _landings_page(ltype="staff", active="landings_staff", msg="", request=request)
-    # Вставляем блок бота перед контентом страницы
-    page_content = welcome_block + page_content
-    return HTMLResponse(base(page_content, "landings_staff", request))
+    page_content = _landings_page(ltype="staff", active="landings_staff", msg=msg, request=request)
+    return HTMLResponse(base(alert + page_content, "landings_staff", request))
 
 
 def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:

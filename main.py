@@ -1312,7 +1312,13 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
         </div>
       </div>
     </div>
-    <script>
+    var _copyLandingId=0;
+    function copyLanding(id,name){_copyLandingId=id;document.getElementById('copy-name').value=name+' (копия)';document.getElementById('copy-slug').value='';document.getElementById('copy-landing-modal').style.display='flex';}
+    function submitCopyLanding(){var n=document.getElementById('copy-name').value.trim();var s=document.getElementById('copy-slug').value.trim();if(!n||!s){alert('Заполни название и slug');return;}
+    fetch('/landings/copy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:_copyLandingId,name:n,slug:s})})
+    .then(r=>r.json()).then(d=>{if(d.ok){window.location.reload();}else{alert(d.error||'Ошибка');}});}
+    </script>'''
+    _utm_script = """<script>
     // UTM Links modal
     var _utmModal = document.createElement('div');
     _utmModal.id='utm-links-modal';
@@ -1336,15 +1342,9 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
         +'<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='📋'},1500)})" style="padding:7px 12px;background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a;border-radius:6px;cursor:pointer;font-size:.85rem">📋</button></div></div>';}
       document.getElementById('utm-links-content').innerHTML=html;
       document.getElementById('utm-links-modal').style.display='flex';
-    }
-    var _copyLandingId=0;
-    function copyLanding(id,name){_copyLandingId=id;document.getElementById('copy-name').value=name+' (копия)';document.getElementById('copy-slug').value='';document.getElementById('copy-landing-modal').style.display='flex';}
-    function submitCopyLanding(){var n=document.getElementById('copy-name').value.trim();var s=document.getElementById('copy-slug').value.trim();if(!n||!s){alert('Заполни название и slug');return;}
-    fetch('/landings/copy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:_copyLandingId,name:n,slug:s})})
-    .then(r=>r.json()).then(d=>{if(d.ok){window.location.reload();}else{alert(d.error||'Ошибка');}});}
-    </script>'''
+    }"""
     return f"""<div class="page-wrap"><div class="page-title">{title}</div>
-    <div class="page-sub">{sub}</div>{_copy_modal}{alert}
+    <div class="page-sub">{sub}</div>{_copy_modal}{_utm_script}{alert}
     <div class="section"><div class="section-head"><h3>➕ Создать лендинг</h3></div><div class="section-body">
     <form method="post" action="/landings/create"><input type="hidden" name="ltype" value="{ltype}"/>
     <input type="hidden" name="redirect" value="/landings{'_staff' if ltype=='staff' else ''}"/>

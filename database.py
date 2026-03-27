@@ -2376,3 +2376,44 @@ class Database:
     def reset_autopost_window(self, campaign_id: int):
         """Сброс счётчика окна — вызывается когда окно неактивно"""
         pass  # счётчик берётся из лога по дате — ничего сбрасывать не нужно
+
+    # ── Медиатека автопостинга ─────────────────────────────────────────────────
+    def _ensure_media_library(self):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS autopost_media (
+                        id          SERIAL PRIMARY KEY,
+                        name        TEXT DEFAULT '',
+                        url         TEXT NOT NULL,
+                        media_type  TEXT DEFAULT 'image',
+                        size_bytes  INTEGER DEFAULT 0,
+                        created_at  TEXT NOT NULL
+                    )
+                """)
+            conn.commit()
+
+    def get_autopost_media(self) -> list:
+        self._ensure_media_library()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM autopost_media ORDER BY created_at DESC")
+                return [dict(r) for r in cur.fetchall()]
+
+    def add_autopost_media(self, name: str, url: str, media_type: str = "image", size_bytes: int = 0) -> int:
+        self._ensure_media_library()
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO autopost_media (name, url, media_type, size_bytes, created_at) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+                    (name, url, media_type, size_bytes, datetime.utcnow().isoformat())
+                )
+                return cur.fetchone()["id"]
+            conn.commit()
+
+    def delete_autopost_media(self, media_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM autopost_media WHERE id=%s", (media_id,))
+            conn.commit()

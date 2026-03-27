@@ -42,6 +42,7 @@ async def settings_page(request: Request, msg: str = ""):
 
     b1_info = await bot_manager.get_bot_info(bot_manager.get_tracker_bot())
     b2_info = await bot_manager.get_bot_info(bot_manager.get_staff_bot())
+    b3_info = await bot_manager.get_bot_info(bot_manager.get_autopost_bot())
     # Раздельные пиксели
     pixel_clients   = db.get_setting("pixel_id_clients",   db.get_setting("pixel_id", ""))
     token_clients   = db.get_setting("meta_token_clients", db.get_setting("meta_token", ""))
@@ -57,8 +58,8 @@ async def settings_page(request: Request, msg: str = ""):
 
     def bot_card(title, color, info, field, route):
         status = f'<span style="color:#34d399">● Активен — <a href="{info.get("link","")}" target="_blank" style="color:#60a5fa">@{info.get("username","")}</a></span>' if info.get("active") else '<span style="color:var(--red)">● Не запущен</span>'
-        border = "#3b82f6" if color == "blue" else "#f97316"
-        btn = "btn" if color == "blue" else "btn-orange"
+        border = "#3b82f6" if color == "blue" else ("#f97316" if color == "orange" else "#9333ea")
+        btn = "btn" if color == "blue" else ("btn-orange" if color == "orange" else "btn")
         return f"""<div class="section" style="border-left:3px solid {border}">
           <div class="section-head"><h3>{title}</h3><span style="font-size:.82rem">{status}</span></div>
           <div class="section-body">
@@ -76,6 +77,7 @@ async def settings_page(request: Request, msg: str = ""):
     <div class="section-head" style="padding:0;margin-bottom:12px"><h3 style="font-size:.78rem;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.08em">🤖 Управление ботами</h3></div>
     {bot_card("🔵 Бот 1 — Трекер (Клиенты)", "blue", b1_info, "bot1_token", "settings/bot1")}
     {bot_card("🟠 Бот 2 — Уведомления (авторизация)", "orange", b2_info, "bot2_token", "settings/bot2")}
+    {bot_card("🟣 Бот 3 — Автопостинг в каналы", "purple", b3_info, "bot3_token", "settings/bot3")}
 
     <div class="section" style="border-left:3px solid #25d366">
       <div class="section-head"><h3>💚 WhatsApp</h3>
@@ -204,6 +206,18 @@ async def settings_bot2(request: Request, bot2_token: str = Form("")):
         info = await bot_manager.get_bot_info(bot_manager.get_staff_bot())
         if info.get("username"): db.set_setting("bot2_name", f"@{info['username']}")
     return RedirectResponse("/settings?msg=Бот+2+обновлён", 303)
+
+
+@router.post("/settings/bot3")
+async def settings_bot3(request: Request, bot3_token: str = Form("")):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    if bot3_token.strip():
+        db.set_setting("bot3_token", bot3_token.strip())
+        await bot_manager.start_autopost_bot(bot3_token.strip())
+        info = await bot_manager.get_bot_info(bot_manager.get_autopost_bot())
+        if info.get("username"): db.set_setting("bot3_name", f"@{info['username']}")
+    return RedirectResponse("/settings?msg=Бот+3+обновлён", 303)
 
 
 @router.post("/settings/tiktok_pixel")

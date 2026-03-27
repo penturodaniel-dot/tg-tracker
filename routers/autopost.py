@@ -248,6 +248,31 @@ async def autopost_edit(request: Request, campaign_id: int, msg: str = "", err: 
     alert = (f'<div class="alert-green">✅ {msg}</div>' if msg else
              f'<div class="alert-red">❌ {err}</div>' if err else "")
 
+    # Боты для постинга
+    _b2_token = db.get_setting("bot2_token") or ""
+    _b2_name  = db.get_setting("bot2_name") or "Бот 2"
+    _b3_token = db.get_setting("bot3_token") or ""
+    _b3_name  = db.get_setting("bot3_name") or "Бот 3"
+    _cur_token = c.get("bot_token") or ""
+    _bot_opts = '<option value="">— выбрать бота —</option>'
+    if _b2_token:
+        _sel = "selected" if _cur_token == _b2_token else ""
+        _bot_opts += f'<option value="{_b2_token}" {_sel}>🟠 {_b2_name} (подписки)</option>'
+    if _b3_token:
+        _sel = "selected" if _cur_token == _b3_token else ""
+        _bot_opts += f'<option value="{_b3_token}" {_sel}>🟣 {_b3_name} (автопостинг)</option>'
+    _sel_style = "width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);font-size:.82rem"
+    _bot_select_html = f'<select name="bot_token" style="{_sel_style}">{_bot_opts}</select>'
+
+    # Каналы из БД
+    _channels = db.get_channels()
+    _cur_channel = c.get("channel_id") or ""
+    _ch_opts = '<option value="">— выбрать канал —</option>'
+    for ch in _channels:
+        _sel = "selected" if str(ch.get("channel_id", "")) == str(_cur_channel) else ""
+        _ch_opts += f'<option value="{ch["channel_id"]}" {_sel}>📡 {ch["name"]}</option>'
+    _channel_select_html = f'<select name="channel_id" style="{_sel_style}">{_ch_opts}</select>'
+
     # Окна постинга
     windows = json.loads(c.get("windows") or "[]") or [[8, 10], [18, 21]]
     windows_str = ", ".join(f"{s}-{e}" for s, e in windows)
@@ -284,14 +309,14 @@ async def autopost_edit(request: Request, campaign_id: int, msg: str = "", err: 
       <form method="post" action="/autopost/{campaign_id}/save">
         <div class="form-row" style="flex-wrap:wrap;gap:12px">
           <div class="field-group" style="flex:1;min-width:220px">
-            <div class="field-label">Bot Token {bot_status}</div>
-            <input type="text" name="bot_token" value="{bot_token}" placeholder="7711559280:AAG..."/>
-            <span style="font-size:.72rem;color:var(--text3)">Токен бота который будет постить в канал</span>
+            <div class="field-label">Бот для постинга</div>
+            {_bot_select_html}
+            <span style="font-size:.72rem;color:var(--text3)">Рекомендуется Бот 3 (автопостинг)</span>
           </div>
           <div class="field-group" style="flex:1;min-width:220px">
-            <div class="field-label">Chat ID канала</div>
-            <input type="text" name="channel_id" value="{channel_id}" placeholder="-1002643912551"/>
-            <span style="font-size:.72rem;color:var(--text3)">ID канала (отрицательное число)</span>
+            <div class="field-label">Канал</div>
+            {_channel_select_html}
+            <span style="font-size:.72rem;color:var(--text3)">Каналы из раздела Клиенты → Каналы</span>
           </div>
         </div>
 
@@ -683,8 +708,14 @@ async def _send_post(campaign_id: int, post_id: int = None, advance_index: bool 
 
         token = c.get("bot_token") or ""
         channel = c.get("channel_id") or ""
-        if not token or not channel:
-            log.warning(f"[Autopost] campaign={campaign_id} missing token or channel")
+        if not channel:
+            log.warning(f"[Autopost] campaign={campaign_id} missing channel")
+            return False
+        # Если токен не задан явно — используем Бот 3, затем Бот 2
+        if not token:
+            token = db.get_setting("bot3_token") or db.get_setting("bot2_token") or ""
+        if not token:
+            log.warning(f"[Autopost] campaign={campaign_id} no bot token available")
             return False
 
         if post_id:

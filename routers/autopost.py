@@ -200,10 +200,11 @@ async def autopost_media_upload(request: Request, name: str = Form(...),
         cld_secret = os.getenv("CLOUDINARY_API_SECRET", "")
         cld_url    = db.get_setting("cloudinary_url") or os.getenv("CLOUDINARY_URL", "")
 
+        log.info(f"[Autopost media] cld_name={repr(cld_name)} cld_key={repr(cld_key[:5] if cld_key else '')} cld_url={repr(cld_url[:20] if cld_url else '')}")
         if cld_name and cld_key and cld_secret:
-            cloudinary.config(cloud_name=cld_name, api_key=cld_key, api_secret=cld_secret)
+            cloudinary.config(cloud_name=cld_name.strip(), api_key=cld_key.strip(), api_secret=cld_secret.strip())
         elif cld_url:
-            cloudinary.config(cloudinary_url=cld_url)
+            cloudinary.config(cloudinary_url=cld_url.strip())
         else:
             return RedirectResponse("/autopost/media?err=Cloudinary+не+настроен", 303)
         file_bytes = await media.read()

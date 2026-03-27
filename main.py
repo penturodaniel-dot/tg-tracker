@@ -896,7 +896,7 @@ settings_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, 
 app.include_router(settings_router)
 
 channels_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, bot_manager)
-autopost_setup(db=db, log=log, require_auth=require_auth, base=base, bot_manager=bot_manager)
+autopost_setup(db, log, require_auth, base, bot_manager=bot_manager)
 app.include_router(channels_router)
 app.include_router(autopost_router)
 

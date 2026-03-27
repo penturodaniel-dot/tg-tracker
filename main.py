@@ -1,3 +1,4 @@
+
 import asyncio
 import hashlib
 import logging
@@ -37,6 +38,7 @@ from routers.staff       import router as staff_router,     setup as staff_setup
 from routers.users_tags  import router as users_tags_router, setup as users_tags_setup
 from routers.settings    import router as settings_router,  setup as settings_setup
 from routers.channels    import router as channels_router,  setup as channels_setup
+from routers.autopost    import router as autopost_router,  setup as autopost_setup, start_scheduler as autopost_start_scheduler
 from routers.projects    import router as projects_router,  setup as projects_setup
 from routers.scripts     import router as scripts_router,   setup as scripts_setup
 
@@ -104,6 +106,7 @@ async def lifespan(app: FastAPI):
     except: pass
     await bot_manager.start_tracker_bot(db.get_setting("bot1_token"))
     await bot_manager.start_staff_bot(db.get_setting("bot2_token"))
+    autopost_start_scheduler()
     yield
     await bot_manager.stop_tracker_bot()
     await bot_manager.stop_staff_bot()
@@ -555,6 +558,7 @@ def nav_html(active: str, request: Request) -> str:
     clients_items = (
         item("📡", "Каналы",      "channels",          "blue") +
         item("🔗", "Кампании",    "campaigns",         "blue") +
+        item("📣", "Автопостинг", "autopost",           "blue", url="/autopost") +
         item("🎨", "Шаблоны",     "landings",          "blue") +
         item("📈", "Статистика",  "analytics_clients", "blue", url="/analytics/clients")
     )
@@ -892,7 +896,9 @@ settings_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, 
 app.include_router(settings_router)
 
 channels_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, bot_manager)
+autopost_setup(db=db, log=log, require_auth=require_auth, base=base, bot_manager=bot_manager)
 app.include_router(channels_router)
+app.include_router(autopost_router)
 
 projects_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker)
 app.include_router(projects_router)

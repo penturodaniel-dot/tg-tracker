@@ -2153,3 +2153,226 @@ class Database:
                     (project_id,)
                 )
                 return [r["category"] for r in cur.fetchall()]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # АВТОПОСТИНГ
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _ensure_autopost_tables(self):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS autopost_campaigns (
+                        id              SERIAL PRIMARY KEY,
+                        name            TEXT NOT NULL,
+                        status          TEXT DEFAULT 'paused',
+                        bot_token       TEXT DEFAULT '',
+                        channel_id      TEXT DEFAULT '',
+                        timezone        TEXT DEFAULT 'US/Eastern',
+                        windows         TEXT DEFAULT '[[8,10],[18,21]]',
+                        windows_label   TEXT DEFAULT '8-10, 18-21',
+                        max_posts       INTEGER DEFAULT 2,
+                        delay_min       INTEGER DEFAULT 5,
+                        delay_max       INTEGER DEFAULT 15,
+                        post_mode       TEXT DEFAULT 'loop',
+                        current_index   INTEGER DEFAULT 1,
+                        created_at      TEXT NOT NULL
+                    )
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS autopost_posts (
+                        id              SERIAL PRIMARY KEY,
+                        campaign_id     INTEGER NOT NULL,
+                        position        INTEGER DEFAULT 1,
+                        caption         TEXT DEFAULT '',
+                        media_url       TEXT DEFAULT '',
+                        media_type      TEXT DEFAULT '',
+                        sent_count      INTEGER DEFAULT 0,
+                        last_sent_at    TEXT,
+                        created_at      TEXT NOT NULL
+                    )
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS autopost_log (
+                        id              SERIAL PRIMARY KEY,
+                        campaign_id     INTEGER NOT NULL,
+                        post_id         INTEGER,
+                        window_start    INTEGER,
+                        window_end      INTEGER,
+                        sent_at         TEXT NOT NULL,
+                        status          TEXT DEFAULT 'ok',
+                        error           TEXT DEFAULT ''
+                    )
+                """)
+            conn.commit()
+
+    def get_autopost_campaigns(self, status=None):
+        self._ensure_autopost_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if status:
+                    cur.execute("SELECT * FROM autopost_campaigns WHERE status=%s ORDER BY id", (status,))
+                else:
+                    cur.execute("SELECT * FROM autopost_campaigns ORDER BY id")
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_autopost_campaign(self, campaign_id: int):
+        self._ensure_autopost_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM autopost_campaigns WHERE id=%s", (campaign_id,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def create_autopost_campaign(self, name: str, timezone: str = "US/Eastern") -> int:
+        self._ensure_autopost_tables()
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO autopost_campaigns (name, timezone, created_at) VALUES (%s,%s,%s) RETURNING id",
+                    (name, timezone, datetime.utcnow().isoformat())
+                )
+                return cur.fetchone()["id"]
+            conn.commit()
+
+    def update_autopost_campaign(self, campaign_id: int, **kwargs):
+        allowed = ["bot_token","channel_id","timezone","windows","windows_label",
+                   "max_posts","delay_min","delay_max","post_mode","status"]
+        fields, vals = [], []
+        for k, v in kwargs.items():
+            if k in allowed:
+                fields.append(f"{k}=%s"); vals.append(v)
+        if not fields: return
+        vals.append(campaign_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"UPDATE autopost_campaigns SET {', '.join(fields)} WHERE id=%s", vals)
+            conn.commit()
+
+    def set_autopost_status(self, campaign_id: int, status: str):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE autopost_campaigns SET status=%s WHERE id=%s", (status, campaign_id))
+            conn.commit()
+
+    def delete_autopost_campaign(self, campaign_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM autopost_posts WHERE campaign_id=%s", (campaign_id,))
+                cur.execute("DELETE FROM autopost_log WHERE campaign_id=%s", (campaign_id,))
+                cur.execute("DELETE FROM autopost_campaigns WHERE id=%s", (campaign_id,))
+            conn.commit()
+
+    def get_autopost_posts(self, campaign_id: int):
+        self._ensure_autopost_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM autopost_posts WHERE campaign_id=%s ORDER BY position", (campaign_id,))
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_autopost_post(self, post_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM autopost_posts WHERE id=%s", (post_id,))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def get_autopost_posts_count(self, campaign_id: int) -> int:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) as c FROM autopost_posts WHERE campaign_id=%s", (campaign_id,))
+                return cur.fetchone()["c"]
+
+    def get_autopost_sent_count(self, campaign_id: int) -> int:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COALESCE(SUM(sent_count),0) as c FROM autopost_posts WHERE campaign_id=%s", (campaign_id,))
+                return cur.fetchone()["c"]
+
+    def add_autopost_post(self, campaign_id: int, caption: str, position: int,
+                          media_url: str = None, media_type: str = None):
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO autopost_posts (campaign_id, position, caption, media_url, media_type, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
+                    (campaign_id, position, caption, media_url or "", media_type or "", datetime.utcnow().isoformat())
+                )
+            conn.commit()
+
+    def delete_autopost_post(self, post_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM autopost_posts WHERE id=%s", (post_id,))
+            conn.commit()
+
+    def get_autopost_next_index(self, campaign_id: int) -> int:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT current_index FROM autopost_campaigns WHERE id=%s", (campaign_id,))
+                r = cur.fetchone()
+                return r["current_index"] if r else 1
+
+    def get_autopost_next_post(self, campaign_id: int):
+        idx = self.get_autopost_next_index(campaign_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM autopost_posts WHERE campaign_id=%s AND position>=%s ORDER BY position LIMIT 1",
+                    (campaign_id, idx)
+                )
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def advance_autopost_index(self, campaign_id: int):
+        post = self.get_autopost_next_post(campaign_id)
+        if post:
+            next_pos = post["position"] + 1
+            with self._conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE autopost_campaigns SET current_index=%s WHERE id=%s", (next_pos, campaign_id))
+                conn.commit()
+
+    def reset_autopost_index(self, campaign_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE autopost_campaigns SET current_index=1 WHERE id=%s", (campaign_id,))
+            conn.commit()
+
+    def mark_autopost_sent(self, post_id: int):
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE autopost_posts SET sent_count=sent_count+1, last_sent_at=%s WHERE id=%s",
+                    (datetime.utcnow().isoformat(), post_id)
+                )
+            conn.commit()
+
+    def get_autopost_window_count(self, campaign_id: int, window: tuple) -> int:
+        """Сколько постов отправлено в текущем окне сегодня"""
+        from datetime import datetime
+        today = datetime.utcnow().date().isoformat()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT COUNT(*) as c FROM autopost_log
+                       WHERE campaign_id=%s AND window_start=%s AND window_end=%s
+                       AND sent_at>=%s AND status='ok'""",
+                    (campaign_id, window[0], window[1], today)
+                )
+                return cur.fetchone()["c"]
+
+    def log_autopost_window(self, campaign_id: int, window: tuple):
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO autopost_log (campaign_id, window_start, window_end, sent_at) VALUES (%s,%s,%s,%s)",
+                    (campaign_id, window[0], window[1], datetime.utcnow().isoformat())
+                )
+            conn.commit()
+
+    def reset_autopost_window(self, campaign_id: int):
+        """Сброс счётчика окна — вызывается когда окно неактивно"""
+        pass  # счётчик берётся из лога по дате — ничего сбрасывать не нужно

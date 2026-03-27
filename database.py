@@ -2417,3 +2417,35 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM autopost_media WHERE id=%s", (media_id,))
             conn.commit()
+
+    def update_autopost_post(self, post_id: int, caption: str = None,
+                              media_url: str = None, media_type: str = None):
+        fields, vals = [], []
+        if caption is not None:   fields.append("caption=%s");    vals.append(caption)
+        if media_url is not None: fields.append("media_url=%s");  vals.append(media_url)
+        if media_type is not None: fields.append("media_type=%s"); vals.append(media_type)
+        if not fields: return
+        vals.append(post_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"UPDATE autopost_posts SET {', '.join(fields)} WHERE id=%s", vals)
+            conn.commit()
+
+    def reorder_autopost_posts(self, campaign_id: int, post_ids: list):
+        """Обновляем position по новому порядку"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                for i, pid in enumerate(post_ids, 1):
+                    cur.execute("UPDATE autopost_posts SET position=%s WHERE id=%s AND campaign_id=%s",
+                                (i, pid, campaign_id))
+            conn.commit()
+
+    def get_autopost_log(self, campaign_id: int, limit: int = 10) -> list:
+        self._ensure_autopost_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM autopost_log WHERE campaign_id=%s ORDER BY sent_at DESC LIMIT %s",
+                    (campaign_id, limit)
+                )
+                return [dict(r) for r in cur.fetchall()]

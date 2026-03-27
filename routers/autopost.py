@@ -236,6 +236,206 @@ async def autopost_media_delete(request: Request, id: int = Form(...)):
 
 # ─── НАСТРОЙКИ КАМПАНИИ ───────────────────────────────────────────────────────
 
+
+
+# ─── ШАБЛОНЫ ПОСТОВ ──────────────────────────────────────────────────────────
+
+@router.get("/autopost/templates", response_class=HTMLResponse)
+async def autopost_templates_page(request: Request, msg: str = "", err: str = ""):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+
+    templates = db.get_autopost_templates()
+    all_media  = db.get_autopost_media()
+    alert = (f'<div class="alert-green">✅ {msg}</div>' if msg else
+             f'<div class="alert-red">❌ {err}</div>' if err else "")
+
+    # Media select
+    _mopts = '<option value="">— без медиа —</option>'
+    for m in all_media:
+        _ico = "🎬" if m["media_type"] == "video" else "🖼"
+        _mopts += f'<option value="{m["url"]}" data-type="{m["media_type"]}">{_ico} {m["name"]}</option>'
+    _sel_style = "width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);font-size:.82rem"
+    _media_sel = f'<select name="media_url" id="tpl-media-sel" onchange="var t=this.options[this.selectedIndex].dataset.type||\'\';\ndocument.getElementById(\'tpl-mtype\').value=t" style="{_sel_style}">{_mopts}</select>'
+    _media_sel = f'<select name="media_url" id="tpl-media-sel" style="{_sel_style}">{_mopts}</select><input type="hidden" name="media_type" id="tpl-mtype"/>'
+
+    # Список шаблонов
+    cards = ""
+    for t in templates:
+        _prev = ""
+        if t.get("media_url"):
+            if t.get("media_type") == "video":
+                _prev = '<div style="width:60px;height:60px;background:#1a1a2a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0">🎬</div>'
+            else:
+                _prev = f'<img src="{t["media_url"]}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;flex-shrink:0"/>'
+        _tags = "".join(f'<span style="background:var(--bg3);border:1px solid var(--border);border-radius:99px;padding:2px 8px;font-size:.68rem;color:var(--text3)">{tg.strip()}</span>' for tg in (t.get("tags") or "").split(",") if tg.strip())
+        _caption_short = (t.get("caption") or "")[:100]
+        import base64 as _b64
+        _caption_b64 = _b64.b64encode((t.get("caption") or "").encode("utf-8")).decode("ascii")
+        _media_url_val = t.get("media_url") or ""
+
+        cards += f"""<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;gap:14px;align-items:flex-start">
+          {_prev}
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:.88rem;margin-bottom:4px">{t['name']}</div>
+            <div style="font-size:.78rem;color:var(--text3);margin-bottom:6px;white-space:pre-wrap">{_caption_short}{'...' if len(t.get('caption',''))>100 else ''}</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">{_tags}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button onclick="editTemplate({t['id']}, this)" data-caption="{_caption_b64}" data-media="{_media_url_val}" data-name="{t['name']}" data-tags="{t.get('tags','')}" class="btn-gray btn-sm">✏️</button>
+            <form method="post" action="/autopost/templates/{t['id']}/delete" style="display:inline"><button class="del-btn btn-sm">✕</button></form>
+          </div>
+        </div>"""
+
+    cards = cards or '<div style="padding:20px;text-align:center;color:var(--text3)">Нет шаблонов — создай первый</div>'
+
+    content = f"""<div class="page-wrap">
+    <div class="page-title">📝 Шаблоны постов</div>
+    <div class="page-sub"><a href="/autopost" style="color:var(--text3)">← Автопостинг</a></div>
+    {alert}
+
+    <div class="section"><div class="section-head"><h3>➕ Новый шаблон</h3></div>
+    <div class="section-body">
+      <form method="post" action="/autopost/templates/save">
+        <div class="form-row" style="flex-wrap:wrap;gap:12px">
+          <div class="field-group" style="flex:2;min-width:280px">
+            <div class="field-label">Название шаблона</div>
+            <input type="text" name="name" placeholder="Вечерний пост — Чикаго" required/>
+            <div class="field-label" style="margin-top:10px">Текст поста (HTML)</div>
+            <textarea name="caption" rows="6" placeholder="<b>Текст</b> поста..."></textarea>
+          </div>
+          <div class="field-group" style="flex:1;min-width:220px">
+            <div class="field-label">Медиафайл <a href="/autopost/media" target="_blank" style="font-size:.72rem;color:var(--orange)">+ загрузить</a></div>
+            {_media_sel}
+            <div class="field-label" style="margin-top:10px">Теги (через запятую)</div>
+            <input type="text" name="tags" placeholder="вечер, чикаго, акция"/>
+            <span style="font-size:.72rem;color:var(--text3)">Для быстрого поиска шаблонов</span>
+          </div>
+        </div>
+        <button class="btn-orange">💾 Сохранить шаблон</button>
+      </form>
+    </div></div>
+
+    <div class="section"><div class="section-head">
+      <h3>Шаблоны ({len(templates)})</h3>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;padding:12px 16px">
+      {cards}
+    </div></div>
+
+    <!-- Модал редактирования шаблона -->
+    <div id="edit-tpl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;align-items:center;justify-content:center">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;width:min(560px,95%);max-height:90vh;overflow-y:auto">
+        <div style="font-weight:700;font-size:1rem;margin-bottom:16px">✏️ Редактировать шаблон</div>
+        <form method="post" id="edit-tpl-form">
+          <div class="field-group" style="margin-bottom:10px">
+            <div class="field-label">Название</div>
+            <input type="text" name="name" id="etpl-name"/>
+          </div>
+          <div class="field-group" style="margin-bottom:10px">
+            <div class="field-label">Текст</div>
+            <textarea name="caption" id="etpl-caption" rows="6" style="min-height:120px"></textarea>
+          </div>
+          <div class="field-group" style="margin-bottom:10px">
+            <div class="field-label">Медиа</div>
+            <select name="media_url" id="etpl-media" style="{_sel_style}">{_mopts}</select>
+          </div>
+          <div class="field-group" style="margin-bottom:16px">
+            <div class="field-label">Теги</div>
+            <input type="text" name="tags" id="etpl-tags"/>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button type="submit" class="btn-orange" style="flex:1">💾 Сохранить</button>
+            <button type="button" onclick="document.getElementById('edit-tpl-modal').style.display='none'" class="btn-gray">Отмена</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <script>
+    function editTemplate(id, btn) {{
+      var captionB64 = btn.dataset.caption || '';
+      var caption = captionB64 ? decodeURIComponent(atob(captionB64).split('').map(function(c){{return '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)}}).join('')) : '';
+      document.getElementById('etpl-name').value = btn.dataset.name || '';
+      document.getElementById('etpl-caption').value = caption;
+      document.getElementById('etpl-tags').value = btn.dataset.tags || '';
+      var sel = document.getElementById('etpl-media');
+      var mediaUrl = btn.dataset.media || '';
+      if (sel) {{
+        sel.selectedIndex = 0;
+        for (var i=0; i<sel.options.length; i++) {{
+          if (sel.options[i].value === mediaUrl) {{ sel.selectedIndex = i; break; }}
+        }}
+      }}
+      document.getElementById('edit-tpl-form').action = '/autopost/templates/' + id + '/update';
+      document.getElementById('edit-tpl-modal').style.display = 'flex';
+    }}
+    </script>
+    </div>"""
+
+    return HTMLResponse(base(content, "autopost", request))
+
+
+@router.post("/autopost/templates/save")
+async def autopost_templates_save(request: Request,
+                                   name: str = Form(...), caption: str = Form(""),
+                                   media_url: str = Form(""), media_type: str = Form(""),
+                                   tags: str = Form("")):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+    # Определяем media_type из медиатеки
+    if media_url and not media_type:
+        for m in db.get_autopost_media():
+            if m["url"] == media_url:
+                media_type = m["media_type"]; break
+    db.save_autopost_template(name, caption, media_url, media_type, tags)
+    return RedirectResponse("/autopost/templates?msg=Шаблон+сохранён", 303)
+
+
+@router.post("/autopost/templates/{tpl_id}/update")
+async def autopost_templates_update(request: Request, tpl_id: int,
+                                     name: str = Form(""), caption: str = Form(""),
+                                     media_url: str = Form(""), tags: str = Form("")):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+    media_type = ""
+    if media_url:
+        for m in db.get_autopost_media():
+            if m["url"] == media_url:
+                media_type = m["media_type"]; break
+    db.update_autopost_template(tpl_id, name=name, caption=caption,
+                                 media_url=media_url, media_type=media_type, tags=tags)
+    return RedirectResponse("/autopost/templates?msg=Шаблон+обновлён", 303)
+
+
+@router.post("/autopost/templates/{tpl_id}/delete")
+async def autopost_templates_delete(request: Request, tpl_id: int):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+    db.delete_autopost_template(tpl_id)
+    return RedirectResponse("/autopost/templates?msg=Шаблон+удалён", 303)
+
+
+# API — добавить посты из шаблонов в кампанию
+@router.post("/autopost/{campaign_id}/posts/from_templates")
+async def autopost_add_from_templates(request: Request, campaign_id: int):
+    user, e = require_auth(request, role="admin")
+    if e: return JSONResponse({"ok": False})
+    try:
+        data = await request.json()
+        tpl_ids = data.get("ids", [])
+        posts = db.get_autopost_posts(campaign_id)
+        start_pos = max((p["position"] for p in posts), default=0) + 1
+        for i, tpl_id in enumerate(tpl_ids):
+            tpl = db.get_autopost_template(int(tpl_id))
+            if tpl:
+                db.add_autopost_post(campaign_id, tpl["caption"], start_pos + i,
+                                     tpl.get("media_url") or None, tpl.get("media_type") or None)
+        return JSONResponse({"ok": True, "added": len(tpl_ids)})
+    except Exception as ex:
+        log.error(f"[Autopost] from_templates error: {ex}")
+        return JSONResponse({"ok": False})
+
+
 @router.get("/autopost/{campaign_id}", response_class=HTMLResponse)
 async def autopost_edit(request: Request, campaign_id: int, msg: str = "", err: str = ""):
     user, e = require_auth(request, role="admin")
@@ -521,9 +721,12 @@ async def autopost_posts(request: Request, campaign_id: int, msg: str = "", err:
 
     <div class="section"><div class="section-head">
       <h3>Очередь постов ({len(posts)})</h3>
-      <form method="post" action="/autopost/{campaign_id}/posts/reset_index" style="display:inline">
-        <button class="btn-gray btn-sm">↺ Сбросить на начало</button>
-      </form>
+      <div style="display:flex;gap:6px">
+        <button class="btn-gray btn-sm" onclick="openTemplatesModal()" style="background:#1a2a1a;border-color:#166534;color:#86efac">📝 Из шаблонов</button>
+        <form method="post" action="/autopost/{campaign_id}/posts/reset_index" style="display:inline">
+          <button class="btn-gray btn-sm">↺ Сбросить</button>
+        </form>
+      </div>
     </div>
     <table id="posts-sortable"><thead><tr><th style="width:30px"></th><th>#</th><th>Медиа</th><th>Текст</th><th>Отправлено</th><th>Действия</th></tr></thead>
     <tbody id="posts-tbody">{rows}</tbody></table></div>
@@ -620,6 +823,61 @@ async def autopost_posts(request: Request, campaign_id: int, msg: str = "", err:
     }}
     </script>
     </div>"""
+
+
+    # Шаблоны для модала выбора
+    _all_templates = db.get_autopost_templates()
+    _tpl_cards = ""
+    import base64 as _b64tpl
+    for t in _all_templates:
+        _prev = ""
+        if t.get("media_url"):
+            if t.get("media_type") == "video":
+                _prev = '<div style="width:50px;height:50px;background:#1a1a2a;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">🎬</div>'
+            else:
+                _prev = f'<img src="{t["media_url"]}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;flex-shrink:0"/>'
+        _short = (t.get("caption") or "")[:60]
+        _short = (t.get("caption") or "")[:60]
+        _tid = str(t["id"])
+        _tname = t["name"]
+        _ellipsis = "..." if len(t.get("caption","")) > 60 else ""
+        _label_open = '<label style="display:flex;gap:10px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:6px">'
+        _chk = '<input type="checkbox" name="tpl" value="' + _tid + '" style="flex-shrink:0"/>'
+        _txt = '<div><div style="font-weight:600;font-size:.82rem">' + _tname + '</div><div style="font-size:.72rem;color:var(--text3)">' + _short + _ellipsis + '</div></div>'
+        _tpl_cards += _label_open + _chk + _prev + _txt + "</label>"
+    _tpl_modal_html = '''
+    <div id="tpl-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;align-items:center;justify-content:center">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;width:min(520px,95%);max-height:85vh;display:flex;flex-direction:column">
+        <div style="font-weight:700;font-size:1rem;margin-bottom:4px">📝 Добавить из шаблонов</div>
+        <div style="font-size:.78rem;color:var(--text3);margin-bottom:14px">Выбери шаблоны — они добавятся в очередь кампании</div>
+        <div style="overflow-y:auto;flex:1;margin-bottom:14px">
+          {_tpl_cards if _tpl_cards else '<div style="padding:20px;text-align:center;color:var(--text3)">Нет шаблонов. <a href="/autopost/templates" target="_blank" style="color:var(--orange)">Создать →</a></div>'}
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="addFromTemplates({campaign_id})" class="btn-orange" style="flex:1">➕ Добавить выбранные</button>
+          <button onclick="document.getElementById('tpl-picker-modal').style.display='none'" class="btn-gray">Отмена</button>
+        </div>
+      </div>
+    </div>
+    <script>
+    function openTemplatesModal() {{
+      document.getElementById('tpl-picker-modal').style.display = 'flex';
+    }}
+    function addFromTemplates(campaignId) {{
+      var ids = Array.from(document.querySelectorAll('#tpl-picker-modal input[name=tpl]:checked')).map(function(c) {{ return c.value; }});
+      if (!ids.length) {{ alert('Выбери хотя бы один шаблон'); return; }}
+      fetch('/autopost/' + campaignId + '/posts/from_templates', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{ids: ids}})
+      }}).then(function(r) {{ return r.json(); }}).then(function(d) {{
+        if (d.ok) {{ window.location.reload(); }}
+        else {{ alert('Ошибка добавления'); }}
+      }});
+    }}
+    </script>
+    '''
+    content = content + _tpl_modal_html
 
     return HTMLResponse(base(content, "autopost", request))
 

@@ -427,7 +427,8 @@ async def autopost_posts(request: Request, campaign_id: int, msg: str = "", err:
         import json as _json
         _media_url_val = p.get('media_url') or ''
         _media_type_val = p.get('media_type') or ''
-        _caption_b64 = __import__('base64').b64encode((p.get('caption') or '').encode()).decode()
+        import base64 as _b64
+        _caption_b64 = _b64.b64encode((p.get('caption') or '').encode('utf-8')).decode('ascii')
         rows += f"""<tr draggable="true" data-id="{p['id']}" style="cursor:grab">
           <td style="text-align:center;color:var(--text3);font-size:1rem">⠿</td>
           <td style="text-align:center;font-weight:700">{_is_next}{p['position']}</td>
@@ -530,7 +531,15 @@ async def autopost_posts(request: Request, campaign_id: int, msg: str = "", err:
       var id = btn.dataset.id;
       var captionB64 = btn.dataset.caption || '';
       var mediaUrl = btn.dataset.media || '';
-      var caption = captionB64 ? atob(captionB64) : '';
+      var caption = '';
+      if (captionB64) {{
+        try {{
+          // Правильное декодирование UTF-8 из base64
+          caption = decodeURIComponent(atob(captionB64).split('').map(function(c) {{
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }}).join(''));
+        }} catch(e) {{ caption = atob(captionB64); }}
+      }}
       document.getElementById('edit-post-id').value = id;
       document.getElementById('edit-caption').value = caption;
       var sel = document.getElementById('edit-media-select');

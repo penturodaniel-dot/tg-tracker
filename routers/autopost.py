@@ -489,17 +489,18 @@ async def _send_post(campaign_id: int, post_id: int = None, advance_index: bool 
             media_type = post.get("media_type") or ""
 
             if media_url:
-                import aiohttp
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(media_url) as resp:
-                        file_bytes = await resp.read()
-                import io
+                import httpx, io
+                async with httpx.AsyncClient(timeout=60) as client:
+                    resp = await client.get(media_url)
+                    file_bytes = resp.content
                 buf = io.BytesIO(file_bytes)
                 buf.name = "media.mp4" if "video" in media_type else "media.jpg"
                 if "video" in media_type:
-                    await bot.send_video(int(channel), buf, caption=caption, parse_mode="HTML", supports_streaming=True)
+                    from aiogram.types import BufferedInputFile
+                    await bot.send_video(int(channel), BufferedInputFile(file_bytes, filename="video.mp4"), caption=caption, parse_mode="HTML", supports_streaming=True)
                 else:
-                    await bot.send_photo(int(channel), buf, caption=caption, parse_mode="HTML")
+                    from aiogram.types import BufferedInputFile
+                    await bot.send_photo(int(channel), BufferedInputFile(file_bytes, filename="photo.jpg"), caption=caption, parse_mode="HTML")
             else:
                 await bot.send_message(int(channel), caption, parse_mode="HTML")
 

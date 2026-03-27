@@ -845,38 +845,24 @@ async def autopost_posts(request: Request, campaign_id: int, msg: str = "", err:
         _chk = '<input type="checkbox" name="tpl" value="' + _tid + '" style="flex-shrink:0"/>'
         _txt = '<div><div style="font-weight:600;font-size:.82rem">' + _tname + '</div><div style="font-size:.72rem;color:var(--text3)">' + _short + _ellipsis + '</div></div>'
         _tpl_cards += _label_open + _chk + _prev + _txt + "</label>"
-    _tpl_modal_html = '''
-    <div id="tpl-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;align-items:center;justify-content:center">
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;width:min(520px,95%);max-height:85vh;display:flex;flex-direction:column">
-        <div style="font-weight:700;font-size:1rem;margin-bottom:4px">📝 Добавить из шаблонов</div>
-        <div style="font-size:.78rem;color:var(--text3);margin-bottom:14px">Выбери шаблоны — они добавятся в очередь кампании</div>
-        <div style="overflow-y:auto;flex:1;margin-bottom:14px">
-          {_tpl_cards if _tpl_cards else '<div style="padding:20px;text-align:center;color:var(--text3)">Нет шаблонов. <a href="/autopost/templates" target="_blank" style="color:var(--orange)">Создать →</a></div>'}
-        </div>
-        <div style="display:flex;gap:8px">
-          <button onclick="addFromTemplates({campaign_id})" class="btn-orange" style="flex:1">➕ Добавить выбранные</button>
-          <button onclick="document.getElementById('tpl-picker-modal').style.display='none'" class="btn-gray">Отмена</button>
-        </div>
-      </div>
-    </div>
-    <script>
-    function openTemplatesModal() {{
-      document.getElementById('tpl-picker-modal').style.display = 'flex';
-    }}
-    function addFromTemplates(campaignId) {{
-      var ids = Array.from(document.querySelectorAll('#tpl-picker-modal input[name=tpl]:checked')).map(function(c) {{ return c.value; }});
-      if (!ids.length) {{ alert('Выбери хотя бы один шаблон'); return; }}
-      fetch('/autopost/' + campaignId + '/posts/from_templates', {{
-        method: 'POST',
-        headers: {{'Content-Type': 'application/json'}},
-        body: JSON.stringify({{ids: ids}})
-      }}).then(function(r) {{ return r.json(); }}).then(function(d) {{
-        if (d.ok) {{ window.location.reload(); }}
-        else {{ alert('Ошибка добавления'); }}
-      }});
-    }}
-    </script>
-    '''
+    _no_tpl_msg = '<div style="padding:20px;text-align:center;color:var(--text3)">Нет шаблонов. <a href="/autopost/templates" target="_blank" style="color:var(--orange)">Создать →</a></div>'
+    _tpl_cards_html = _tpl_cards if _tpl_cards else _no_tpl_msg
+    _cid_str = str(campaign_id)
+    _tpl_modal_html = (
+        '<div id="tpl-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;align-items:center;justify-content:center">'
+        '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;width:min(520px,95%);max-height:85vh;display:flex;flex-direction:column">'
+        '<div style="font-weight:700;font-size:1rem;margin-bottom:4px">Добавить из шаблонов</div>'
+        '<div style="font-size:.78rem;color:var(--text3);margin-bottom:14px">Выбери шаблоны — они добавятся в очередь</div>'
+        '<div style="overflow-y:auto;flex:1;margin-bottom:14px">' + _tpl_cards_html + '</div>'
+        '<div style="display:flex;gap:8px">'
+        '<button onclick="addFromTemplates(' + _cid_str + ')" class="btn-orange" style="flex:1">Добавить выбранные</button>'
+        '<button onclick="document.getElementById(\'tpl-picker-modal\').style.display=\'none\'" class="btn-gray">Отмена</button>'
+        '</div></div></div>'
+        '<script>'
+        'function openTemplatesModal(){document.getElementById("tpl-picker-modal").style.display="flex";}'
+        'function addFromTemplates(cid){var ids=Array.from(document.querySelectorAll("#tpl-picker-modal input[name=tpl]:checked")).map(function(c){return c.value;});if(!ids.length){alert("Выбери хотя бы один шаблон");return;}fetch("/autopost/"+cid+"/posts/from_templates",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ids:ids})}).then(function(r){return r.json();}).then(function(d){if(d.ok){window.location.reload();}else{alert("Ошибка");}});}'
+        '</script>'
+    )
     content = content + _tpl_modal_html
 
     return HTMLResponse(base(content, "autopost", request))

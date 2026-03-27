@@ -424,10 +424,10 @@ async def autopost_posts(request: Request, campaign_id: int, msg: str = "", err:
                 _media_preview = f'<span style="font-size:1.2rem">🎬</span>'
         _caption_short = (p.get("caption") or "")[:80]
 
-        _caption_escaped = (_caption_short).replace('"', '&quot;').replace("'", "&#39;")
+        import json as _json
         _media_url_val = p.get('media_url') or ''
         _media_type_val = p.get('media_type') or ''
-        _caption_full = (p.get('caption') or '').replace('"', '&quot;').replace("'", "&#39;")
+        _caption_b64 = __import__('base64').b64encode((p.get('caption') or '').encode()).decode()
         rows += f"""<tr draggable="true" data-id="{p['id']}" style="cursor:grab">
           <td style="text-align:center;color:var(--text3);font-size:1rem">⠿</td>
           <td style="text-align:center;font-weight:700">{_is_next}{p['position']}</td>
@@ -435,7 +435,7 @@ async def autopost_posts(request: Request, campaign_id: int, msg: str = "", err:
           <td style="max-width:260px;font-size:.8rem;color:var(--text2)">{_caption_short}{'...' if len(p.get('caption',''))>80 else ''}</td>
           <td style="text-align:center;font-size:.75rem;color:var(--text3)">{_sent}x<br>{_last}</td>
           <td>
-            <button onclick="openEditPost({p['id']},'{_caption_full}','{_media_url_val}','{_media_type_val}')" class="btn-gray btn-sm">✏️</button>
+            <button onclick="openEditPost(this)" data-id="{p['id']}" data-caption="{_caption_b64}" data-media="{_media_url_val}" data-mtype="{_media_type_val}" class="btn-gray btn-sm">✏️</button>
             <form method="post" action="/autopost/{campaign_id}/posts/{p['id']}/send_now" style="display:inline"><button class="btn-gray btn-sm" title="Отправить этот пост сейчас">⚡</button></form>
             <form method="post" action="/autopost/{campaign_id}/posts/{p['id']}/delete" style="display:inline"><button class="del-btn btn-sm">✕</button></form>
           </td></tr>"""
@@ -526,11 +526,16 @@ async def autopost_posts(request: Request, campaign_id: int, msg: str = "", err:
       </div>
     </div>
     <script>
-    function openEditPost(id, caption, mediaUrl, mediaType) {{
+    function openEditPost(btn) {{
+      var id = btn.dataset.id;
+      var captionB64 = btn.dataset.caption || '';
+      var mediaUrl = btn.dataset.media || '';
+      var caption = captionB64 ? atob(captionB64) : '';
       document.getElementById('edit-post-id').value = id;
-      document.getElementById('edit-caption').value = caption.replace(/&#39;/g,"'").replace(/&quot;/g,'"');
+      document.getElementById('edit-caption').value = caption;
       var sel = document.getElementById('edit-media-select');
       if (sel) {{
+        sel.selectedIndex = 0;
         for (var i=0; i<sel.options.length; i++) {{
           if (sel.options[i].value === mediaUrl) {{ sel.selectedIndex = i; break; }}
         }}

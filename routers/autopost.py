@@ -424,18 +424,47 @@ async def autopost_posts(request: Request, campaign_id: int, msg: str = "", err:
                 _media_preview = f'<span style="font-size:1.2rem">🎬</span>'
         _caption_short = (p.get("caption") or "")[:80]
 
-        rows += f"""<tr>
+        _caption_escaped = (_caption_short).replace('"', '&quot;').replace("'", "&#39;")
+        _media_url_val = p.get('media_url') or ''
+        _media_type_val = p.get('media_type') or ''
+        _caption_full = (p.get('caption') or '').replace('"', '&quot;').replace("'", "&#39;")
+        rows += f"""<tr draggable="true" data-id="{p['id']}" style="cursor:grab">
+          <td style="text-align:center;color:var(--text3);font-size:1rem">⠿</td>
           <td style="text-align:center;font-weight:700">{_is_next}{p['position']}</td>
           <td>{_media_preview}</td>
-          <td style="max-width:300px;font-size:.8rem;color:var(--text2)">{_caption_short}{'...' if len(p.get('caption',''))>80 else ''}</td>
+          <td style="max-width:260px;font-size:.8rem;color:var(--text2)">{_caption_short}{'...' if len(p.get('caption',''))>80 else ''}</td>
           <td style="text-align:center;font-size:.75rem;color:var(--text3)">{_sent}x<br>{_last}</td>
           <td>
-            <a href="/autopost/{campaign_id}/posts/{p['id']}/edit" class="btn-gray btn-sm">✏️</a>
+            <button onclick="openEditPost({p['id']},'{_caption_full}','{_media_url_val}','{_media_type_val}')" class="btn-gray btn-sm">✏️</button>
             <form method="post" action="/autopost/{campaign_id}/posts/{p['id']}/send_now" style="display:inline"><button class="btn-gray btn-sm" title="Отправить этот пост сейчас">⚡</button></form>
             <form method="post" action="/autopost/{campaign_id}/posts/{p['id']}/delete" style="display:inline"><button class="del-btn btn-sm">✕</button></form>
           </td></tr>"""
 
     rows = rows or '<tr><td colspan="5"><div class="empty">Нет постов — добавь первый</div></td></tr>'
+
+    # Лог последних отправок
+    _log_entries = db.get_autopost_log(campaign_id, limit=10)
+    if _log_entries:
+        _log_rows = ""
+        for lg in _log_entries:
+            _lt = (lg.get("sent_at") or "")[:16].replace("T", " ")
+            _ls = "✅" if lg.get("status") == "ok" else "❌"
+            _le = lg.get("error") or "отправлен"
+            _log_rows += f'<div style="display:flex;gap:12px;padding:5px 0;border-bottom:1px solid var(--border);font-size:.78rem"><span style="color:var(--text3);white-space:nowrap">{_lt}</span><span>{_ls} {_le}</span></div>'
+        _log_html = f'<div class="section"><div class="section-head"><h3>📊 Лог отправок (последние 10)</h3></div><div class="section-body" style="padding:8px 16px">{_log_rows}</div></div>'
+    else:
+        _log_html = ""
+
+    # Media select для модала редактирования
+    _media_opts_edit = '<option value="">— без медиа —</option>'
+    for m in _all_media:
+        _ico = "🎬" if m["media_type"] == "video" else "🖼"
+        _media_opts_edit += f'<option value="{m["url"]}" data-type="{m["media_type"]}">{_ico} {m["name"]}</option>'
+    _media_select_html_edit = (
+        '<select name="media_url" id="edit-media-select" style="width:100%;background:var(--bg);'
+        'border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);font-size:.82rem">'
+        + _media_opts_edit + '</select>'
+    )
 
     content = f"""<div class="page-wrap">
     <div class="page-title">📋 Посты: {c['name']}</div>
@@ -470,8 +499,87 @@ async def autopost_posts(request: Request, campaign_id: int, msg: str = "", err:
         <button class="btn-gray btn-sm">↺ Сбросить на начало</button>
       </form>
     </div>
-    <table><thead><tr><th>#</th><th>Медиа</th><th>Текст</th><th>Отправлено</th><th>Действия</th></tr></thead>
-    <tbody>{rows}</tbody></table></div>
+    <table id="posts-sortable"><thead><tr><th style="width:30px"></th><th>#</th><th>Медиа</th><th>Текст</th><th>Отправлено</th><th>Действия</th></tr></thead>
+    <tbody id="posts-tbody">{rows}</tbody></table></div>
+
+    {_log_html}
+
+    <!-- Модал редактирования поста -->
+    <div id="edit-post-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;align-items:center;justify-content:center">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;width:min(580px,95%);max-height:90vh;overflow-y:auto">
+        <div style="font-weight:700;font-size:1rem;margin-bottom:16px">✏️ Редактировать пост</div>
+        <form method="post" id="edit-post-form">
+          <input type="hidden" name="post_id" id="edit-post-id"/>
+          <div class="field-group" style="margin-bottom:12px">
+            <div class="field-label">Текст поста (HTML)</div>
+            <textarea name="caption" id="edit-caption" rows="6" style="min-height:140px"></textarea>
+          </div>
+          <div class="field-group" style="margin-bottom:16px">
+            <div class="field-label">Медиафайл <a href="/autopost/media" target="_blank" style="font-size:.72rem;color:var(--orange)">+ загрузить</a></div>
+            {_media_select_html_edit}
+          </div>
+          <div style="display:flex;gap:8px">
+            <button type="submit" class="btn-orange" style="flex:1">💾 Сохранить</button>
+            <button type="button" onclick="document.getElementById('edit-post-modal').style.display='none'" class="btn-gray">Отмена</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <script>
+    function openEditPost(id, caption, mediaUrl, mediaType) {{
+      document.getElementById('edit-post-id').value = id;
+      document.getElementById('edit-caption').value = caption.replace(/&#39;/g,"'").replace(/&quot;/g,'"');
+      var sel = document.getElementById('edit-media-select');
+      if (sel) {{
+        for (var i=0; i<sel.options.length; i++) {{
+          if (sel.options[i].value === mediaUrl) {{ sel.selectedIndex = i; break; }}
+        }}
+      }}
+      document.getElementById('edit-post-form').action = '/autopost/{campaign_id}/posts/' + id + '/edit';
+      document.getElementById('edit-post-modal').style.display = 'flex';
+    }}
+
+    // Drag-and-drop сортировка
+    var tbody = document.getElementById('posts-tbody');
+    var dragging = null;
+    if (tbody) {{
+      tbody.addEventListener('dragstart', function(e) {{
+        dragging = e.target.closest('tr');
+        setTimeout(function() {{ dragging.style.opacity = '0.4'; }}, 0);
+      }});
+      tbody.addEventListener('dragend', function(e) {{
+        dragging.style.opacity = '';
+        dragging = null;
+        saveSortOrder();
+      }});
+      tbody.addEventListener('dragover', function(e) {{
+        e.preventDefault();
+        var target = e.target.closest('tr');
+        if (target && dragging && target !== dragging) {{
+          var rect = target.getBoundingClientRect();
+          var mid = rect.top + rect.height / 2;
+          if (e.clientY < mid) {{ tbody.insertBefore(dragging, target); }}
+          else {{ tbody.insertBefore(dragging, target.nextSibling); }}
+        }}
+      }});
+    }}
+    function saveSortOrder() {{
+      var ids = Array.from(tbody.querySelectorAll('tr[data-id]')).map(function(r) {{ return r.dataset.id; }});
+      fetch('/autopost/{campaign_id}/posts/reorder', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{order: ids}})
+      }}).then(function(r) {{ return r.json(); }}).then(function(d) {{
+        if (d.ok) {{
+          // Обновляем номера позиций
+          tbody.querySelectorAll('tr[data-id]').forEach(function(tr, i) {{
+            var cells = tr.querySelectorAll('td');
+            if (cells[1]) cells[1].innerHTML = (i+1) + '';
+          }});
+        }}
+      }});
+    }}
+    </script>
     </div>"""
 
     return HTMLResponse(base(content, "autopost", request))
@@ -601,6 +709,15 @@ async def _send_post(campaign_id: int, post_id: int = None, advance_index: bool 
                 db.advance_autopost_index(campaign_id)
 
             log.info(f"[Autopost] ✅ campaign={campaign_id} post={post['id']} pos={post['position']}")
+            # Пишем в лог отправок
+            with db._conn() as _lconn:
+                with _lconn.cursor() as _lcur:
+                    from datetime import datetime as _dt
+                    _lcur.execute(
+                        "INSERT INTO autopost_log (campaign_id, post_id, sent_at, status) VALUES (%s,%s,%s,'ok')",
+                        (campaign_id, post['id'], _dt.utcnow().isoformat())
+                    )
+                _lconn.commit()
             return True
 
         finally:
@@ -670,3 +787,40 @@ def start_scheduler():
         return
     _scheduler_task = asyncio.create_task(scheduler_loop())
     log.info("[Autopost] Scheduler task created")
+
+
+# ─── РЕДАКТИРОВАНИЕ ПОСТА ─────────────────────────────────────────────────────
+
+@router.post("/autopost/{campaign_id}/posts/{post_id}/edit")
+async def autopost_edit_post(request: Request, campaign_id: int, post_id: int,
+                               caption: str = Form(""), media_url: str = Form("")):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+    # Определяем media_type по URL из медиатеки
+    media_type = ""
+    if media_url:
+        all_media = db.get_autopost_media()
+        for m in all_media:
+            if m["url"] == media_url:
+                media_type = m["media_type"]
+                break
+    db.update_autopost_post(post_id, caption=caption.strip(),
+                             media_url=media_url.strip() or None,
+                             media_type=media_type or None)
+    return RedirectResponse(f"/autopost/{campaign_id}/posts?msg=Пост+обновлён", 303)
+
+
+# ─── REORDER (drag-and-drop) ──────────────────────────────────────────────────
+
+@router.post("/autopost/{campaign_id}/posts/reorder")
+async def autopost_reorder(request: Request, campaign_id: int):
+    user, e = require_auth(request, role="admin")
+    if e: return JSONResponse({"ok": False})
+    try:
+        data = await request.json()
+        order = data.get("order", [])
+        db.reorder_autopost_posts(campaign_id, [int(i) for i in order])
+        return JSONResponse({"ok": True})
+    except Exception as ex:
+        log.error(f"[Autopost] reorder error: {ex}")
+        return JSONResponse({"ok": False})

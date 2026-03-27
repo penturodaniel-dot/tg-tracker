@@ -560,6 +560,7 @@ def nav_html(active: str, request: Request) -> str:
         item("📡", "Каналы",      "channels",          "blue") +
         item("🔗", "Кампании",    "campaigns",         "blue") +
         item("📣", "Автопостинг", "autopost",           "blue", url="/autopost") +
+        item("📝", "Шаблоны постов", "autopost_tpl",  "blue", url="/autopost/templates") +
         item("🎨", "Шаблоны",     "landings",          "blue") +
         item("📈", "Статистика",  "analytics_clients", "blue", url="/analytics/clients")
     )

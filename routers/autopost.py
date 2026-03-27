@@ -120,6 +120,112 @@ async def autopost_create(request: Request, name: str = Form(...), timezone: str
     return RedirectResponse(f"/autopost/{cid}?msg=Кампания+создана", 303)
 
 
+
+# ─── МЕДИАТЕКА ────────────────────────────────────────────────────────────────
+
+@router.get("/autopost/media", response_class=HTMLResponse)
+async def autopost_media_page(request: Request, msg: str = "", err: str = ""):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+
+    media_list = db.get_autopost_media()
+    alert = (f'<div class="alert-green">✅ {msg}</div>' if msg else
+             f'<div class="alert-red">❌ {err}</div>' if err else "")
+
+    items = ""
+    for m in media_list:
+        _prev = ""
+        if m["media_type"] == "video":
+            _prev = f'<div style="width:80px;height:80px;background:#1a1a2a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:2rem">🎬</div>'
+        else:
+            _prev = f'<img src="{m["url"]}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border)"/>'
+        _size = f'{m["size_bytes"]//1024} KB' if m.get("size_bytes") else ""
+        items += f"""<div style="display:flex;align-items:center;gap:12px;padding:10px;border-bottom:1px solid var(--border)">
+          {_prev}
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:.85rem">{m['name']}</div>
+            <div style="font-size:.72rem;color:var(--text3)">{m['media_type']} · {_size}</div>
+            <div style="font-size:.7rem;color:var(--text3);margin-top:2px;word-break:break-all">{m['url'][:60]}...</div>
+          </div>
+          <form method="post" action="/autopost/media/delete">
+            <input type="hidden" name="id" value="{m['id']}"/>
+            <button class="del-btn btn-sm">✕</button>
+          </form>
+        </div>"""
+
+    items = items or '<div style="padding:20px;text-align:center;color:var(--text3)">Нет медиафайлов — загрузи первый</div>'
+
+    content = f"""<div class="page-wrap">
+    <div class="page-title">🖼 Медиатека</div>
+    <div class="page-sub"><a href="/autopost" style="color:var(--text3)">← Автопостинг</a></div>
+    {alert}
+
+    <div class="section"><div class="section-head"><h3>⬆️ Загрузить файл</h3></div>
+    <div class="section-body">
+      <form method="post" action="/autopost/media/upload" enctype="multipart/form-data">
+        <div class="form-row" style="gap:12px;flex-wrap:wrap">
+          <div class="field-group" style="flex:1;min-width:200px">
+            <div class="field-label">Название файла</div>
+            <input type="text" name="name" placeholder="Фото Чикаго #1" required/>
+          </div>
+          <div class="field-group" style="flex:1;min-width:200px">
+            <div class="field-label">Файл (фото или видео)</div>
+            <input type="file" name="media" accept="image/*,video/*" required style="font-size:.85rem"/>
+          </div>
+          <div style="display:flex;align-items:flex-end">
+            <button class="btn-orange">⬆️ Загрузить</button>
+          </div>
+        </div>
+      </form>
+    </div></div>
+
+    <div class="section"><div class="section-head"><h3>Файлы ({len(media_list)})</h3></div>
+    {items}
+    </div></div>"""
+
+    return HTMLResponse(base(content, "autopost", request))
+
+
+@router.post("/autopost/media/upload")
+async def autopost_media_upload(request: Request, name: str = Form(...),
+                                 media: UploadFile = File(...)):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+
+    try:
+        import cloudinary, cloudinary.uploader, base64
+        cld_url = db.get_setting("cloudinary_url") or os.getenv("CLOUDINARY_URL", "")
+        if not cld_url:
+            return RedirectResponse("/autopost/media?err=Cloudinary+не+настроен", 303)
+
+        cloudinary.config(cloudinary_url=cld_url)
+        file_bytes = await media.read()
+        mime = media.content_type or "image/jpeg"
+        result = cloudinary.uploader.upload(
+            f"data:{mime};base64,{base64.b64encode(file_bytes).decode()}",
+            folder="autopost_media",
+            resource_type="auto"
+        )
+        url = result.get("secure_url")
+        media_type = "video" if "video" in mime else "image"
+        size = len(file_bytes)
+        db.add_autopost_media(name.strip(), url, media_type, size)
+        return RedirectResponse(f"/autopost/media?msg=Загружено+{name}", 303)
+
+    except Exception as ex:
+        log.error(f"[Autopost media] upload error: {ex}")
+        return RedirectResponse(f"/autopost/media?err=Ошибка+загрузки", 303)
+
+
+@router.post("/autopost/media/delete")
+async def autopost_media_delete(request: Request, id: int = Form(...)):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+    db.delete_autopost_media(id)
+    return RedirectResponse("/autopost/media?msg=Удалено", 303)
+
+
+
 # ─── НАСТРОЙКИ КАМПАНИИ ───────────────────────────────────────────────────────
 
 @router.get("/autopost/{campaign_id}", response_class=HTMLResponse)
@@ -556,107 +662,3 @@ def start_scheduler():
         return
     _scheduler_task = asyncio.create_task(scheduler_loop())
     log.info("[Autopost] Scheduler task created")
-
-
-# ─── МЕДИАТЕКА ────────────────────────────────────────────────────────────────
-
-@router.get("/autopost/media", response_class=HTMLResponse)
-async def autopost_media_page(request: Request, msg: str = "", err: str = ""):
-    user, e = require_auth(request, role="admin")
-    if e: return e
-
-    media_list = db.get_autopost_media()
-    alert = (f'<div class="alert-green">✅ {msg}</div>' if msg else
-             f'<div class="alert-red">❌ {err}</div>' if err else "")
-
-    items = ""
-    for m in media_list:
-        _prev = ""
-        if m["media_type"] == "video":
-            _prev = f'<div style="width:80px;height:80px;background:#1a1a2a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:2rem">🎬</div>'
-        else:
-            _prev = f'<img src="{m["url"]}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border)"/>'
-        _size = f'{m["size_bytes"]//1024} KB' if m.get("size_bytes") else ""
-        items += f"""<div style="display:flex;align-items:center;gap:12px;padding:10px;border-bottom:1px solid var(--border)">
-          {_prev}
-          <div style="flex:1">
-            <div style="font-weight:600;font-size:.85rem">{m['name']}</div>
-            <div style="font-size:.72rem;color:var(--text3)">{m['media_type']} · {_size}</div>
-            <div style="font-size:.7rem;color:var(--text3);margin-top:2px;word-break:break-all">{m['url'][:60]}...</div>
-          </div>
-          <form method="post" action="/autopost/media/delete">
-            <input type="hidden" name="id" value="{m['id']}"/>
-            <button class="del-btn btn-sm">✕</button>
-          </form>
-        </div>"""
-
-    items = items or '<div style="padding:20px;text-align:center;color:var(--text3)">Нет медиафайлов — загрузи первый</div>'
-
-    content = f"""<div class="page-wrap">
-    <div class="page-title">🖼 Медиатека</div>
-    <div class="page-sub"><a href="/autopost" style="color:var(--text3)">← Автопостинг</a></div>
-    {alert}
-
-    <div class="section"><div class="section-head"><h3>⬆️ Загрузить файл</h3></div>
-    <div class="section-body">
-      <form method="post" action="/autopost/media/upload" enctype="multipart/form-data">
-        <div class="form-row" style="gap:12px;flex-wrap:wrap">
-          <div class="field-group" style="flex:1;min-width:200px">
-            <div class="field-label">Название файла</div>
-            <input type="text" name="name" placeholder="Фото Чикаго #1" required/>
-          </div>
-          <div class="field-group" style="flex:1;min-width:200px">
-            <div class="field-label">Файл (фото или видео)</div>
-            <input type="file" name="media" accept="image/*,video/*" required style="font-size:.85rem"/>
-          </div>
-          <div style="display:flex;align-items:flex-end">
-            <button class="btn-orange">⬆️ Загрузить</button>
-          </div>
-        </div>
-      </form>
-    </div></div>
-
-    <div class="section"><div class="section-head"><h3>Файлы ({len(media_list)})</h3></div>
-    {items}
-    </div></div>"""
-
-    return HTMLResponse(base(content, "autopost", request))
-
-
-@router.post("/autopost/media/upload")
-async def autopost_media_upload(request: Request, name: str = Form(...),
-                                 media: UploadFile = File(...)):
-    user, e = require_auth(request, role="admin")
-    if e: return e
-
-    try:
-        import cloudinary, cloudinary.uploader, base64
-        cld_url = db.get_setting("cloudinary_url") or os.getenv("CLOUDINARY_URL", "")
-        if not cld_url:
-            return RedirectResponse("/autopost/media?err=Cloudinary+не+настроен", 303)
-
-        cloudinary.config(cloudinary_url=cld_url)
-        file_bytes = await media.read()
-        mime = media.content_type or "image/jpeg"
-        result = cloudinary.uploader.upload(
-            f"data:{mime};base64,{base64.b64encode(file_bytes).decode()}",
-            folder="autopost_media",
-            resource_type="auto"
-        )
-        url = result.get("secure_url")
-        media_type = "video" if "video" in mime else "image"
-        size = len(file_bytes)
-        db.add_autopost_media(name.strip(), url, media_type, size)
-        return RedirectResponse(f"/autopost/media?msg=Загружено+{name}", 303)
-
-    except Exception as ex:
-        log.error(f"[Autopost media] upload error: {ex}")
-        return RedirectResponse(f"/autopost/media?err=Ошибка+загрузки", 303)
-
-
-@router.post("/autopost/media/delete")
-async def autopost_media_delete(request: Request, id: int = Form(...)):
-    user, e = require_auth(request, role="admin")
-    if e: return e
-    db.delete_autopost_media(id)
-    return RedirectResponse("/autopost/media?msg=Удалено", 303)

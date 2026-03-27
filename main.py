@@ -107,6 +107,7 @@ async def lifespan(app: FastAPI):
     await bot_manager.start_tracker_bot(db.get_setting("bot1_token"))
     await bot_manager.start_staff_bot(db.get_setting("bot2_token"))
     autopost_start_scheduler()
+    await bot_manager.start_autopost_bot(db.get_setting("bot3_token") or "")
     yield
     await bot_manager.stop_tracker_bot()
     await bot_manager.stop_staff_bot()

@@ -219,3 +219,33 @@ async def get_bot_info(bot: Bot | None) -> dict:
                 "name": info.full_name, "link": f"https://t.me/{info.username}"}
     except:
         return {"active": False, "username": None, "name": None}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# БОТ 3 — АВТОПОСТИНГ В КАНАЛЫ
+# ══════════════════════════════════════════════════════════════════════════════
+
+_autopost_bot = None
+
+async def start_autopost_bot(token: str):
+    global _autopost_bot
+    await stop_autopost_bot()
+    if not token: return
+    try:
+        _autopost_bot = Bot(token=token)
+        info = await _autopost_bot.get_me()
+        log.info(f"[BOT3] Started: @{info.username}")
+    except Exception as e:
+        log.error(f"[BOT3] Start error: {e}")
+        _autopost_bot = None
+
+
+async def stop_autopost_bot():
+    global _autopost_bot
+    if _autopost_bot:
+        try: await _autopost_bot.session.close()
+        except: pass
+    _autopost_bot = None
+
+
+def get_autopost_bot():
+    return _autopost_bot

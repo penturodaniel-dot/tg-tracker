@@ -2449,3 +2449,71 @@ class Database:
                     (campaign_id, limit)
                 )
                 return [dict(r) for r in cur.fetchall()]
+
+    # ── Шаблоны постов ────────────────────────────────────────────────────────
+    def _ensure_post_templates(self):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS autopost_templates (
+                        id          SERIAL PRIMARY KEY,
+                        name        TEXT NOT NULL,
+                        caption     TEXT DEFAULT '',
+                        media_url   TEXT DEFAULT '',
+                        media_type  TEXT DEFAULT '',
+                        tags        TEXT DEFAULT '',
+                        created_at  TEXT NOT NULL
+                    )
+                """)
+            conn.commit()
+
+    def get_autopost_templates(self, tag: str = None) -> list:
+        self._ensure_post_templates()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if tag:
+                    cur.execute("SELECT * FROM autopost_templates WHERE tags LIKE %s ORDER BY created_at DESC", (f"%{tag}%",))
+                else:
+                    cur.execute("SELECT * FROM autopost_templates ORDER BY created_at DESC")
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_autopost_template(self, tpl_id: int):
+        self._ensure_post_templates()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM autopost_templates WHERE id=%s", (tpl_id,))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def save_autopost_template(self, name: str, caption: str, media_url: str = "",
+                                media_type: str = "", tags: str = "") -> int:
+        self._ensure_post_templates()
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO autopost_templates (name, caption, media_url, media_type, tags, created_at) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+                    (name.strip(), caption.strip(), media_url, media_type, tags.strip(), datetime.utcnow().isoformat())
+                )
+                return cur.fetchone()["id"]
+            conn.commit()
+
+    def update_autopost_template(self, tpl_id: int, name: str = None, caption: str = None,
+                                  media_url: str = None, media_type: str = None, tags: str = None):
+        fields, vals = [], []
+        if name is not None:       fields.append("name=%s");       vals.append(name.strip())
+        if caption is not None:    fields.append("caption=%s");    vals.append(caption.strip())
+        if media_url is not None:  fields.append("media_url=%s");  vals.append(media_url)
+        if media_type is not None: fields.append("media_type=%s"); vals.append(media_type)
+        if tags is not None:       fields.append("tags=%s");       vals.append(tags.strip())
+        if not fields: return
+        vals.append(tpl_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"UPDATE autopost_templates SET {', '.join(fields)} WHERE id=%s", vals)
+            conn.commit()
+
+    def delete_autopost_template(self, tpl_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM autopost_templates WHERE id=%s", (tpl_id,))
+            conn.commit()

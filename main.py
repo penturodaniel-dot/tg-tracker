@@ -106,9 +106,14 @@ async def lifespan(app: FastAPI):
     except: pass
     await bot_manager.start_tracker_bot(db.get_setting("bot1_token"))
     await bot_manager.start_staff_bot(db.get_setting("bot2_token"))
-    autopost_start_scheduler()
     await bot_manager.start_autopost_bot(db.get_setting("bot3_token") or "")
+    # Запускаем шедулер автопостинга
+    import asyncio as _asyncio
+    from routers.autopost import scheduler_loop
+    _autopost_sched = _asyncio.create_task(scheduler_loop())
+    log.info("[Autopost] Scheduler task launched from lifespan")
     yield
+    _autopost_sched.cancel()
     await bot_manager.stop_tracker_bot()
     await bot_manager.stop_staff_bot()
 

@@ -1029,6 +1029,7 @@ async def scheduler_loop():
     while True:
         try:
             campaigns = db.get_autopost_campaigns(status="active")
+            log.info(f"[Autopost] Scheduler tick: {len(campaigns)} active campaigns")
             for c in campaigns:
                 try:
                     tz_name = c.get("timezone") or "US/Eastern"
@@ -1036,6 +1037,7 @@ async def scheduler_loop():
                     now_hour = datetime.now(tz).hour
                     windows = json.loads(c.get("windows") or "[]")
                     max_posts = c.get("max_posts") or 2
+                    log.info(f"[Autopost] campaign={c['id']} name={c['name']} tz={tz_name} now_hour={now_hour} windows={windows}")
                     delay_min = c.get("delay_min") or 5
                     delay_max = c.get("delay_max") or 15
 

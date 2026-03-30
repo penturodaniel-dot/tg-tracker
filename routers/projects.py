@@ -43,8 +43,12 @@ def _project_card(p: dict, msg: str = "", err: str = "") -> str:
     if msg: alert = f'<div class="alert-green" style="margin-bottom:12px">✅ {msg}</div>'
     if err: alert = f'<div class="alert-red"   style="margin-bottom:12px">⚠️ {err}</div>'
 
-    fb_status  = f'<span style="color:#34d399">● {_masked(p["fb_pixel_id"])}</span>' if p.get("fb_pixel_id") else '<span style="color:var(--red)">● не настроен</span>'
-    tt_status  = f'<span style="color:#34d399">● {_masked(p["tt_pixel_id"])}</span>' if p.get("tt_pixel_id") else '<span style="color:var(--red)">● не настроен</span>'
+    _fb_tok = p.get('fb_token') or ''
+    _tt_tok = p.get('tt_token') or ''
+    _fb_tok_badge = ' <span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:4px;padding:1px 6px;font-size:.68rem;margin-left:4px">🔑 токен ✓</span>' if _fb_tok else ' <span style="background:#2d0a0a;color:#fca5a5;border:1px solid #7f1d1d;border-radius:4px;padding:1px 6px;font-size:.68rem;margin-left:4px">⚠️ токен не задан</span>'
+    _tt_tok_badge = ' <span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:4px;padding:1px 6px;font-size:.68rem;margin-left:4px">🔑 токен ✓</span>' if _tt_tok else ' <span style="background:#2d0a0a;color:#fca5a5;border:1px solid #7f1d1d;border-radius:4px;padding:1px 6px;font-size:.68rem;margin-left:4px">⚠️ токен не задан</span>'
+    fb_status  = (f'<span style="color:#34d399">● {_masked(p["fb_pixel_id"])}</span>' if p.get("fb_pixel_id") else '<span style="color:var(--red)">● не настроен</span>') + _fb_tok_badge
+    tt_status  = (f'<span style="color:#34d399">● {_masked(p["tt_pixel_id"])}</span>' if p.get("tt_pixel_id") else '<span style="color:var(--red)">● не настроен</span>') + _tt_tok_badge
     utms = p.get("utm_campaigns") or ""
     utm_tags = "".join(f'<span class="badge" style="margin-right:4px">{u.strip()}</span>' for u in utms.split(",") if u.strip()) or '<span style="color:var(--text3);font-size:.78rem">не привязаны</span>'
 

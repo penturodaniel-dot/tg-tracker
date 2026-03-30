@@ -43,7 +43,7 @@ async def send_event(
     event_time: int = None,
 ) -> bool:
     if not pixel_id or not access_token:
-        log.warning("Meta CAPI: pixel_id or token not set")
+        log.debug("Meta CAPI: pixel_id or token not set (skipped)")
         return False
 
     user_data = {}

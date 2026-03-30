@@ -1012,7 +1012,7 @@ async def tg_account_webhook(request: Request):
                             _event_time = int(datetime.fromisoformat(_created_at.replace("Z","")).replace(tzinfo=_tz.utc).timestamp())
                         except Exception:
                             pass
-                    log.info(f"[AutoLead/TGA] conv={conv['id']} pixel={px['fb_pixel'][:8] if px['fb_pixel'] else 'NONE'} project={px['project_name'] or 'global'} utm={_campaign} fbp={'✓' if _fbp else '—'} fbc={'✓' if _fbclid else '—'}")
+                    log.info(f"[AutoLead/TGA] conv={conv['id']} fb={px['fb_pixel'][:8] if px['fb_pixel'] else 'NONE'} tt={px.get('tt_pixel','')[:8] if px.get('tt_pixel') else 'NONE'} project={px['project_name'] or 'global'} utm={_campaign}")
                     _fb_sent = await meta_capi.send_lead_event(
                         px["fb_pixel"], px["fb_token"],
                         user_id=str(tg_user_id), campaign=_campaign,

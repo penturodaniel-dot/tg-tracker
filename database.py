@@ -2522,8 +2522,17 @@ class Database:
     def create_staff_manual(self, name: str, phone: str = "", email: str = "",
                              position: str = "", status: str = "new",
                              notes: str = "", tags: str = "",
-                             username: str = "", manager_name: str = "") -> int:
+                             username: str = "", manager_name: str = "",
+                             created_at_override: str = None) -> int:
         from datetime import datetime
+        # Если передана дата вручную — используем её (формат YYYY-MM-DD)
+        if created_at_override:
+            try:
+                _dt = datetime.strptime(created_at_override[:10], "%Y-%m-%d")
+                created_at = _dt.isoformat()
+            except: created_at = datetime.utcnow().isoformat()
+        else:
+            created_at = datetime.utcnow().isoformat()
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -2532,10 +2541,21 @@ class Database:
                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                     (name.strip(), phone.strip(), email.strip(), position.strip(),
                      status, notes.strip(), tags.strip(),
-                     username.strip(), manager_name.strip(),
-                     datetime.utcnow().isoformat())
+                     username.strip(), manager_name.strip(), created_at)
                 )
                 return cur.fetchone()["id"]
+            conn.commit()
+
+    def update_staff_created_at(self, staff_id: int, date_str: str):
+        """Обновляет дату добавления карточки"""
+        from datetime import datetime
+        try:
+            _dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
+            created_at = _dt.isoformat()
+        except: return
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE staff SET created_at=%s WHERE id=%s", (created_at, staff_id))
             conn.commit()
 
     def get_staff_by_month(self, year: int, month: int) -> list:

@@ -155,6 +155,11 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                       {manager_opts}
                     </select>
                   </div>
+                  <div class="field-group" style="margin-bottom:12px">
+                    <div class="field-label">📅 Дата добавления анкеты</div>
+                    <input type="date" name="created_at_manual" value="{(s.get('created_at') or '')[:10]}"/>
+                    <span style="font-size:.72rem;color:var(--text3)">Измени если анкета поступила вне CRM</span>
+                  </div>
                   <div style="display:flex;gap:8px">
                     <button class="btn-orange">💾 Сохранить</button>
                     <a href="/staff"><button class="btn-gray" type="button">Отмена</button></a>
@@ -292,10 +297,13 @@ async function deleteGalleryPhoto(photoId, staffId) {{
 async def staff_update(request: Request, staff_id: int = Form(...), name: str = Form(""),
                         phone: str = Form(""), email: str = Form(""), position: str = Form(""),
                         status: str = Form("new"), notes: str = Form(""), tags: str = Form(""),
-                        manager_name: str = Form(""), staff_photo: UploadFile = File(None)):
+                        manager_name: str = Form(""), created_at_manual: str = Form(""),
+                        staff_photo: UploadFile = File(None)):
     user, err = require_auth(request)
     if err: return err
     db.update_staff(staff_id, name, phone, email, position, status, notes, tags, manager_name=manager_name.strip())
+    if created_at_manual.strip():
+        db.update_staff_created_at(staff_id, created_at_manual.strip())
     # Загрузка фото если прислали
     if staff_photo and staff_photo.filename:
         try:
@@ -503,6 +511,13 @@ async def staff_new_page(request: Request, msg: str = "", err: str = ""):
             <input type="text" name="tags" placeholder="LA, опыт, english"/>
           </div>
           <div class="field-group" style="flex:1;min-width:200px">
+            <div class="field-label">📅 Дата добавления анкеты</div>
+            <input type="date" name="created_at_manual" value="{__import__('datetime').datetime.utcnow().strftime('%Y-%m-%d')}"/>
+            <span style="font-size:.72rem;color:var(--text3)">Если анкета поступила вне CRM</span>
+          </div>
+        </div>
+        <div class="form-row" style="flex-wrap:wrap;gap:12px;margin-top:10px">
+          <div class="field-group" style="flex:1;min-width:200px">
             <div class="field-label">Фото</div>
             <input type="file" name="staff_photo" accept="image/*" style="font-size:.82rem"/>
           </div>
@@ -529,6 +544,7 @@ async def staff_create_manual(request: Request,
                                position: str = Form(""), status: str = Form("new"),
                                notes: str = Form(""), tags: str = Form(""),
                                manager_name: str = Form(""),
+                               created_at_manual: str = Form(""),
                                staff_photo: UploadFile = File(None)):
     user, err = require_auth(request)
     if err: return err
@@ -536,7 +552,8 @@ async def staff_create_manual(request: Request,
     staff_id = db.create_staff_manual(
         name=name, phone=phone, email=email, position=position,
         status=status, notes=notes, tags=tags,
-        username=username.lstrip("@"), manager_name=manager_name
+        username=username.lstrip("@"), manager_name=manager_name,
+        created_at_override=created_at_manual.strip() or None
     )
 
     # Загрузка фото

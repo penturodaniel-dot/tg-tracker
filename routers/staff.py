@@ -45,6 +45,12 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
 
     # Поиск и сортировка
+    # Кнопки быстрых действий
+    _action_btns = ('<div style="display:flex;gap:8px;margin-bottom:14px">'
+        '<a href="/staff/new" style="text-decoration:none"><button class="btn-orange btn-sm">➕ Добавить вручную</button></a>'
+        '<a href="/staff/calendar" style="text-decoration:none"><button class="btn-gray btn-sm">📅 Календарь</button></a>'
+        '</div>')
+
     search_bar = f'''<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <form method="get" action="/staff" style="display:flex;gap:8px;flex:1;align-items:center;flex-wrap:wrap">
         <input type="hidden" name="status_filter" value="{status_filter}"/>
@@ -270,6 +276,7 @@ async function deleteGalleryPhoto(photoId, staffId) {{
     <div class="page-title">🗂 База сотрудников</div>
     <div class="page-sub">Все кто написал боту</div>
     {alert}
+    {_action_btns}
     {search_bar}
     <div style="margin-bottom:16px">{filter_btns}</div>
     {edit_form}
@@ -428,3 +435,249 @@ async def staff_create_from_tga(request: Request, conv_id: int = 0):
     )
     return RedirectResponse(f"/staff?edit={staff['id']}", 303)
 
+
+
+# ─── РУЧНОЕ СОЗДАНИЕ СОТРУДНИКА ───────────────────────────────────────────────
+
+@router.get("/staff/new", response_class=HTMLResponse)
+async def staff_new_page(request: Request, msg: str = "", err: str = ""):
+    user, err_auth = require_auth(request)
+    if err_auth: return err_auth
+
+    alert = (f'<div class="alert-green">✅ {msg}</div>' if msg else
+             f'<div class="alert-red">❌ {err}</div>' if err else "")
+
+    status_opts = "".join(
+        f'<option value="{k}" {"selected" if k=="new" else ""}>{icon} {label}</option>'
+        for k, (icon, label, _) in STAFF_STATUSES.items()
+    )
+    manager_opts = "<option value=''>— не назначен —</option>" + "\n".join(
+        f'<option value="{u.get("display_name") or u["username"]}">'
+        f'{u.get("display_name") or u["username"]} ({u["role"]})</option>'
+        for u in db.get_users()
+    )
+
+    content = f"""<div class="page-wrap">
+    <div class="page-title">➕ Добавить сотрудника вручную</div>
+    <div class="page-sub"><a href="/staff" style="color:var(--text3)">← База</a></div>
+    {alert}
+
+    <div class="section"><div class="section-head"><h3>Новая карточка</h3></div>
+    <div class="section-body">
+      <form method="post" action="/staff/create_manual" enctype="multipart/form-data">
+        <div class="form-row" style="flex-wrap:wrap;gap:12px">
+          <div class="field-group" style="flex:1;min-width:200px">
+            <div class="field-label">Имя *</div>
+            <input type="text" name="name" required placeholder="Анна Иванова"/>
+          </div>
+          <div class="field-group" style="flex:1;min-width:200px">
+            <div class="field-label">Telegram username</div>
+            <input type="text" name="username" placeholder="@username"/>
+          </div>
+          <div class="field-group" style="flex:1;min-width:200px">
+            <div class="field-label">Телефон</div>
+            <input type="text" name="phone" placeholder="+1 234 567 8900"/>
+          </div>
+        </div>
+        <div class="form-row" style="flex-wrap:wrap;gap:12px;margin-top:10px">
+          <div class="field-group" style="flex:1;min-width:200px">
+            <div class="field-label">Email</div>
+            <input type="email" name="email" placeholder="anna@email.com"/>
+          </div>
+          <div class="field-group" style="flex:1;min-width:200px">
+            <div class="field-label">Должность</div>
+            <input type="text" name="position" placeholder="Массажист"/>
+          </div>
+          <div class="field-group" style="flex:1;min-width:160px">
+            <div class="field-label">Статус</div>
+            <select name="status">{status_opts}</select>
+          </div>
+        </div>
+        <div class="form-row" style="flex-wrap:wrap;gap:12px;margin-top:10px">
+          <div class="field-group" style="flex:1;min-width:200px">
+            <div class="field-label">Менеджер</div>
+            <select name="manager_name">{manager_opts}</select>
+          </div>
+          <div class="field-group" style="flex:1;min-width:200px">
+            <div class="field-label">Теги (через запятую)</div>
+            <input type="text" name="tags" placeholder="LA, опыт, english"/>
+          </div>
+          <div class="field-group" style="flex:1;min-width:200px">
+            <div class="field-label">Фото</div>
+            <input type="file" name="staff_photo" accept="image/*" style="font-size:.82rem"/>
+          </div>
+        </div>
+        <div class="field-group" style="margin-top:10px">
+          <div class="field-label">Заметки</div>
+          <textarea name="notes" rows="3" placeholder="Дополнительная информация..."></textarea>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn-orange">💾 Создать карточку</button>
+          <a href="/staff"><button type="button" class="btn-gray">Отмена</button></a>
+        </div>
+      </form>
+    </div></div>
+    </div>"""
+
+    return HTMLResponse(base(content, "staff", request))
+
+
+@router.post("/staff/create_manual")
+async def staff_create_manual(request: Request,
+                               name: str = Form(...), username: str = Form(""),
+                               phone: str = Form(""), email: str = Form(""),
+                               position: str = Form(""), status: str = Form("new"),
+                               notes: str = Form(""), tags: str = Form(""),
+                               manager_name: str = Form(""),
+                               staff_photo: UploadFile = File(None)):
+    user, err = require_auth(request)
+    if err: return err
+
+    staff_id = db.create_staff_manual(
+        name=name, phone=phone, email=email, position=position,
+        status=status, notes=notes, tags=tags,
+        username=username.lstrip("@"), manager_name=manager_name
+    )
+
+    # Загрузка фото
+    if staff_photo and staff_photo.filename:
+        try:
+            import cloudinary, cloudinary.uploader, base64 as _b64
+            cld_name = os.getenv("CLOUDINARY_CLOUD_NAME", "")
+            cld_key  = os.getenv("CLOUDINARY_API_KEY", "")
+            cld_sec  = os.getenv("CLOUDINARY_API_SECRET", "")
+            cld_url  = db.get_setting("cloudinary_url") or os.getenv("CLOUDINARY_URL", "")
+            if cld_name and cld_key and cld_sec:
+                cloudinary.config(cloud_name=cld_name, api_key=cld_key, api_secret=cld_sec)
+            elif cld_url:
+                cloudinary.config(cloudinary_url=cld_url)
+            photo_data = await staff_photo.read()
+            mime = staff_photo.content_type or "image/jpeg"
+            result = cloudinary.uploader.upload(
+                f"data:{mime};base64,{_b64.b64encode(photo_data).decode()}",
+                folder="staff_photos", resource_type="image"
+            )
+            photo_url = result.get("secure_url")
+            if photo_url:
+                db.update_staff_photo(staff_id, photo_url)
+        except Exception as e:
+            log.error(f"[staff/create_manual] photo error: {e}")
+
+    return RedirectResponse(f"/staff?edit={staff_id}&msg=Сотрудник+добавлен", 303)
+
+
+# ─── КАЛЕНДАРЬ СОТРУДНИКОВ ────────────────────────────────────────────────────
+
+@router.get("/staff/calendar", response_class=HTMLResponse)
+async def staff_calendar(request: Request, year: int = 0, month: int = 0, view: str = "month"):
+    user, err = require_auth(request)
+    if err: return err
+
+    from datetime import datetime, date
+    import calendar as _cal
+
+    now = datetime.utcnow()
+    if not year:  year  = now.year
+    if not month: month = now.month
+
+    # Навигация
+    prev_month = month - 1 if month > 1 else 12
+    prev_year  = year if month > 1 else year - 1
+    next_month = month + 1 if month < 12 else 1
+    next_year  = year if month < 12 else year + 1
+
+    month_name = ["", "Январь","Февраль","Март","Апрель","Май","Июнь",
+                  "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"][month]
+
+    # Все сотрудники месяца
+    staff_list = db.get_staff_by_month(year, month)
+
+    # Группируем по дню
+    by_day = {}
+    for s in staff_list:
+        try:
+            d = s["created_at"][:10]  # YYYY-MM-DD
+            day = int(d.split("-")[2])
+            if day not in by_day:
+                by_day[day] = []
+            by_day[day].append(s)
+        except: pass
+
+    # Строим сетку месяца
+    cal = _cal.monthcalendar(year, month)
+    days_header = "<tr>" + "".join(
+        f'<th style="padding:8px;font-size:.75rem;color:var(--text3);font-weight:600;text-align:center">{d}</th>'
+        for d in ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]
+    ) + "</tr>"
+
+    today = date.today()
+    rows = ""
+    for week in cal:
+        rows += "<tr>"
+        for day in week:
+            if day == 0:
+                rows += '<td style="background:var(--bg3);min-height:80px;padding:4px;border:1px solid var(--border)"></td>'
+            else:
+                is_today = (date(year, month, day) == today)
+                today_style = "background:rgba(249,115,22,.08);border-color:var(--orange);" if is_today else ""
+                day_staff = by_day.get(day, [])
+                day_label = f'<div style="font-weight:700;font-size:.8rem;{"color:var(--orange)" if is_today else "color:var(--text3)"};margin-bottom:4px">{day}</div>'
+                cards = ""
+                for s in day_staff[:3]:
+                    _sicon = STAFF_STATUSES.get(s.get("status","new"), ("🆕","",""))[0]
+                    cards += (
+                        f'<a href="/staff?edit={s["id"]}" style="display:block;text-decoration:none;'
+                        f'background:var(--bg3);border:1px solid var(--border);border-radius:5px;'
+                        f'padding:3px 6px;margin-bottom:2px;font-size:.7rem;color:var(--text);'
+                        f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+                        f'{_sicon} {s.get("name") or "—"}</a>'
+                    )
+                if len(day_staff) > 3:
+                    cards += f'<div style="font-size:.68rem;color:var(--text3);padding:2px 4px">+{len(day_staff)-3} ещё</div>'
+                rows += (
+                    f'<td style="vertical-align:top;min-height:80px;height:90px;padding:6px;'
+                    f'border:1px solid var(--border);{today_style}">'
+                    f'{day_label}{cards}</td>'
+                )
+        rows += "</tr>"
+
+    # Статистика месяца
+    total = len(staff_list)
+    by_status = {}
+    for s in staff_list:
+        st = s.get("status","new")
+        by_status[st] = by_status.get(st, 0) + 1
+
+    stat_items = ""
+    for st, cnt in by_status.items():
+        icon, label, _ = STAFF_STATUSES.get(st, ("","",""))
+        stat_items += f'<span style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:.78rem">{icon} {label}: <b>{cnt}</b></span>'
+
+    content = f"""<div class="page-wrap">
+    <div class="page-title">📅 Календарь сотрудников</div>
+    <div class="page-sub"><a href="/staff" style="color:var(--text3)">← База</a></div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <a href="/staff/calendar?year={prev_year}&month={prev_month}">
+          <button class="btn-gray btn-sm">← </button></a>
+        <div style="font-size:1.1rem;font-weight:700;min-width:160px;text-align:center">{month_name} {year}</div>
+        <a href="/staff/calendar?year={next_year}&month={next_month}">
+          <button class="btn-gray btn-sm"> →</button></a>
+        <a href="/staff/calendar?year={now.year}&month={now.month}">
+          <button class="btn-gray btn-sm">Сегодня</button></a>
+      </div>
+      <div style="font-size:.82rem;color:var(--text3)">Добавлено в этом месяце: <b style="color:var(--text)">{total}</b></div>
+    </div>
+
+    {f'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">{stat_items}</div>' if stat_items else ''}
+
+    <div class="section" style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;min-width:600px">
+        <thead>{days_header}</thead>
+        <tbody>{rows}</tbody>
+      </table>
+    </div>
+    </div>"""
+
+    return HTMLResponse(base(content, "staff", request))

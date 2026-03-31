@@ -299,7 +299,23 @@ async function deleteGalleryPhoto(photoId, staffId) {{
   if (d.ok) window.location.reload();
   else alert('Ошибка удаления');
 }}
+function quickStatusChange(id, status) {{
+  fetch('/staff/quick_status', {{
+    method: 'POST',
+    headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{id: id, status: status}})
+  }}).then(r => r.json()).then(d => {{
+    if (!d.ok) alert('Ошибка смены статуса');
+  }});
+}}
 </script>"""
+
+    def _status_opts_for(current):
+        opts = ""
+        for k, (ico, lbl, _) in STAFF_STATUSES.items():
+            sel = "selected" if k == current else ""
+            opts += f'<option value="{k}" {sel}>{ico} {lbl}</option>'
+        return opts
 
     rows = ""
     for s in staff_list:
@@ -330,7 +346,15 @@ async function deleteGalleryPhoto(photoId, staffId) {{
               </div>
             </div></td>
             <td>{s.get('position') or '—'}</td>
-            <td><span class="{badge_cls}">{icon} {label}</span></td>
+            <td>
+              <div style="position:relative;display:inline-block">
+                <select onchange="quickStatusChange({s['id']}, this.value)"
+                  style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;
+                         padding:3px 8px;color:var(--text);font-size:.75rem;cursor:pointer">
+                  {_status_opts_for(s.get('status','new'))}
+                </select>
+              </div>
+            </td>
             <td>{s.get('phone') or '—'}</td>
             <td style="font-size:.8rem;color:#86efac">{s.get('email') or '—'}</td>
             <td style="font-size:.8rem;color:var(--orange)">{s.get('manager_name') or '—'}</td>
@@ -952,3 +976,25 @@ async def staff_bonuses_save(request: Request):
                 db.set_bonus_rate(status, rate, label)
             except: pass
     return RedirectResponse("/staff/bonuses?msg=Ставки+сохранены", 303)
+
+
+@router.post("/staff/quick_status")
+async def staff_quick_status(request: Request):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"ok": False})
+    try:
+        data = await request.json()
+        staff_id = int(data.get("id", 0))
+        status = data.get("status", "")
+        if not staff_id or not status:
+            return JSONResponse({"ok": False})
+        s = db.get_staff_by_id(staff_id)
+        if not s:
+            return JSONResponse({"ok": False})
+        db.update_staff(staff_id, s.get("name",""), s.get("phone",""), s.get("email",""),
+                        s.get("position",""), status, s.get("notes",""), s.get("tags",""),
+                        manager_name=s.get("manager_name",""))
+        return JSONResponse({"ok": True})
+    except Exception as ex:
+        log.error(f"[staff/quick_status] {ex}")
+        return JSONResponse({"ok": False})

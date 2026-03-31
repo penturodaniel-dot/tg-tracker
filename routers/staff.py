@@ -37,10 +37,22 @@ def setup(_db, _log, _require_auth, _base, _nav_html, _render_conv_tags_picker_f
 # ══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/staff", response_class=HTMLResponse)
-async def staff_page(request: Request, edit: int = 0, status_filter: str = "", msg: str = "", sort: str = "newest", search: str = ""):
+async def staff_page(request: Request, edit: int = 0, status_filter: str = "", msg: str = "", sort: str = "newest", search: str = "", date_from: str = "", date_to: str = ""):
     user, err = require_auth(request)
     if err: return err
-    staff_list = db.get_staff(status_filter if status_filter else None, sort=sort, search=search)
+    if date_from or date_to:
+        staff_list = db.get_staff_filtered(
+            date_from=date_from or None,
+            date_to=date_to or None,
+            status=status_filter or None
+        )
+        if search:
+            _s = search.lower()
+            staff_list = [s for s in staff_list if _s in (s.get('name') or '').lower()
+                          or _s in (s.get('username') or '').lower()
+                          or _s in (s.get('phone') or '').lower()]
+    else:
+        staff_list = db.get_staff(status_filter if status_filter else None, sort=sort, search=search)
     funnel = db.get_staff_funnel()
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
 
@@ -50,6 +62,62 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
         '<a href="/staff/new" style="text-decoration:none"><button class="btn-orange btn-sm">➕ Добавить вручную</button></a>'
         '<a href="/staff/calendar" style="text-decoration:none"><button class="btn-gray btn-sm">📅 Календарь</button></a>'
         '</div>')
+
+    from datetime import date as _date, timedelta as _td
+    _today = _date.today()
+    _tw_s = (_today - _td(days=_today.weekday())).isoformat()
+    _tw_e = (_today - _td(days=_today.weekday()) + _td(days=6)).isoformat()
+    _lw_s = (_today - _td(days=_today.weekday()) - _td(weeks=1)).isoformat()
+    _lw_e = (_today - _td(days=_today.weekday()) - _td(days=1)).isoformat()
+    _sel_s = "background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:.8rem"
+    _active_week = (date_from == _tw_s and date_to == _tw_e)
+    _active_lweek = (date_from == _lw_s and date_to == _lw_e)
+    _w_style = "background:var(--orange);color:#fff;border-color:var(--orange)" if _active_week else ""
+    _lw_style = "background:var(--orange);color:#fff;border-color:var(--orange)" if _active_lweek else ""
+    _clr_btn = ('<a href="/staff?status_filter=' + status_filter + '"><button class="btn-gray btn-sm" type="button">✕</button></a>') if (date_from or date_to) else ""
+    _date_filter_html = (
+        '<form method="get" action="/staff" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">'
+        '<input type="hidden" name="status_filter" value="' + status_filter + '">'
+        '<div style="display:flex;gap:6px;align-items:center">'
+        '<span style="font-size:.78rem;color:var(--text3)">Период:</span>'
+        '<input type="date" name="date_from" value="' + date_from + '" style="' + _sel_s + '">'
+        '<span style="color:var(--text3)">—</span>'
+        '<input type="date" name="date_to" value="' + date_to + '" style="' + _sel_s + '">'
+        '<button class="btn btn-sm">OK</button>' + _clr_btn + '</div>'
+        '<div style="display:flex;gap:4px">'
+        '<a href="/staff?date_from=' + _tw_s + '&date_to=' + _tw_e + '&status_filter=' + status_filter + '" style="text-decoration:none"><button class="btn-gray btn-sm" style="' + _w_style + '">Эта неделя</button></a>'
+        '<a href="/staff?date_from=' + _lw_s + '&date_to=' + _lw_e + '&status_filter=' + status_filter + '" style="text-decoration:none"><button class="btn-gray btn-sm" style="' + _lw_style + '">Прошлая</button></a>'
+        '</div></form>'
+    )
+
+    from datetime import date as _date, timedelta as _td
+    _today = _date.today()
+    _tw_s = (_today - _td(days=_today.weekday())).isoformat()
+    _tw_e = (_today - _td(days=_today.weekday()) + _td(days=6)).isoformat()
+    _lw_s = (_today - _td(days=_today.weekday()) - _td(weeks=1)).isoformat()
+    _lw_e = (_today - _td(days=_today.weekday()) - _td(days=1)).isoformat()
+
+    _sel_style = "background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:.8rem"
+    _active_week = date_from == _tw_s and date_to == _tw_e
+    _active_lweek = date_from == _lw_s and date_to == _lw_e
+    _date_filter_html = (
+        '<form method="get" action="/staff" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">'
+        '<input type="hidden" name="status_filter" value="' + status_filter + '"/>'
+        '<div style="display:flex;gap:6px;align-items:center">'
+        '<span style="font-size:.78rem;color:var(--text3)">Период:</span>'
+        '<input type="date" name="date_from" value="' + date_from + '" style="' + _sel_style + '"/>'
+        '<span style="color:var(--text3)">—</span>'
+        '<input type="date" name="date_to" value="' + date_to + '" style="' + _sel_style + '"/>'
+        '<button class="btn btn-sm">OK</button>'
+        + ('<a href="/staff?status_filter=' + status_filter + '"><button class="btn-gray btn-sm" type="button">✕</button></a>' if date_from or date_to else '')
+        + '</div>'
+        '<div style="display:flex;gap:4px;align-items:center">'
+        '<a href="/staff?date_from=' + _tw_s + '&date_to=' + _tw_e + '&status_filter=' + status_filter + '" style="text-decoration:none">'
+        '<button class="btn-gray btn-sm" ' + ('style="background:var(--orange);color:#fff;border-color:var(--orange)"' if _active_week else '') + '>Эта неделя</button></a>'
+        '<a href="/staff?date_from=' + _lw_s + '&date_to=' + _lw_e + '&status_filter=' + status_filter + '" style="text-decoration:none">'
+        '<button class="btn-gray btn-sm" ' + ('style="background:var(--orange);color:#fff;border-color:var(--orange)"' if _active_lweek else '') + '>Прошлая</button></a>'
+        '</div></form>'
+    )
 
     search_bar = f'''<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <form method="get" action="/staff" style="display:flex;gap:8px;flex:1;align-items:center;flex-wrap:wrap">
@@ -282,6 +350,7 @@ async function deleteGalleryPhoto(photoId, staffId) {{
     <div class="page-sub">Все кто написал боту</div>
     {alert}
     {_action_btns}
+    {_date_filter_html}
     {search_bar}
     <div style="margin-bottom:16px">{filter_btns}</div>
     {edit_form}
@@ -698,3 +767,188 @@ async def staff_calendar(request: Request, year: int = 0, month: int = 0, view: 
     </div>"""
 
     return HTMLResponse(base(content, "staff", request))
+
+
+# ─── ВКЛАДКА БОНУСЫ ──────────────────────────────────────────────────────────
+
+@router.get("/staff/bonuses", response_class=HTMLResponse)
+async def staff_bonuses_page(request: Request,
+                              date_from: str = "", date_to: str = "",
+                              manager_filter: str = "", msg: str = ""):
+    user, err = require_auth(request)
+    if err: return err
+
+    from datetime import datetime, timedelta, date
+
+    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+    rates = db.get_bonus_rates()
+    today = date.today()
+
+    # Быстрые диапазоны дат
+    def week_range(offset=0):
+        start = today - timedelta(days=today.weekday()) + timedelta(weeks=offset)
+        end = start + timedelta(days=6)
+        return start.isoformat(), end.isoformat()
+
+    def month_range(offset=0):
+        import calendar
+        d = date(today.year, today.month, 1)
+        if offset < 0:
+            d = date(d.year if d.month > 1 else d.year-1, d.month-1 if d.month > 1 else 12, 1)
+        last = calendar.monthrange(d.year, d.month)[1]
+        return d.isoformat(), date(d.year, d.month, last).isoformat()
+
+    tw_s, tw_e = week_range(0)
+    lw_s, lw_e = week_range(-1)
+    tm_s, tm_e = month_range(0)
+    lm_s, lm_e = month_range(-1)
+
+    def _qbtn(label, df, dt, color="#1e3a5f"):
+        active = "background:var(--orange);color:#fff;border-color:var(--orange)" if (date_from==df and date_to==dt) else f"background:{color};color:var(--text)"
+        return f'<a href="/staff/bonuses?date_from={df}&date_to={dt}&manager_filter={manager_filter}" style="text-decoration:none"><button class="btn-gray btn-sm" style="{active}">{label}</button></a>'
+
+    quick_btns = (
+        _qbtn("Эта неделя", tw_s, tw_e) +
+        _qbtn("Прошлая неделя", lw_s, lw_e) +
+        _qbtn("Этот месяц", tm_s, tm_e) +
+        _qbtn("Прошлый месяц", lm_s, lm_e)
+    )
+
+    # Менеджеры для фильтра
+    managers = [u.get("display_name") or u["username"] for u in db.get_users()]
+    mgr_opts = "<option value=''>Все менеджеры</option>" + "".join(
+        f'<option value="{m}" {"selected" if manager_filter==m else ""}>{m}</option>'
+        for m in managers
+    )
+
+    # Итоги за период
+    summary = None
+    period_label = ""
+    if date_from or date_to:
+        summary = db.get_staff_bonus_summary(
+            date_from=date_from or None,
+            date_to=date_to or None,
+            manager=manager_filter or None
+        )
+        df_fmt = date_from[5:] if date_from else "начало"
+        dt_fmt = date_to[5:] if date_to else "сейчас"
+        period_label = f"{df_fmt.replace('-','.')} — {dt_fmt.replace('-','.')}"
+
+    # Таблица итогов
+    summary_html = ""
+    if summary:
+        rows_s = ""
+        for st, data in summary["by_status"].items():
+            icon, label, _ = STAFF_STATUSES.get(st, ("","",""))
+            rate = data["rate"]
+            count = data["count"]
+            amount = data["amount"]
+            rows_s += f"""<tr>
+              <td>{icon} {label or st}</td>
+              <td style="text-align:center;font-weight:700">{count}</td>
+              <td style="text-align:center;color:var(--text3)">${rate:.2f}</td>
+              <td style="text-align:center;color:#86efac;font-weight:700">${amount:.2f}</td>
+            </tr>"""
+
+        summary_html = f"""
+        <div class="section" style="border-left:3px solid #86efac">
+          <div class="section-head"><h3>💰 Итого за период: {period_label}</h3></div>
+          <div class="section-body">
+            <table style="width:100%;border-collapse:collapse">
+              <thead><tr>
+                <th style="text-align:left;padding:8px;font-size:.78rem;color:var(--text3)">Статус</th>
+                <th style="text-align:center;padding:8px;font-size:.78rem;color:var(--text3)">Анкет</th>
+                <th style="text-align:center;padding:8px;font-size:.78rem;color:var(--text3)">Ставка</th>
+                <th style="text-align:center;padding:8px;font-size:.78rem;color:var(--text3)">Сумма</th>
+              </tr></thead>
+              <tbody>{rows_s}</tbody>
+              <tfoot><tr style="border-top:2px solid var(--border)">
+                <td style="padding:10px 8px;font-weight:700">ИТОГО</td>
+                <td style="text-align:center;padding:10px 8px;font-weight:700">{summary['total_count']}</td>
+                <td></td>
+                <td style="text-align:center;padding:10px 8px;font-weight:700;color:#86efac;font-size:1.1rem">${summary['total_amount']:.2f}</td>
+              </tr></tfoot>
+            </table>
+          </div>
+        </div>"""
+
+    # Форма ставок
+    rate_rows = ""
+    for st, (icon, label, _) in STAFF_STATUSES.items():
+        cur_rate = rates.get(st, {}).get("rate", 0)
+        rate_rows += f"""<tr>
+          <td style="padding:10px 8px">{icon} {label}</td>
+          <td style="padding:10px 8px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="color:var(--text3)">$</span>
+              <input type="number" name="rate_{st}" value="{cur_rate:.2f}"
+                     min="0" step="0.5"
+                     style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.85rem"/>
+            </div>
+          </td>
+        </tr>"""
+
+    content = f"""<div class="page-wrap">
+    <div class="page-title">💰 Бонусы</div>
+    <div class="page-sub"><a href="/staff" style="color:var(--text3)">← База</a></div>
+    {alert}
+
+    <div class="section"><div class="section-head"><h3>📊 Отчёт за период</h3></div>
+    <div class="section-body">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">{quick_btns}</div>
+      <form method="get" action="/staff/bonuses">
+        <div class="form-row" style="flex-wrap:wrap;gap:10px;align-items:flex-end">
+          <div class="field-group" style="flex:1;min-width:140px">
+            <div class="field-label">С даты</div>
+            <input type="date" name="date_from" value="{date_from}"/>
+          </div>
+          <div class="field-group" style="flex:1;min-width:140px">
+            <div class="field-label">По дату</div>
+            <input type="date" name="date_to" value="{date_to}"/>
+          </div>
+          <div class="field-group" style="flex:1;min-width:160px">
+            <div class="field-label">Менеджер</div>
+            <select name="manager_filter">{mgr_opts}</select>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:6px">
+            <button class="btn-orange">📊 Показать</button>
+            <a href="/staff/bonuses"><button type="button" class="btn-gray">✕</button></a>
+          </div>
+        </div>
+      </form>
+    </div></div>
+
+    {summary_html}
+
+    <div class="section"><div class="section-head"><h3>⚙️ Ставки оплаты</h3></div>
+    <div class="section-body">
+      <form method="post" action="/staff/bonuses/save_rates">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="text-align:left;padding:8px;font-size:.78rem;color:var(--text3)">Статус анкеты</th>
+            <th style="text-align:left;padding:8px;font-size:.78rem;color:var(--text3)">Ставка за анкету</th>
+          </tr></thead>
+          <tbody>{rate_rows}</tbody>
+        </table>
+        <button class="btn-orange" style="margin-top:12px">💾 Сохранить ставки</button>
+      </form>
+    </div></div>
+    </div>"""
+
+    return HTMLResponse(base(content, "staff", request))
+
+
+@router.post("/staff/bonuses/save_rates")
+async def staff_bonuses_save(request: Request):
+    user, err = require_auth(request, role="admin")
+    if err: return err
+    form = await request.form()
+    for key, val in form.items():
+        if key.startswith("rate_"):
+            status = key[5:]
+            try:
+                rate = float(val)
+                _, label, _ = STAFF_STATUSES.get(status, ("", status, ""))
+                db.set_bonus_rate(status, rate, label)
+            except: pass
+    return RedirectResponse("/staff/bonuses?msg=Ставки+сохранены", 303)

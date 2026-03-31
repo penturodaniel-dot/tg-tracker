@@ -90,35 +90,6 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
         '</div></form>'
     )
 
-    from datetime import date as _date, timedelta as _td
-    _today = _date.today()
-    _tw_s = (_today - _td(days=_today.weekday())).isoformat()
-    _tw_e = (_today - _td(days=_today.weekday()) + _td(days=6)).isoformat()
-    _lw_s = (_today - _td(days=_today.weekday()) - _td(weeks=1)).isoformat()
-    _lw_e = (_today - _td(days=_today.weekday()) - _td(days=1)).isoformat()
-
-    _sel_style = "background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:.8rem"
-    _active_week = date_from == _tw_s and date_to == _tw_e
-    _active_lweek = date_from == _lw_s and date_to == _lw_e
-    _date_filter_html = (
-        '<form method="get" action="/staff" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">'
-        '<input type="hidden" name="status_filter" value="' + status_filter + '"/>'
-        '<div style="display:flex;gap:6px;align-items:center">'
-        '<span style="font-size:.78rem;color:var(--text3)">Период:</span>'
-        '<input type="date" name="date_from" value="' + date_from + '" style="' + _sel_style + '"/>'
-        '<span style="color:var(--text3)">—</span>'
-        '<input type="date" name="date_to" value="' + date_to + '" style="' + _sel_style + '"/>'
-        '<button class="btn btn-sm">OK</button>'
-        + ('<a href="/staff?status_filter=' + status_filter + '"><button class="btn-gray btn-sm" type="button">✕</button></a>' if date_from or date_to else '')
-        + '</div>'
-        '<div style="display:flex;gap:4px;align-items:center">'
-        '<a href="/staff?date_from=' + _tw_s + '&date_to=' + _tw_e + '&status_filter=' + status_filter + '" style="text-decoration:none">'
-        '<button class="btn-gray btn-sm" ' + ('style="background:var(--orange);color:#fff;border-color:var(--orange)"' if _active_week else '') + '>Эта неделя</button></a>'
-        '<a href="/staff?date_from=' + _lw_s + '&date_to=' + _lw_e + '&status_filter=' + status_filter + '" style="text-decoration:none">'
-        '<button class="btn-gray btn-sm" ' + ('style="background:var(--orange);color:#fff;border-color:var(--orange)"' if _active_lweek else '') + '>Прошлая</button></a>'
-        '</div></form>'
-    )
-
     search_bar = f'''<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <form method="get" action="/staff" style="display:flex;gap:8px;flex:1;align-items:center;flex-wrap:wrap">
         <input type="hidden" name="status_filter" value="{status_filter}"/>

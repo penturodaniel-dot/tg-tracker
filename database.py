@@ -2517,3 +2517,34 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM autopost_templates WHERE id=%s", (tpl_id,))
             conn.commit()
+
+    # ── Ручное создание сотрудника ────────────────────────────────────────────
+    def create_staff_manual(self, name: str, phone: str = "", email: str = "",
+                             position: str = "", status: str = "new",
+                             notes: str = "", tags: str = "",
+                             username: str = "", manager_name: str = "") -> int:
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO staff (name, phone, email, position, status, notes, tags,
+                       username, manager_name, created_at)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                    (name.strip(), phone.strip(), email.strip(), position.strip(),
+                     status, notes.strip(), tags.strip(),
+                     username.strip(), manager_name.strip(),
+                     datetime.utcnow().isoformat())
+                )
+                return cur.fetchone()["id"]
+            conn.commit()
+
+    def get_staff_by_month(self, year: int, month: int) -> list:
+        """Сотрудники добавленные в указанный месяц"""
+        prefix = f"{year:04d}-{month:02d}"
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM staff WHERE created_at LIKE %s ORDER BY created_at",
+                    (f"{prefix}%",)
+                )
+                return [dict(r) for r in cur.fetchall()]

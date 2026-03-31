@@ -589,6 +589,7 @@ def nav_html(active: str, request: Request) -> str:
         item("📱", "TG Чаты",     "tg_account_chat", "orange", badge_count=tga_unread, url="/tg_account/chat", badge_id="nav-tga-badge") +
         item("💚", "WA Чаты",     "wa_chat",         "orange", badge_count=wa_unread,  url="/wa/chat",         badge_id="nav-wa-badge") +
         item("🗂",  "База",        "staff",            "orange") +
+        item("💰", "Бонусы",      "staff_bonuses",    "orange", url="/staff/bonuses") +
         item("📝", "Скрипты",     "scripts",          "orange", url="/scripts") +
         item("🌐", "Лендинги HR", "landings_staff",   "orange") +
         item("📊", "Статистика",  "analytics_staff",  "orange", url="/analytics/staff")

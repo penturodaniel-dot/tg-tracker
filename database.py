@@ -2568,3 +2568,81 @@ class Database:
                     (f"{prefix}%",)
                 )
                 return [dict(r) for r in cur.fetchall()]
+
+    # ── Бонусные ставки ───────────────────────────────────────────────────────
+    def _ensure_bonus_rates(self):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS bonus_rates (
+                        id          SERIAL PRIMARY KEY,
+                        status      TEXT NOT NULL UNIQUE,
+                        rate        NUMERIC(10,2) DEFAULT 0,
+                        label       TEXT DEFAULT '',
+                        updated_at  TEXT NOT NULL
+                    )
+                """)
+            conn.commit()
+
+    def get_bonus_rates(self) -> dict:
+        """Возвращает {status: rate}"""
+        self._ensure_bonus_rates()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT status, rate, label FROM bonus_rates")
+                return {r["status"]: {"rate": float(r["rate"]), "label": r["label"]} for r in cur.fetchall()}
+
+    def set_bonus_rate(self, status: str, rate: float, label: str = ""):
+        self._ensure_bonus_rates()
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO bonus_rates (status, rate, label, updated_at)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (status) DO UPDATE
+                    SET rate=%s, label=%s, updated_at=%s
+                """, (status, rate, label, datetime.utcnow().isoformat(),
+                      rate, label, datetime.utcnow().isoformat()))
+            conn.commit()
+
+    def get_staff_filtered(self, date_from: str = None, date_to: str = None,
+                            status: str = None, manager: str = None) -> list:
+        """Фильтрация сотрудников по диапазону дат и статусу"""
+        conditions = []
+        params = []
+        if date_from:
+            conditions.append("created_at >= %s")
+            params.append(date_from)
+        if date_to:
+            # До конца дня
+            conditions.append("created_at <= %s")
+            params.append(date_to + "T23:59:59")
+        if status:
+            conditions.append("status = %s")
+            params.append(status)
+        if manager:
+            conditions.append("manager_name = %s")
+            params.append(manager)
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SELECT * FROM staff {where} ORDER BY created_at DESC", params)
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_staff_bonus_summary(self, date_from: str = None, date_to: str = None,
+                                 manager: str = None) -> dict:
+        """Итоговая статистика бонусов за период"""
+        staff = self.get_staff_filtered(date_from=date_from, date_to=date_to, manager=manager)
+        rates = self.get_bonus_rates()
+        summary = {}
+        total_amount = 0.0
+        total_count = len(staff)
+        for s in staff:
+            st = s.get("status") or "new"
+            if st not in summary:
+                summary[st] = {"count": 0, "rate": rates.get(st, {}).get("rate", 0), "amount": 0}
+            summary[st]["count"] += 1
+            summary[st]["amount"] += rates.get(st, {}).get("rate", 0)
+            total_amount += rates.get(st, {}).get("rate", 0)
+        return {"by_status": summary, "total_count": total_count, "total_amount": total_amount}

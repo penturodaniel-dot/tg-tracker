@@ -619,6 +619,7 @@ async def staff_create_manual(request: Request,
                                position: str = Form(""), status: str = Form("new"),
                                notes: str = Form(""), tags: str = Form(""),
                                manager_name: str = Form(""),
+                               city: str = Form(""),
                                created_at_manual: str = Form(""),
                                staff_photo: UploadFile = File(None)):
     user, err = require_auth(request)

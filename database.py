@@ -287,6 +287,7 @@ class Database:
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_term TEXT",
                     "ALTER TABLE staff ADD COLUMN IF NOT EXISTS photo_url TEXT",
                     "ALTER TABLE staff ADD COLUMN IF NOT EXISTS manager_name TEXT DEFAULT ''",
+                    "ALTER TABLE staff ADD COLUMN IF NOT EXISTS city TEXT DEFAULT ''",
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_name TEXT DEFAULT ''",
                     "ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS sender_name TEXT DEFAULT ''",
                     "ALTER TABLE landings ADD COLUMN IF NOT EXISTS custom_domain TEXT DEFAULT ''",
@@ -940,11 +941,19 @@ class Database:
                 cur.execute(f"SELECT * FROM staff {where} {order}", params)
                 return [dict(r) for r in cur.fetchall()]
 
-    def update_staff(self, staff_id, name, phone, email, position, status, notes, tags, manager_name=None):
+    def update_staff_status_only(self, staff_id: int, status: str):
+        """Быстрое обновление только статуса"""
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("UPDATE staff SET name=%s,phone=%s,email=%s,position=%s,status=%s,notes=%s,tags=%s,manager_name=%s WHERE id=%s",
-                            (name,phone,email,position,status,notes,tags,manager_name or "",staff_id))
+                cur.execute("UPDATE staff SET status=%s WHERE id=%s", (status, staff_id))
+            conn.commit()
+        _cache.invalidate('tga_in_staff', 'wa_in_staff')
+
+    def update_staff(self, staff_id, name, phone, email, position, status, notes, tags, manager_name=None, city=""):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE staff SET name=%s,phone=%s,email=%s,position=%s,status=%s,notes=%s,tags=%s,manager_name=%s,city=%s WHERE id=%s",
+                            (name,phone,email,position,status,notes,tags,manager_name or "",city or "",staff_id))
             conn.commit()
         _cache.invalidate('tga_in_staff', 'wa_in_staff')
 
@@ -2523,7 +2532,7 @@ class Database:
                              position: str = "", status: str = "new",
                              notes: str = "", tags: str = "",
                              username: str = "", manager_name: str = "",
-                             created_at_override: str = None) -> int:
+                             city: str = "", created_at_override: str = None) -> int:
         from datetime import datetime
         # Если передана дата вручную — используем её (формат YYYY-MM-DD)
         if created_at_override:
@@ -2537,11 +2546,11 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute(
                     """INSERT INTO staff (name, phone, email, position, status, notes, tags,
-                       username, manager_name, created_at)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                       username, manager_name, city, created_at)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                     (name.strip(), phone.strip(), email.strip(), position.strip(),
                      status, notes.strip(), tags.strip(),
-                     username.strip(), manager_name.strip(), created_at)
+                     username.strip(), manager_name.strip(), city.strip(), created_at)
                 )
                 return cur.fetchone()["id"]
             conn.commit()

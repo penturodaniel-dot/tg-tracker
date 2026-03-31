@@ -292,58 +292,80 @@ function quickStatusChange(id, status) {{
             opts += f'<option value="{k}" {sel}>{ico} {lbl}</option>'
         return opts
 
-    rows = ""
+    cards = ""
     for s in staff_list:
         icon, label, badge_cls = STAFF_STATUSES.get(s.get("status","new"), ("🆕","Новый","badge-gray"))
-        fb = '<span class="badge-green" style="font-size:.7rem">FB ✓</span>' if s.get("fb_event_sent") else ""
+        _sid   = s['id']
         _photo = s.get("photo_url") or ""
-        if _photo:
-            _sid = s['id']
-            _avatar = (
-                f'<div class="staff-photo-wrap">'
-                f'<img src="{_photo}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;display:block" />'
-                f'<div class="staff-photo-popup">'
-                f'<button class="spp-close" title="Закрыть" style="position:absolute;top:16px;right:20px;background:rgba(255,255,255,0.12);border:none;color:#fff;font-size:1.4rem;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s" onmouseover="this.style.background=\'rgba(255,255,255,0.25)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.12)\'">✕</button>'
-                f'<img src="{_photo}" />'
-                f'<div class="staff-photo-popup-btns">'
-                f'<a href="{_photo}" download="photo_{_sid}.jpg">⬇ Скачать</a>'
-                f'<a href="/staff?edit={_sid}" style="background:var(--bg3);color:var(--text);border:1px solid var(--border)">✏️ Карточка</a>'
-                f'</div></div></div>'
-            )
-        else:
-            _avatar = '<div style="width:36px;height:36px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0">👤</div>'
-        rows += f"""<tr>
-            <td><div style="display:flex;align-items:center;gap:8px">
-              {_avatar}
-              <div>
-                <div style="font-weight:600;color:#fff">{s['name'] or '—'}</div>
-                <div style="font-size:.75rem;color:var(--text3)">@{s['username'] or '—'}</div>
-              </div>
-            </div></td>
-            <td>{s.get('position') or '—'}</td>
-            <td>
-              <div style="position:relative;display:inline-block">
-                <select onchange="quickStatusChange({s['id']}, this.value)"
-                  style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;
-                         padding:3px 8px;color:var(--text);font-size:.75rem;cursor:pointer">
-                  {_status_opts_for(s.get('status','new'))}
-                </select>
-              </div>
-            </td>
-            <td>{s.get('phone') or '—'}</td>
-            <td style="font-size:.8rem;color:#86efac">{s.get('email') or '—'}</td>
-            <td style="font-size:.8rem;color:var(--orange)">{s.get('manager_name') or '—'}</td>
-            <td style="font-size:.8rem;color:#69c9d0">📍 {s.get('city') or '—'}</td>
-            <td>{fb}</td>
-            <td>{s['created_at'][:10]}</td>
-            <td style="white-space:nowrap">
-              <a href="/staff?edit={s['id']}"><button class="btn-orange btn-sm">✏️</button></a>
-              {'<a href="/chat?conv_id=' + str(s.get("conversation_id","")) + '"><button class="btn-gray btn-sm" style="margin-left:4px">💬</button></a>' if s.get("conversation_id") else ''}
-              {('<form method="post" action="/staff/delete" style="display:inline"><input type="hidden" name="staff_id" value="' + str(s["id"]) + '"/><button class="btn-gray btn-sm" style="color:var(--red);border-color:#7f1d1d;margin-left:4px" onclick="return confirm(''Удалить сотрудника полностью?'')">🗑</button></form>') if user and user.get("role") == "admin" else ""}
-            </td></tr>"""
+        _name  = s.get('name') or '—'
+        _city  = s.get('city') or '—'
+        _date  = (s.get('created_at') or '')[:10]
+        _tg    = s.get('phone') or ''
+        _wa    = s.get('email') or ''
 
-    if not rows:
-        rows = '<tr><td colspan="7"><div class="empty">Нет сотрудников</div></td></tr>'
+        # Главное фото
+        if _photo:
+            photo_block = f'<img src="{_photo}" style="width:100%;height:100%;object-fit:cover;display:block" loading="lazy" />'
+        else:
+            initials = ''.join(w[0].upper() for w in _name.split()[:2]) if _name != '—' else '?'
+            photo_block = f'<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:var(--bg3)"><div style="width:64px;height:64px;border-radius:50%;background:#1d3050;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:500;color:#5aaddd">{initials}</div><span style="font-size:11px;color:var(--text3)">Нет фото</span></div>'
+
+        # Галерея (миниатюры под фото)
+        gallery_items = db.get_staff_gallery(_sid)
+        gallery_block = ""
+        if gallery_items:
+            thumbs = ""
+            for gi in gallery_items[:3]:
+                thumbs += f'<div style="width:38px;height:38px;border-radius:5px;overflow:hidden;border:1px solid var(--border);flex-shrink:0;cursor:pointer" onclick="openGalleryLightbox(\'{gi["photo_url"]}\',{gi["id"]})"><img src="{gi["photo_url"]}" style="width:100%;height:100%;object-fit:cover" loading="lazy"/></div>'
+            extra = len(gallery_items) - 3
+            if extra > 0:
+                thumbs += f'<div style="width:38px;height:38px;border-radius:5px;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3);flex-shrink:0">+{extra}</div>'
+            gallery_block = f'<div style="display:flex;gap:5px;padding:6px 8px;background:var(--bg2,var(--bg3));border-bottom:1px solid var(--border)">{thumbs}</div>'
+
+        # Контакт
+        if _tg:
+            contact_html = f'<span style="color:#5aaddd;font-size:12px">💬 {_tg}</span>'
+        elif _wa:
+            contact_html = f'<span style="color:#86efac;font-size:12px">💚 {_wa}</span>'
+        else:
+            contact_html = '<span style="color:var(--text3);font-size:12px">— нет контакта</span>'
+
+        # Быстрая смена статуса
+        status_select = f'<select onchange="quickStatusChange({_sid}, this.value)" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:2px 6px;color:var(--text);font-size:11px;cursor:pointer;width:100%">{_status_opts_for(s.get("status","new"))}</select>'
+
+        # Кнопка чата
+        chat_btn = ""
+        if s.get("conversation_id"):
+            chat_btn = f'<a href="/chat?conv_id={s["conversation_id"]}" style="text-decoration:none"><button class="btn-gray btn-sm" style="font-size:11px;padding:3px 7px">💬</button></a>'
+        elif s.get("wa_conv_id"):
+            chat_btn = f'<a href="/wa/chat?conv_id={s["wa_conv_id"]}" style="text-decoration:none"><button class="btn-gray btn-sm" style="font-size:11px;padding:3px 7px;color:#86efac;border-color:#166534">💚</button></a>'
+
+        # Кнопка удаления (только admin)
+        del_btn = ""
+        if user and user.get("role") == "admin":
+            del_btn = f'<form method="post" action="/staff/delete" style="display:inline;margin:0"><input type="hidden" name="staff_id" value="{_sid}"/><button class="btn-gray btn-sm" style="font-size:11px;padding:3px 7px;color:var(--red);border-color:#7f1d1d" onclick="return confirm(\'Удалить сотрудника полностью?\')">🗑</button></form>'
+
+        cards += f"""<div style="background:var(--bg2,#23262f);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column">
+          <div style="position:relative;width:100%;aspect-ratio:3/4;overflow:hidden;background:var(--bg3)">
+            {photo_block}
+          </div>
+          {gallery_block}
+          <div style="padding:10px 12px 12px;display:flex;flex-direction:column;gap:5px;flex:1">
+            <div style="font-size:14px;font-weight:500;color:var(--text)">{_name}</div>
+            <div style="font-size:11px;color:var(--text3)">📅 {_date}</div>
+            <div style="font-size:11px;color:#69c9d0">📍 {_city}</div>
+            <div style="margin:2px 0">{status_select}</div>
+            <div style="margin-top:2px">{contact_html}</div>
+            <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:8px;display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap;align-items:center">
+              {chat_btn}
+              <a href="/staff?edit={_sid}" style="text-decoration:none"><button class="btn-orange btn-sm" style="font-size:11px;padding:3px 7px">✏️ Изменить</button></a>
+              {del_btn}
+            </div>
+          </div>
+        </div>"""
+
+    if not cards:
+        cards = '<div class="empty" style="grid-column:1/-1">Нет сотрудников</div>'
 
     content = f"""<div class="page-wrap">
     <div class="page-title">🗂 База сотрудников</div>
@@ -356,8 +378,11 @@ function quickStatusChange(id, status) {{
     {edit_form}
     <div class="section">
       <div class="section-head"><h3>📋 Сотрудники ({len(staff_list)})</h3></div>
-      <table><thead><tr><th>Имя</th><th>Должность</th><th>Статус</th><th>Telegram</th><th>WhatsApp</th><th>Менеджер</th><th>Город</th><th>FB</th><th>Добавлен</th><th></th></tr></thead>
-      <tbody>{rows}</tbody></table>
+      <div class="section-body" style="padding:16px">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+          {cards}
+        </div>
+      </div>
     </div></div>"""
     return HTMLResponse(base(content, "staff", request))
 

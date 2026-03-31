@@ -331,7 +331,7 @@ function quickStatusChange(id, status) {{
             contact_html = '<span style="color:var(--text3);font-size:12px">— нет контакта</span>'
 
         # Быстрая смена статуса
-        status_select = f'<select onchange="quickStatusChange({_sid}, this.value)" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:2px 6px;color:var(--text);font-size:11px;cursor:pointer;width:100%">{_status_opts_for(s.get("status","new"))}</select>'
+        status_select = f'<select onchange="quickStatusChange({_sid}, this.value, this)" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:2px 6px;color:var(--text);font-size:11px;cursor:pointer;width:100%">{_status_opts_for(s.get("status","new"))}</select>'
 
         # Кнопка чата
         chat_btn = ""
@@ -367,23 +367,49 @@ function quickStatusChange(id, status) {{
     if not cards:
         cards = '<div class="empty" style="grid-column:1/-1">Нет сотрудников</div>'
 
-    content = f"""<div class="page-wrap">
-    <div class="page-title">🗂 База сотрудников</div>
-    <div class="page-sub">Все кто написал боту</div>
-    {alert}
-    {_action_btns}
-    {_date_filter_html}
-    {search_bar}
-    <div style="margin-bottom:16px">{filter_btns}</div>
-    {edit_form}
-    <div class="section">
-      <div class="section-head"><h3>📋 Сотрудники ({len(staff_list)})</h3></div>
-      <div class="section-body" style="padding:16px">
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
-          {cards}
-        </div>
-      </div>
-    </div></div>"""
+    _qs_js = """<script>
+function quickStatusChange(id, status, selectEl) {
+  if (selectEl) { selectEl.disabled = true; selectEl.style.opacity = '0.6'; }
+  fetch('/staff/quick_status', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id: id, status: status})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (selectEl) { selectEl.disabled = false; selectEl.style.opacity = '1'; }
+    if (d.ok) {
+      if (selectEl) {
+        selectEl.style.outline = '2px solid #22c55e';
+        setTimeout(function() { selectEl.style.outline = ''; }, 1200);
+      }
+    } else {
+      alert('Ошибка смены статуса');
+      if (selectEl) location.reload();
+    }
+  }).catch(function() {
+    if (selectEl) { selectEl.disabled = false; selectEl.style.opacity = '1'; }
+    alert('Ошибка соединения');
+  });
+}
+</script>"""
+
+    content = (
+        f'<div class="page-wrap">'
+        f'<div class="page-title">🗂 База сотрудников</div>'
+        f'<div class="page-sub">Все кто написал боту</div>'
+        f'{alert}'
+        f'{_action_btns}'
+        f'{_date_filter_html}'
+        f'{search_bar}'
+        f'<div style="margin-bottom:16px">{filter_btns}</div>'
+        f'{edit_form}'
+        f'<div class="section">'
+        f'<div class="section-head"><h3>📋 Сотрудники ({len(staff_list)})</h3></div>'
+        f'<div class="section-body" style="padding:16px">'
+        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">'
+        f'{cards}'
+        f'</div></div></div></div>'
+        f'{_qs_js}'
+    )
     return HTMLResponse(base(content, "staff", request))
 
 

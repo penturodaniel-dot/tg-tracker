@@ -224,6 +224,10 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                     </select>
                   </div>
                   <div class="field-group" style="margin-bottom:12px">
+                    <div class="field-label">📍 Город размещения</div>
+                    <input type="text" name="city" value="{s.get('city') or ''}" placeholder="Los Angeles, Chicago..."/>
+                  </div>
+                  <div class="field-group" style="margin-bottom:12px">
                     <div class="field-label">📅 Дата добавления анкеты</div>
                     <input type="date" name="created_at_manual" value="{(s.get('created_at') or '')[:10]}"/>
                     <span style="font-size:.72rem;color:var(--text3)">Измени если анкета поступила вне CRM</span>
@@ -358,6 +362,7 @@ function quickStatusChange(id, status) {{
             <td>{s.get('phone') or '—'}</td>
             <td style="font-size:.8rem;color:#86efac">{s.get('email') or '—'}</td>
             <td style="font-size:.8rem;color:var(--orange)">{s.get('manager_name') or '—'}</td>
+            <td style="font-size:.8rem;color:#69c9d0">📍 {s.get('city') or '—'}</td>
             <td>{fb}</td>
             <td>{s['created_at'][:10]}</td>
             <td style="white-space:nowrap">
@@ -380,7 +385,7 @@ function quickStatusChange(id, status) {{
     {edit_form}
     <div class="section">
       <div class="section-head"><h3>📋 Сотрудники ({len(staff_list)})</h3></div>
-      <table><thead><tr><th>Имя</th><th>Должность</th><th>Статус</th><th>Telegram</th><th>WhatsApp</th><th>Менеджер</th><th>FB</th><th>Добавлен</th><th></th></tr></thead>
+      <table><thead><tr><th>Имя</th><th>Должность</th><th>Статус</th><th>Telegram</th><th>WhatsApp</th><th>Менеджер</th><th>Город</th><th>FB</th><th>Добавлен</th><th></th></tr></thead>
       <tbody>{rows}</tbody></table>
     </div></div>"""
     return HTMLResponse(base(content, "staff", request))
@@ -390,11 +395,13 @@ function quickStatusChange(id, status) {{
 async def staff_update(request: Request, staff_id: int = Form(...), name: str = Form(""),
                         phone: str = Form(""), email: str = Form(""), position: str = Form(""),
                         status: str = Form("new"), notes: str = Form(""), tags: str = Form(""),
-                        manager_name: str = Form(""), created_at_manual: str = Form(""),
+                        manager_name: str = Form(""), city: str = Form(""),
+                        created_at_manual: str = Form(""),
                         staff_photo: UploadFile = File(None)):
     user, err = require_auth(request)
     if err: return err
-    db.update_staff(staff_id, name, phone, email, position, status, notes, tags, manager_name=manager_name.strip())
+    db.update_staff(staff_id, name, phone, email, position, status, notes, tags,
+                    manager_name=manager_name.strip(), city=city.strip())
     if created_at_manual.strip():
         db.update_staff_created_at(staff_id, created_at_manual.strip())
     # Загрузка фото если прислали
@@ -604,6 +611,10 @@ async def staff_new_page(request: Request, msg: str = "", err: str = ""):
             <input type="text" name="tags" placeholder="LA, опыт, english"/>
           </div>
           <div class="field-group" style="flex:1;min-width:200px">
+            <div class="field-label">📍 Город размещения</div>
+            <input type="text" name="city" placeholder="Los Angeles"/>
+          </div>
+          <div class="field-group" style="flex:1;min-width:200px">
             <div class="field-label">📅 Дата добавления анкеты</div>
             <input type="date" name="created_at_manual" value="{__import__('datetime').datetime.utcnow().strftime('%Y-%m-%d')}"/>
             <span style="font-size:.72rem;color:var(--text3)">Если анкета поступила вне CRM</span>
@@ -646,6 +657,7 @@ async def staff_create_manual(request: Request,
         name=name, phone=phone, email=email, position=position,
         status=status, notes=notes, tags=tags,
         username=username.lstrip("@"), manager_name=manager_name,
+        city=city.strip(),
         created_at_override=created_at_manual.strip() or None
     )
 
@@ -991,9 +1003,8 @@ async def staff_quick_status(request: Request):
         s = db.get_staff_by_id(staff_id)
         if not s:
             return JSONResponse({"ok": False})
-        db.update_staff(staff_id, s.get("name",""), s.get("phone",""), s.get("email",""),
-                        s.get("position",""), status, s.get("notes",""), s.get("tags",""),
-                        manager_name=s.get("manager_name",""))
+        # Прямое обновление только статуса
+        db.update_staff_status_only(staff_id, status)
         return JSONResponse({"ok": True})
     except Exception as ex:
         log.error(f"[staff/quick_status] {ex}")

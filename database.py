@@ -2600,35 +2600,42 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS bonus_rates (
-                        id          SERIAL PRIMARY KEY,
-                        status      TEXT NOT NULL UNIQUE,
-                        rate        NUMERIC(10,2) DEFAULT 0,
-                        label       TEXT DEFAULT '',
-                        updated_at  TEXT NOT NULL
+                        id           SERIAL PRIMARY KEY,
+                        status       TEXT NOT NULL UNIQUE,
+                        rate         NUMERIC(10,2) DEFAULT 0,
+                        manager_rate NUMERIC(10,2) DEFAULT 0,
+                        label        TEXT DEFAULT '',
+                        updated_at   TEXT NOT NULL
                     )
                 """)
+                # migration для старых БД
+                try:
+                    cur.execute("ALTER TABLE bonus_rates ADD COLUMN IF NOT EXISTS manager_rate NUMERIC(10,2) DEFAULT 0")
+                except Exception:
+                    pass
             conn.commit()
 
     def get_bonus_rates(self) -> dict:
-        """Возвращает {status: rate}"""
+        """Возвращает {status: {rate, manager_rate, label}}"""
         self._ensure_bonus_rates()
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT status, rate, label FROM bonus_rates")
-                return {r["status"]: {"rate": float(r["rate"]), "label": r["label"]} for r in cur.fetchall()}
+                cur.execute("SELECT status, rate, COALESCE(manager_rate,0) as manager_rate, label FROM bonus_rates")
+                return {r["status"]: {"rate": float(r["rate"]), "manager_rate": float(r["manager_rate"]), "label": r["label"]} for r in cur.fetchall()}
 
-    def set_bonus_rate(self, status: str, rate: float, label: str = ""):
+    def set_bonus_rate(self, status: str, rate: float, label: str = "", manager_rate: float = 0.0):
         self._ensure_bonus_rates()
         from datetime import datetime
+        now = datetime.utcnow().isoformat()
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO bonus_rates (status, rate, label, updated_at)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO bonus_rates (status, rate, manager_rate, label, updated_at)
+                    VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (status) DO UPDATE
-                    SET rate=%s, label=%s, updated_at=%s
-                """, (status, rate, label, datetime.utcnow().isoformat(),
-                      rate, label, datetime.utcnow().isoformat()))
+                    SET rate=%s, manager_rate=%s, label=%s, updated_at=%s
+                """, (status, rate, manager_rate, label, now,
+                      rate, manager_rate, label, now))
             conn.commit()
 
     def get_staff_filtered(self, date_from: str = None, date_to: str = None,
@@ -2665,11 +2672,14 @@ class Database:
         total_count = len(staff)
         for s in staff:
             st = s.get("status") or "new"
+            _rate = rates.get(st, {}).get("rate", 0)
+            _mgr_rate = rates.get(st, {}).get("manager_rate", 0)
+            _total_rate = _rate + _mgr_rate
             if st not in summary:
-                summary[st] = {"count": 0, "rate": rates.get(st, {}).get("rate", 0), "amount": 0}
+                summary[st] = {"count": 0, "rate": _rate, "manager_rate": _mgr_rate, "amount": 0}
             summary[st]["count"] += 1
-            summary[st]["amount"] += rates.get(st, {}).get("rate", 0)
-            total_amount += rates.get(st, {}).get("rate", 0)
+            summary[st]["amount"] += _total_rate
+            total_amount += _total_rate
         return {"by_status": summary, "total_count": total_count, "total_amount": total_amount}
 
     # ── Staff Notes (история касаний) ─────────────────────────────────────────

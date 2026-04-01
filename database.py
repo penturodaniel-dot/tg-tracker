@@ -384,6 +384,22 @@ class Database:
                         created_at TEXT NOT NULL
                     )
                 """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS staff_notes (
+                        id           SERIAL PRIMARY KEY,
+                        staff_id     INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+                        manager_name TEXT NOT NULL DEFAULT '',
+                        type         TEXT NOT NULL DEFAULT 'note',
+                        text         TEXT NOT NULL DEFAULT '',
+                        remind_at    TEXT DEFAULT NULL,
+                        created_at   TEXT NOT NULL
+                    )
+                """)
+                try:
+                    cur.execute("CREATE INDEX IF NOT EXISTS idx_staff_notes_staff_id ON staff_notes(staff_id)")
+                    cur.execute("CREATE INDEX IF NOT EXISTS idx_staff_notes_remind_at ON staff_notes(remind_at) WHERE remind_at IS NOT NULL")
+                except Exception:
+                    pass
 
             conn.commit()
 
@@ -2655,3 +2671,78 @@ class Database:
             summary[st]["amount"] += rates.get(st, {}).get("rate", 0)
             total_amount += rates.get(st, {}).get("rate", 0)
         return {"by_status": summary, "total_count": total_count, "total_amount": total_amount}
+
+    # ── Staff Notes (история касаний) ─────────────────────────────────────────
+
+    def add_staff_note(self, staff_id: int, manager_name: str, note_type: str,
+                       text: str, remind_at: str = None) -> dict:
+        from datetime import datetime
+        now = datetime.utcnow().isoformat()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO staff_notes (staff_id, manager_name, type, text, remind_at, created_at) "
+                    "VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
+                    (staff_id, manager_name, note_type, text, remind_at or None, now)
+                )
+                row = dict(cur.fetchone())
+            conn.commit()
+        return row
+
+    def get_staff_notes(self, staff_id: int) -> list:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM staff_notes WHERE staff_id=%s ORDER BY created_at DESC",
+                    (staff_id,)
+                )
+                return [dict(r) for r in cur.fetchall()]
+
+    def delete_staff_note(self, note_id: int, staff_id: int) -> bool:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM staff_notes WHERE id=%s AND staff_id=%s",
+                    (note_id, staff_id)
+                )
+                deleted = cur.rowcount > 0
+            conn.commit()
+        return deleted
+
+    def get_staff_last_contact(self, staff_id: int):
+        """Дата последнего касания"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT created_at FROM staff_notes WHERE staff_id=%s ORDER BY created_at DESC LIMIT 1",
+                    (staff_id,)
+                )
+                row = cur.fetchone()
+                return row["created_at"] if row else None
+
+    def get_staff_reminders_due(self) -> list:
+        """Сотрудники у кого remind_at <= сегодня"""
+        from datetime import date
+        today = date.today().isoformat()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT sn.*, s.name as staff_name, s.id as staff_id "
+                    "FROM staff_notes sn JOIN staff s ON s.id = sn.staff_id "
+                    "WHERE sn.remind_at IS NOT NULL AND sn.remind_at <= %s "
+                    "ORDER BY sn.remind_at ASC",
+                    (today,)
+                )
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_staff_no_contact_days(self, staff_id: int) -> int:
+        """Сколько дней прошло с последнего касания"""
+        from datetime import datetime
+        last = self.get_staff_last_contact(staff_id)
+        if not last:
+            return -1
+        try:
+            last_dt = datetime.fromisoformat(last[:19])
+            return (datetime.utcnow() - last_dt).days
+        except Exception:
+            return -1

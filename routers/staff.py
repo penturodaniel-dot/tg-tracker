@@ -1032,7 +1032,7 @@ async def staff_bonuses_page(request: Request,
               <td style="text-align:center;color:#86efac;font-weight:700;padding:8px">${rate * count:.2f}</td>
             </tr>"""
         # Ставка менеджера — одна на все анкеты
-        _flat_rate    = rates.get("__manager__", {{}}).get("rate", 0)
+        _flat_rate    = rates.get("__manager__", {}).get("rate", 0)
         _flat_amount  = _flat_rate * summary["total_count"]
         _grand_total  = summary["total_amount"] + _flat_amount
 

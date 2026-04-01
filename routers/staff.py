@@ -146,6 +146,51 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                 )
             else:
                 photo_html = '<div style="width:200px;height:200px;border-radius:12px;background:var(--bg3);border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:3rem">👤</div>'
+            # История касаний
+            notes_list = db.get_staff_notes(s['id'])
+            _note_type_colors = {
+                'note':    ('#1a1a3a','#818cf8','📝'),
+                'call':    ('#1a2a3a','#5aaddd','📞'),
+                'message': ('#1a2a35','#5cc87a','💬'),
+                'meet':    ('#2a1a3a','#bb77ee','📅'),
+                'status':  ('#2a1a0a','#f97316','🔄'),
+            }
+            notes_timeline_html = ""
+            if notes_list:
+                for n in notes_list:
+                    _nt = n.get('type','note')
+                    _bg, _col, _ico = _note_type_colors.get(_nt, ('#1a1a3a','#818cf8','📝'))
+                    _ndate = (n.get('created_at') or '')[:16].replace('T',' ')
+                    _remind = f'<span style="font-size:.7rem;color:#f97316;margin-left:6px">⏰ {n["remind_at"]}</span>' if n.get('remind_at') else ''
+                    _nid = n['id']
+                    _sid2 = s['id']
+                    notes_timeline_html += (
+                        f'<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'
+                        f'<div style="width:28px;height:28px;border-radius:50%;background:{_bg};display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">{_ico}</div>'
+                        f'<div style="flex:1">'
+                        f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">'
+                        f'<span style="font-size:.8rem;font-weight:600;color:{_col}">{n.get("manager_name") or "—"}</span>'
+                        f'<span style="font-size:.72rem;color:var(--text3)">{_ndate}</span>'
+                        f'<span style="font-size:.7rem;padding:1px 7px;border-radius:20px;background:{_bg};color:{_col}">{_nt}</span>'
+                        f'{_remind}'
+                        f'<button type="button" onclick="deleteStaffNote({_nid},{_sid2})" style="margin-left:auto;background:transparent;border:none;color:var(--text3);font-size:.7rem;cursor:pointer;padding:0 4px">✕</button>'
+                        f'</div>'
+                        f'<div style="font-size:.82rem;color:var(--text2);line-height:1.5">{n.get("text") or ""}</div>'
+                        f'</div></div>'
+                    )
+            else:
+                notes_timeline_html = '<div style="color:var(--text3);font-size:.82rem;padding:8px 0">Пока нет касаний — добавьте первую заметку</div>'
+            # Последнее касание
+            _days_ago = db.get_staff_no_contact_days(s['id'])
+            if _days_ago < 0:
+                last_contact_str = "касаний нет"
+            elif _days_ago == 0:
+                last_contact_str = "последнее касание: сегодня"
+            elif _days_ago == 1:
+                last_contact_str = "последнее касание: вчера"
+            else:
+                last_contact_str = f"последнее касание: {_days_ago} дн. назад"
+
             # Галерея
             gallery_items = db.get_staff_gallery(s['id'])
             gallery_html = ""
@@ -220,6 +265,36 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                   {gallery_html}
                 </div>
               </div></div>
+<!-- История касаний -->
+<div class="section" style="margin-top:18px;border-left:3px solid #6366f1">
+  <div class="section-head" style="display:flex;align-items:center;justify-content:space-between">
+    <h3>💬 История касаний ({len(notes_list)})</h3>
+    <span style="font-size:.75rem;color:var(--text3)">{last_contact_str}</span>
+  </div>
+  <div class="section-body">
+    <!-- Форма добавления -->
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:16px">
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <button type="button" onclick="setNoteType('note',this)" class="note-type-btn active-type" data-type="note" style="padding:4px 12px;border-radius:20px;font-size:.78rem;border:1px solid #6366f1;background:#1a1a3a;color:#818cf8;cursor:pointer">📝 Заметка</button>
+        <button type="button" onclick="setNoteType('call',this)" class="note-type-btn" data-type="call" style="padding:4px 12px;border-radius:20px;font-size:.78rem;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer">📞 Звонок</button>
+        <button type="button" onclick="setNoteType('message',this)" class="note-type-btn" data-type="message" style="padding:4px 12px;border-radius:20px;font-size:.78rem;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer">💬 Написали</button>
+        <button type="button" onclick="setNoteType('meet',this)" class="note-type-btn" data-type="meet" style="padding:4px 12px;border-radius:20px;font-size:.78rem;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer">📅 Встреча</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <textarea id="note-text-{s['id']}" rows="2" placeholder="Написал в WA, ответил что подумает..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.84rem;padding:8px 10px;resize:vertical"></textarea>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          <button type="button" onclick="addStaffNote({s['id']})" class="btn-orange btn-sm">Добавить</button>
+          <div style="font-size:.7rem;color:var(--text3);text-align:center">⏰ напомнить</div>
+          <input type="date" id="note-remind-{s['id']}" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text3);font-size:.72rem;padding:3px 6px"/>
+        </div>
+      </div>
+    </div>
+    <!-- Таймлайн -->
+    <div id="notes-timeline-{s['id']}">
+      {notes_timeline_html}
+    </div>
+  </div>
+</div>
 <!-- Lightbox для галереи -->
 <div class="gallery-lightbox" id="gallery-lightbox">
   <span class="gallery-lightbox-close" onclick="closeGalleryLightbox()">✕</span>
@@ -283,6 +358,42 @@ function quickStatusChange(id, status) {{
     if (!d.ok) alert('Ошибка смены статуса');
   }});
 }}
+var _activeNoteType = 'note';
+function setNoteType(type, btn) {{
+  _activeNoteType = type;
+  document.querySelectorAll('.note-type-btn').forEach(function(b) {{
+    b.style.borderColor = 'var(--border)';
+    b.style.background = 'transparent';
+    b.style.color = 'var(--text3)';
+  }});
+  var colors = {{note:'#6366f1',call:'#5aaddd',message:'#5cc87a',meet:'#bb77ee'}};
+  var bgs = {{note:'#1a1a3a',call:'#1a2a3a',message:'#1a2a35',meet:'#2a1a3a'}};
+  btn.style.borderColor = colors[type] || '#6366f1';
+  btn.style.background = bgs[type] || '#1a1a3a';
+  btn.style.color = colors[type] || '#818cf8';
+}}
+async function addStaffNote(staffId) {{
+  var text = document.getElementById('note-text-' + staffId);
+  var remind = document.getElementById('note-remind-' + staffId);
+  if (!text || !text.value.trim()) {{ alert('Введите текст заметки'); return; }}
+  var payload = {{staff_id: staffId, type: _activeNoteType, text: text.value.trim(), remind_at: remind ? remind.value : ''}};
+  try {{
+    var r = await fetch('/staff/notes/add', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify(payload)}});
+    var d = await r.json();
+    if (d.ok) {{
+      text.value = '';
+      if (remind) remind.value = '';
+      window.location.reload();
+    }} else {{ alert('Ошибка: ' + (d.error || 'неизвестно')); }}
+  }} catch(e) {{ alert('Ошибка соединения'); }}
+}}
+async function deleteStaffNote(noteId, staffId) {{
+  if (!confirm('Удалить эту запись?')) return;
+  var r = await fetch('/staff/notes/delete', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{note_id: noteId, staff_id: staffId}})}});
+  var d = await r.json();
+  if (d.ok) window.location.reload();
+  else alert('Ошибка удаления');
+}}
 </script>"""
 
     def _status_opts_for(current):
@@ -291,6 +402,28 @@ function quickStatusChange(id, status) {{
             sel = "selected" if k == current else ""
             opts += f'<option value="{k}" {sel}>{ico} {lbl}</option>'
         return opts
+
+    # Напоминания
+    reminders = db.get_staff_reminders_due()
+    reminders_html = ""
+    if reminders:
+        rem_items = ""
+        for r in reminders:
+            _overdue = r.get('remind_at','') < __import__('datetime').date.today().isoformat()
+            _col = "#f97316" if _overdue else "#5aaddd"
+            rem_items += (
+                f'<a href="/staff?edit={r["staff_id"]}" style="text-decoration:none;display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">'
+                f'<span style="font-size:1.1rem">⏰</span>'
+                f'<div style="flex:1"><div style="font-size:.85rem;font-weight:600;color:{_col}">{r.get("staff_name","?")}</div>'
+                f'<div style="font-size:.75rem;color:var(--text3)">{r.get("text","")[:80]}</div></div>'
+                f'<div style="font-size:.72rem;color:{_col};flex-shrink:0">{r.get("remind_at","")}</div>'
+                f'</a>'
+            )
+        reminders_html = (
+            f'<div class="section" style="margin-bottom:16px;border-left:3px solid #f97316">'
+            f'<div class="section-head"><h3>⏰ Напоминания сегодня ({len(reminders)})</h3></div>'
+            f'<div class="section-body">{rem_items}</div></div>'
+        )
 
     cards = ""
     for s in staff_list:
@@ -401,6 +534,7 @@ function quickStatusChange(id, status, selectEl) {
         f'{_date_filter_html}'
         f'{search_bar}'
         f'<div style="margin-bottom:16px">{filter_btns}</div>'
+        f'{reminders_html}'
         f'{edit_form}'
         f'<div class="section">'
         f'<div class="section-head"><h3>📋 Сотрудники ({len(staff_list)})</h3></div>'
@@ -1003,6 +1137,41 @@ async def staff_bonuses_save(request: Request):
     return RedirectResponse("/staff/bonuses?msg=Ставки+сохранены", 303)
 
 
+@router.post("/staff/notes/add")
+async def staff_notes_add(request: Request):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"ok": False, "error": "unauthorized"}, 401)
+    try:
+        data = await request.json()
+        staff_id  = int(data.get("staff_id", 0))
+        note_type = data.get("type", "note")
+        text      = (data.get("text") or "").strip()
+        remind_at = (data.get("remind_at") or "").strip() or None
+        if not staff_id or not text:
+            return JSONResponse({"ok": False, "error": "missing fields"})
+        manager = (user.get("display_name") or user.get("username") or "—")
+        note = db.add_staff_note(staff_id, manager, note_type, text, remind_at)
+        return JSONResponse({"ok": True, "id": note["id"]})
+    except Exception as ex:
+        log.error(f"[staff/notes/add] {ex}")
+        return JSONResponse({"ok": False, "error": str(ex)})
+
+
+@router.post("/staff/notes/delete")
+async def staff_notes_delete(request: Request):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"ok": False, "error": "unauthorized"}, 401)
+    try:
+        data = await request.json()
+        note_id  = int(data.get("note_id", 0))
+        staff_id = int(data.get("staff_id", 0))
+        ok = db.delete_staff_note(note_id, staff_id)
+        return JSONResponse({"ok": ok})
+    except Exception as ex:
+        log.error(f"[staff/notes/delete] {ex}")
+        return JSONResponse({"ok": False, "error": str(ex)})
+
+
 @router.post("/staff/quick_status")
 async def staff_quick_status(request: Request):
     user, err = require_auth(request)
@@ -1017,7 +1186,14 @@ async def staff_quick_status(request: Request):
         if not s:
             return JSONResponse({"ok": False})
         # Прямое обновление только статуса
+        old_s = db.get_staff_by_id(staff_id)
+        old_status = (old_s.get("status") or "new") if old_s else "?"
         db.update_staff_status_only(staff_id, status)
+        # Автозапись в историю
+        if old_status != status:
+            manager = (user.get("display_name") or user.get("username") or "—")
+            db.add_staff_note(staff_id, manager, "status",
+                              f"Статус: {old_status} → {status}")
         return JSONResponse({"ok": True})
     except Exception as ex:
         log.error(f"[staff/quick_status] {ex}")

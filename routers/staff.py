@@ -53,7 +53,15 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                           or _s in (s.get('phone') or '').lower()]
     else:
         staff_list = db.get_staff(status_filter if status_filter else None, sort=sort, search=search)
-    funnel = db.get_staff_funnel()
+    # Если есть фильтр по датам — считаем funnel из отфильтрованного списка
+    # Иначе используем быстрый запрос по всей базе
+    if date_from or date_to or search:
+        funnel = {}
+        for _s in staff_list:
+            _st = _s.get("status") or "new"
+            funnel[_st] = funnel.get(_st, 0) + 1
+    else:
+        funnel = db.get_staff_funnel()
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
 
     # Поиск и сортировка
@@ -106,12 +114,23 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
       </form>
     </div>'''
 
-    # Фильтр
-    filter_btns = '<a href="/staff"><button class="btn-gray btn-sm" style="margin-right:4px">Все</button></a>'
+    # Фильтр — сохраняем даты и поиск в ссылках кнопок
+    def _furl(sf=""):
+        params = []
+        if sf:           params.append(f"status_filter={sf}")
+        if date_from:    params.append(f"date_from={date_from}")
+        if date_to:      params.append(f"date_to={date_to}")
+        if search:       params.append(f"search={search}")
+        if sort and sort != "newest": params.append(f"sort={sort}")
+        return "/staff?" + "&".join(params) if params else "/staff"
+
+    _all_active = "background:#1a2535;color:#fff;" if not status_filter else ""
+    _all_cnt = sum(funnel.values())
+    filter_btns = f'<a href="{_furl()}"><button class="btn-gray btn-sm" style="margin-right:4px;{_all_active}">Все ({_all_cnt})</button></a>'
     for s, (icon, label, _) in STAFF_STATUSES.items():
         active_style = "background:#1a2535;color:#fff;" if status_filter == s else ""
         cnt = funnel.get(s, 0)
-        filter_btns += f'<a href="/staff?status_filter={s}"><button class="btn-gray btn-sm" style="margin-right:4px;{active_style}">{icon} {label} ({cnt})</button></a>'
+        filter_btns += f'<a href="{_furl(s)}"><button class="btn-gray btn-sm" style="margin-right:4px;{active_style}">{icon} {label} ({cnt})</button></a>'
 
     edit_form = ""
     if edit:

@@ -37,7 +37,7 @@ def setup(_db, _log, _require_auth, _base, _nav_html, _render_conv_tags_picker_f
 # ══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/staff", response_class=HTMLResponse)
-async def staff_page(request: Request, edit: int = 0, status_filter: str = "", msg: str = "", sort: str = "newest", search: str = "", date_from: str = "", date_to: str = "", page: int = 1):
+async def staff_page(request: Request, edit: int = 0, status_filter: str = "", msg: str = "", sort: str = "newest", search: str = "", date_from: str = "", date_to: str = "", page: int = 1, tag: str = ""):
     user, err = require_auth(request)
     if err: return err
     if date_from or date_to:
@@ -115,9 +115,10 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
     </div>'''
 
     # Фильтр — сохраняем даты и поиск в ссылках кнопок
-    def _furl(sf=""):
+    def _furl(sf="", tg=""):
         params = []
         if sf:           params.append(f"status_filter={sf}")
+        if tg:           params.append(f"tag={tg}")
         if date_from:    params.append(f"date_from={date_from}")
         if date_to:      params.append(f"date_to={date_to}")
         if search:       params.append(f"search={search}")
@@ -126,11 +127,27 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
 
     _all_active = "background:#1a2535;color:#fff;" if not status_filter else ""
     _all_cnt = len(staff_list)
-    filter_btns = f'<a href="{_furl()}"><button class="btn-gray btn-sm" style="margin-right:4px;{_all_active}">Все ({_all_cnt})</button></a>'
+    filter_btns = f'<a href="{_furl(tg=tag)}"><button class="btn-gray btn-sm" style="margin-right:4px;{_all_active}">Все ({_all_cnt})</button></a>'
     for s, (icon, label, _) in STAFF_STATUSES.items():
         active_style = "background:#1a2535;color:#fff;" if status_filter == s else ""
         cnt = funnel.get(s, 0)
-        filter_btns += f'<a href="{_furl(s)}"><button class="btn-gray btn-sm" style="margin-right:4px;{active_style}">{icon} {label} ({cnt})</button></a>'
+        filter_btns += f'<a href="{_furl(s, tg=tag)}"><button class="btn-gray btn-sm" style="margin-right:4px;{active_style}">{icon} {label} ({cnt})</button></a>'
+
+    # Теги — строим блок кнопок
+    tags_html = ""
+    if all_tags:
+        tag_btns = f'<a href="{_furl(status_filter)}" style="text-decoration:none"><button class="btn-gray btn-sm" style="margin:2px;{"background:var(--orange);color:#fff;border-color:var(--orange)" if not tag else ""}">✕ Все теги</button></a>'
+        for t in all_tags:
+            import urllib.parse
+            _tenc = urllib.parse.quote(t)
+            _tactive = "background:var(--orange);color:#fff;border-color:var(--orange)" if tag == t else ""
+            tag_btns += f'<a href="{_furl(status_filter, tg=_tenc)}" style="text-decoration:none"><button class="btn-gray btn-sm" style="margin:2px;{_tactive}"># {t}</button></a>'
+        tags_html = (
+            f'<div style="margin-bottom:14px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">'
+            f'<div style="font-size:.75rem;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Теги</div>'
+            f'<div style="display:flex;flex-wrap:wrap;gap:2px">{tag_btns}</div>'
+            f'</div>'
+        )
 
     edit_form = ""
     if edit:
@@ -422,6 +439,12 @@ async function deleteStaffNote(noteId, staffId) {{
             opts += f'<option value="{k}" {sel}>{ico} {lbl}</option>'
         return opts
 
+    # Фильтр по тегу — применяется поверх всех остальных фильтров
+    all_tags = db.get_staff_tags()
+    if tag:
+        staff_list = [s for s in staff_list
+                      if tag in [t.strip() for t in (s.get("tags") or "").split(",") if t.strip()]]
+
     # Пагинация
     PAGE_SIZE   = 40
     total_count = len(staff_list)
@@ -453,6 +476,18 @@ async function deleteStaffNote(noteId, staffId) {{
 
     cards = ""
     for s in staff_page_list:
+        # Теги на карточке
+        _stags = [t.strip() for t in (s.get("tags") or "").split(",") if t.strip()]
+        if _stags:
+            import urllib.parse as _up
+            _tags_on_card = '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">' + "".join(
+                f'<a href="{_furl(status_filter, tg=_up.quote(t))}" style="text-decoration:none">'
+                f'<span style="font-size:10px;padding:1px 7px;border-radius:20px;background:var(--bg3);border:1px solid var(--border);color:var(--text3);cursor:pointer">#{t}</span></a>'
+                for t in _stags
+            ) + "</div>"
+        else:
+            _tags_on_card = ""
+
         icon, label, badge_cls = STAFF_STATUSES.get(s.get("status","new"), ("🆕","Новый","badge-gray"))
         _sid   = s['id']
         _photo = s.get("photo_url") or ""
@@ -605,6 +640,7 @@ function quickStatusChange(id, status, selectEl) {
         f'{_date_filter_html}'
         f'{search_bar}'
         f'<div style="margin-bottom:16px">{filter_btns}</div>'
+        f'{tags_html}'
         f'{reminders_html}'
         f'{edit_form}'
         f'<div class="section">'

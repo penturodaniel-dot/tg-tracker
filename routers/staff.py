@@ -1449,6 +1449,7 @@ async def staff_card_page(request: Request, staff_id: int, msg: str = ""):
     city_val = (s.get("city") or "").replace('"', '&quot;')
     date_val = (s.get("created_at") or "")[:10]
     notes_val = (s.get("notes") or "")
+    tags_val = (s.get("tags") or "").replace('"', '&quot;')
 
     content = (
         f'<style>{css}</style>'
@@ -1515,6 +1516,7 @@ async def staff_card_page(request: Request, staff_id: int, msg: str = ""):
         f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Дата анкеты</div><input class="sc-inp" type="date" name="created_at_manual" value="{date_val}"/></div>'
         f'</div>'
         f'<div style="margin-bottom:10px"><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Заметки</div><textarea class="sc-ta" name="notes">{notes_val}</textarea></div>'
+        f'<div style="margin-bottom:10px"><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Теги</div><input class="sc-inp" type="text" name="tags" value="{tags_val}" placeholder="с таргета, не готова летать, английский"/><div style="font-size:.7rem;color:#444;margin-top:3px">через запятую</div></div>'
         f'<div style="margin-bottom:10px"><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Главное фото</div><input type="file" name="staff_photo" accept="image/*" style="font-size:.82rem;color:#666"/></div>'
         f'<button type="submit" style="padding:7px 18px;border-radius:7px;background:#f97316;border:none;color:#fff;font-size:13px;font-weight:500;cursor:pointer">💾 Сохранить</button>'
         f'</form></div></div>'

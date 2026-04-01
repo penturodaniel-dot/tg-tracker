@@ -134,19 +134,20 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
         filter_btns += f'<a href="{_furl(s, tg=tag)}"><button class="btn-gray btn-sm" style="margin-right:4px;{active_style}">{icon} {label} ({cnt})</button></a>'
 
     # Теги — строим блок кнопок
+    import urllib.parse as _urlparse
     tags_html = ""
     if all_tags:
-        tag_btns = f'<a href="{_furl(status_filter)}" style="text-decoration:none"><button class="btn-gray btn-sm" style="margin:2px;{"background:var(--orange);color:#fff;border-color:var(--orange)" if not tag else ""}">✕ Все теги</button></a>'
+        _all_tags_style = "background:var(--orange);color:#fff;border-color:var(--orange)" if not tag else ""
+        tag_btns = f'<a href="{_furl(status_filter)}" style="text-decoration:none"><button class="btn-gray btn-sm" style="margin:2px;{_all_tags_style}">✕ Все теги</button></a>'
         for t in all_tags:
-            import urllib.parse
-            _tenc = urllib.parse.quote(t)
+            _tenc = _urlparse.quote(t)
             _tactive = "background:var(--orange);color:#fff;border-color:var(--orange)" if tag == t else ""
             tag_btns += f'<a href="{_furl(status_filter, tg=_tenc)}" style="text-decoration:none"><button class="btn-gray btn-sm" style="margin:2px;{_tactive}"># {t}</button></a>'
         tags_html = (
-            f'<div style="margin-bottom:14px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">'
-            f'<div style="font-size:.75rem;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Теги</div>'
+            '<div style="margin-bottom:14px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">'
+            '<div style="font-size:.75rem;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Теги</div>'
             f'<div style="display:flex;flex-wrap:wrap;gap:2px">{tag_btns}</div>'
-            f'</div>'
+            '</div>'
         )
 
     edit_form = ""
@@ -479,9 +480,8 @@ async function deleteStaffNote(noteId, staffId) {{
         # Теги на карточке
         _stags = [t.strip() for t in (s.get("tags") or "").split(",") if t.strip()]
         if _stags:
-            import urllib.parse as _up
             _tags_on_card = '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">' + "".join(
-                f'<a href="{_furl(status_filter, tg=_up.quote(t))}" style="text-decoration:none">'
+                f'<a href="{_furl(status_filter, tg=_urlparse.quote(t))}" style="text-decoration:none">'
                 f'<span style="font-size:10px;padding:1px 7px;border-radius:20px;background:var(--bg3);border:1px solid var(--border);color:var(--text3);cursor:pointer">#{t}</span></a>'
                 for t in _stags
             ) + "</div>"

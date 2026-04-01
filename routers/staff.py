@@ -1065,6 +1065,7 @@ async def staff_bonuses_page(request: Request,
         </div>"""
 
     # Форма ставок
+    _flat_rate_val = rates.get("__manager__", {}).get("rate", 0)
     rate_rows = ""
     for st, (icon, label, _) in STAFF_STATUSES.items():
         cur_rate = rates.get(st, {}).get("rate", 0)
@@ -1127,7 +1128,7 @@ async def staff_bonuses_page(request: Request,
               <td style="padding:12px 8px">
                 <div style="display:flex;align-items:center;gap:6px">
                   <span style="color:var(--text3)">$</span>
-                  <input type="number" name="manager_flat_rate" value="{rates.get('__manager__', {{}}).get('rate', 0):.2f}"
+                  <input type="number" name="manager_flat_rate" value="{_flat_rate_val:.2f}"
                          min="0" step="0.5"
                          style="width:100px;background:var(--bg);border:1px solid #2a4060;border-radius:6px;padding:6px 10px;color:#69c9d0;font-size:.85rem"/>
                 </div>

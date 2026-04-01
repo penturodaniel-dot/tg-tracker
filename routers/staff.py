@@ -1023,14 +1023,16 @@ async def staff_bonuses_page(request: Request,
         rows_s = ""
         for st, data in summary["by_status"].items():
             icon, label, _ = STAFF_STATUSES.get(st, ("","",""))
-            rate = data["rate"]
-            count = data["count"]
-            amount = data["amount"]
+            rate     = data["rate"]
+            mgr_rate = data.get("manager_rate", 0)
+            count    = data["count"]
+            amount   = data["amount"]
             rows_s += f"""<tr>
-              <td>{icon} {label or st}</td>
-              <td style="text-align:center;font-weight:700">{count}</td>
-              <td style="text-align:center;color:var(--text3)">${rate:.2f}</td>
-              <td style="text-align:center;color:#86efac;font-weight:700">${amount:.2f}</td>
+              <td style="padding:8px">{icon} {label or st}</td>
+              <td style="text-align:center;font-weight:700;padding:8px">{count}</td>
+              <td style="text-align:center;color:var(--text3);padding:8px">${rate:.2f}</td>
+              <td style="text-align:center;color:#69c9d0;padding:8px">${mgr_rate:.2f}</td>
+              <td style="text-align:center;color:#86efac;font-weight:700;padding:8px">${amount:.2f}</td>
             </tr>"""
 
         summary_html = f"""
@@ -1042,12 +1044,14 @@ async def staff_bonuses_page(request: Request,
                 <th style="text-align:left;padding:8px;font-size:.78rem;color:var(--text3)">Статус</th>
                 <th style="text-align:center;padding:8px;font-size:.78rem;color:var(--text3)">Анкет</th>
                 <th style="text-align:center;padding:8px;font-size:.78rem;color:var(--text3)">Ставка</th>
+                <th style="text-align:center;padding:8px;font-size:.78rem;color:var(--text3)">Ставка менеджера</th>
                 <th style="text-align:center;padding:8px;font-size:.78rem;color:var(--text3)">Сумма</th>
               </tr></thead>
               <tbody>{rows_s}</tbody>
               <tfoot><tr style="border-top:2px solid var(--border)">
                 <td style="padding:10px 8px;font-weight:700">ИТОГО</td>
                 <td style="text-align:center;padding:10px 8px;font-weight:700">{summary['total_count']}</td>
+                <td></td>
                 <td></td>
                 <td style="text-align:center;padding:10px 8px;font-weight:700;color:#86efac;font-size:1.1rem">${summary['total_amount']:.2f}</td>
               </tr></tfoot>
@@ -1058,7 +1062,8 @@ async def staff_bonuses_page(request: Request,
     # Форма ставок
     rate_rows = ""
     for st, (icon, label, _) in STAFF_STATUSES.items():
-        cur_rate = rates.get(st, {}).get("rate", 0)
+        cur_rate     = rates.get(st, {}).get("rate", 0)
+        cur_mgr_rate = rates.get(st, {}).get("manager_rate", 0)
         rate_rows += f"""<tr>
           <td style="padding:10px 8px">{icon} {label}</td>
           <td style="padding:10px 8px">
@@ -1067,6 +1072,14 @@ async def staff_bonuses_page(request: Request,
               <input type="number" name="rate_{st}" value="{cur_rate:.2f}"
                      min="0" step="0.5"
                      style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.85rem"/>
+            </div>
+          </td>
+          <td style="padding:10px 8px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="color:var(--text3)">$</span>
+              <input type="number" name="mgr_rate_{st}" value="{cur_mgr_rate:.2f}"
+                     min="0" step="0.5"
+                     style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:#69c9d0;font-size:.85rem"/>
             </div>
           </td>
         </tr>"""
@@ -1110,6 +1123,7 @@ async def staff_bonuses_page(request: Request,
           <thead><tr>
             <th style="text-align:left;padding:8px;font-size:.78rem;color:var(--text3)">Статус анкеты</th>
             <th style="text-align:left;padding:8px;font-size:.78rem;color:var(--text3)">Ставка за анкету</th>
+            <th style="text-align:left;padding:8px;font-size:.78rem;color:#69c9d0">Ставка менеджера</th>
           </tr></thead>
           <tbody>{rate_rows}</tbody>
         </table>
@@ -1126,14 +1140,22 @@ async def staff_bonuses_save(request: Request):
     user, err = require_auth(request, role="admin")
     if err: return err
     form = await request.form()
+    # Собираем оба типа ставок по статусу
+    rates_map = {}
     for key, val in form.items():
         if key.startswith("rate_"):
             status = key[5:]
-            try:
-                rate = float(val)
-                _, label, _ = STAFF_STATUSES.get(status, ("", status, ""))
-                db.set_bonus_rate(status, rate, label)
-            except: pass
+            rates_map.setdefault(status, {})["rate"] = val
+        elif key.startswith("mgr_rate_"):
+            status = key[9:]
+            rates_map.setdefault(status, {})["mgr_rate"] = val
+    for status, vals in rates_map.items():
+        try:
+            rate     = float(vals.get("rate", 0))
+            mgr_rate = float(vals.get("mgr_rate", 0))
+            _, label, _ = STAFF_STATUSES.get(status, ("", status, ""))
+            db.set_bonus_rate(status, rate, label, manager_rate=mgr_rate)
+        except: pass
     return RedirectResponse("/staff/bonuses?msg=Ставки+сохранены", 303)
 
 

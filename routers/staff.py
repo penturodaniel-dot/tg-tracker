@@ -37,7 +37,7 @@ def setup(_db, _log, _require_auth, _base, _nav_html, _render_conv_tags_picker_f
 # ══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/staff", response_class=HTMLResponse)
-async def staff_page(request: Request, edit: int = 0, status_filter: str = "", msg: str = "", sort: str = "newest", search: str = "", date_from: str = "", date_to: str = ""):
+async def staff_page(request: Request, edit: int = 0, status_filter: str = "", msg: str = "", sort: str = "newest", search: str = "", date_from: str = "", date_to: str = "", page: int = 1):
     user, err = require_auth(request)
     if err: return err
     if date_from or date_to:
@@ -403,6 +403,13 @@ async function deleteStaffNote(noteId, staffId) {{
             opts += f'<option value="{k}" {sel}>{ico} {lbl}</option>'
         return opts
 
+    # Пагинация
+    PAGE_SIZE   = 40
+    total_count = len(staff_list)
+    total_pages = max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+    page        = max(1, min(page, total_pages))
+    staff_page_list = staff_list[(page - 1) * PAGE_SIZE : page * PAGE_SIZE]
+
     # Напоминания
     reminders = db.get_staff_reminders_due()
     reminders_html = ""
@@ -426,7 +433,7 @@ async function deleteStaffNote(noteId, staffId) {{
         )
 
     cards = ""
-    for s in staff_list:
+    for s in staff_page_list:
         icon, label, badge_cls = STAFF_STATUSES.get(s.get("status","new"), ("🆕","Новый","badge-gray"))
         _sid   = s['id']
         _photo = s.get("photo_url") or ""
@@ -525,6 +532,50 @@ function quickStatusChange(id, status, selectEl) {
 }
 </script>"""
 
+    # Пагинация HTML
+    def _page_url(p):
+        parts = [f"page={p}"]
+        if status_filter: parts.append(f"status_filter={status_filter}")
+        if sort and sort != "newest": parts.append(f"sort={sort}")
+        if search: parts.append(f"search={search}")
+        if date_from: parts.append(f"date_from={date_from}")
+        if date_to: parts.append(f"date_to={date_to}")
+        return "/staff?" + "&".join(parts)
+
+    pagination_html = ""
+    if total_pages > 1:
+        btns = ""
+        # Кнопка Назад
+        if page > 1:
+            btns += f'<a href="{_page_url(page-1)}" style="text-decoration:none"><button class="btn-gray btn-sm">‹ Назад</button></a>'
+        # Номера страниц — показываем не больше 7
+        start_p = max(1, page - 3)
+        end_p   = min(total_pages, start_p + 6)
+        start_p = max(1, end_p - 6)
+        if start_p > 1:
+            btns += f'<a href="{_page_url(1)}" style="text-decoration:none"><button class="btn-gray btn-sm">1</button></a>'
+            if start_p > 2:
+                btns += '<span style="color:var(--text3);padding:0 4px">…</span>'
+        for p_num in range(start_p, end_p + 1):
+            _active = "background:var(--orange);color:#fff;border-color:var(--orange)" if p_num == page else ""
+            btns += f'<a href="{_page_url(p_num)}" style="text-decoration:none"><button class="btn-gray btn-sm" style="{_active}">{p_num}</button></a>'
+        if end_p < total_pages:
+            if end_p < total_pages - 1:
+                btns += '<span style="color:var(--text3);padding:0 4px">…</span>'
+            btns += f'<a href="{_page_url(total_pages)}" style="text-decoration:none"><button class="btn-gray btn-sm">{total_pages}</button></a>'
+        # Кнопка Вперёд
+        if page < total_pages:
+            btns += f'<a href="{_page_url(page+1)}" style="text-decoration:none"><button class="btn-gray btn-sm">Вперёд ›</button></a>'
+
+        _from = (page - 1) * PAGE_SIZE + 1
+        _to   = min(page * PAGE_SIZE, total_count)
+        pagination_html = (
+            f'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">'
+            f'<span style="font-size:.8rem;color:var(--text3)">Показано {_from}–{_to} из {total_count}</span>'
+            f'<div style="display:flex;gap:4px;flex-wrap:wrap">{btns}</div>'
+            f'</div>'
+        )
+
     content = (
         f'<div class="page-wrap">'
         f'<div class="page-title">🗂 База сотрудников</div>'
@@ -537,11 +588,13 @@ function quickStatusChange(id, status, selectEl) {
         f'{reminders_html}'
         f'{edit_form}'
         f'<div class="section">'
-        f'<div class="section-head"><h3>📋 Сотрудники ({len(staff_list)})</h3></div>'
+        f'<div class="section-head"><h3>📋 Сотрудники ({total_count})</h3></div>'
         f'<div class="section-body" style="padding:16px">'
         f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">'
         f'{cards}'
-        f'</div></div></div></div>'
+        f'</div>'
+        f'{pagination_html}'
+        f'</div></div></div>'
         f'{_qs_js}'
     )
     return HTMLResponse(base(content, "staff", request))

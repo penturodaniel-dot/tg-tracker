@@ -494,6 +494,7 @@ async function deleteStaffNote(noteId, staffId) {{
             <div style="font-size:14px;font-weight:500;color:var(--text)">{_name}</div>
             <div style="font-size:11px;color:var(--text3)">📅 {_date}</div>
             <div style="font-size:11px;color:#69c9d0">📍 {_city}</div>
+            <div style="font-size:11px;color:var(--orange)">👤 {s.get("manager_name") or "—"}</div>
             <div style="margin:2px 0">{status_select}</div>
             <div style="margin-top:2px">{contact_html}</div>
             <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:8px;display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap;align-items:center">
@@ -1117,6 +1118,10 @@ async def staff_bonuses_page(request: Request,
                 </tr>
               </tfoot>
             </table>
+            <div style="margin-top:14px;padding:10px 12px;background:var(--bg3);border-radius:8px;display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:.85rem;color:var(--text3)">📋 Всего анкет за период</span>
+              <span style="font-size:1.1rem;font-weight:700;color:var(--text)">{summary["total_count"]}</span>
+            </div>
           </div>
         </div>"""
 

@@ -1031,10 +1031,10 @@ async def staff_bonuses_page(request: Request,
               <td style="text-align:center;color:var(--text3);padding:8px">${rate:.2f}</td>
               <td style="text-align:center;color:#86efac;font-weight:700;padding:8px">${rate * count:.2f}</td>
             </tr>"""
-        # Ставка менеджера — одна на все анкеты
-        _flat_rate    = rates.get("__manager__", {}).get("rate", 0)
-        _flat_amount  = _flat_rate * summary["total_count"]
-        _grand_total  = summary["total_amount"] + _flat_amount
+        # Ставка менеджера — фиксированная сумма, просто плюсуется к итогу
+        _flat_rate   = rates.get("__manager__", {}).get("rate", 0)
+        _bonuses     = summary["total_amount"]
+        _grand_total = _bonuses + _flat_rate
 
         summary_html = f"""
         <div class="section" style="border-left:3px solid #86efac">
@@ -1050,14 +1050,17 @@ async def staff_bonuses_page(request: Request,
               <tbody>{rows_s}</tbody>
               <tfoot>
                 <tr style="border-top:1px solid var(--border)">
-                  <td colspan="3" style="padding:8px;color:#69c9d0">Ставка менеджера × {summary["total_count"]} анкет (${_flat_rate:.2f} × {summary["total_count"]})</td>
-                  <td style="text-align:center;padding:8px;color:#69c9d0;font-weight:700">${_flat_amount:.2f}</td>
+                  <td colspan="3" style="padding:8px;color:var(--text3)">Бонусы (итого по статусам)</td>
+                  <td style="text-align:center;padding:8px;color:#86efac;font-weight:600">${_bonuses:.2f}</td>
+                </tr>
+                <tr>
+                  <td colspan="3" style="padding:8px;color:#69c9d0">Ставка менеджера</td>
+                  <td style="text-align:center;padding:8px;color:#69c9d0;font-weight:600">${_flat_rate:.2f}</td>
                 </tr>
                 <tr style="border-top:2px solid var(--border)">
-                  <td style="padding:10px 8px;font-weight:700">ИТОГО</td>
-                  <td style="text-align:center;padding:10px 8px;font-weight:700">{summary["total_count"]}</td>
+                  <td colspan="2" style="padding:10px 8px;font-weight:700;font-size:1rem">ИТОГО</td>
                   <td></td>
-                  <td style="text-align:center;padding:10px 8px;font-weight:700;color:#86efac;font-size:1.1rem">${_grand_total:.2f}</td>
+                  <td style="text-align:center;padding:10px 8px;font-weight:700;color:#86efac;font-size:1.2rem">${_grand_total:.2f}</td>
                 </tr>
               </tfoot>
             </table>

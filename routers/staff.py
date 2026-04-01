@@ -125,7 +125,7 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
         return "/staff?" + "&".join(params) if params else "/staff"
 
     _all_active = "background:#1a2535;color:#fff;" if not status_filter else ""
-    _all_cnt = sum(funnel.values())
+    _all_cnt = len(staff_list)
     filter_btns = f'<a href="{_furl()}"><button class="btn-gray btn-sm" style="margin-right:4px;{_all_active}">Все ({_all_cnt})</button></a>'
     for s, (icon, label, _) in STAFF_STATUSES.items():
         active_style = "background:#1a2535;color:#fff;" if status_filter == s else ""

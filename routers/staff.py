@@ -587,85 +587,75 @@ async def staff_new_page(request: Request, msg: str = "", err: str = ""):
         for u in db.get_users()
     )
 
-    content = f"""<div class="page-wrap">
-    <div class="page-title">➕ Добавить сотрудника вручную</div>
-    <div class="page-sub"><a href="/staff" style="color:var(--text3)">← База</a></div>
-    {alert}
+    import datetime as _dt
+    _today = _dt.datetime.utcnow().strftime('%Y-%m-%d')
+    content = (
+        '<div class="page-wrap">'
+        '<div class="page-title">➕ Добавить сотрудника вручную</div>'
+        '<div class="page-sub"><a href="/staff" style="color:var(--text3)">← База</a></div>'
+        + alert +
+        '<div class="section"><div class="section-head"><h3>Новая карточка</h3></div>'
+        '<div class="section-body">'
+        '<form method="post" action="/staff/create_manual" enctype="multipart/form-data">'
 
-    <div class="section"><div class="section-head"><h3>Новая карточка</h3></div>
-    <div class="section-body">
-      <form method="post" action="/staff/create_manual" enctype="multipart/form-data">
-        <div class="form-row" style="flex-wrap:wrap;gap:12px">
-          <div class="field-group" style="flex:1;min-width:200px">
-            <div class="field-label">Имя *</div>
-            <input type="text" name="name" required placeholder="Анна Иванова"/>
-          </div>
-          <div class="field-group" style="flex:1;min-width:200px">
-            <div class="field-label">Telegram username</div>
-            <input type="text" name="username" placeholder="@username"/>
-          </div>
-          <div class="field-group" style="flex:1;min-width:200px">
-            <div class="field-label">Телефон</div>
-            <input type="text" name="phone" placeholder="+1 234 567 8900"/>
-          </div>
-        </div>
-        <div class="form-row" style="flex-wrap:wrap;gap:12px;margin-top:10px">
-          <div class="field-group" style="flex:1;min-width:200px">
-            <div class="field-label">Email</div>
-            <input type="email" name="email" placeholder="anna@email.com"/>
-          </div>
-          <div class="field-group" style="flex:1;min-width:200px">
-            <div class="field-label">Должность</div>
-            <input type="text" name="position" placeholder="Массажист"/>
-          </div>
-          <div class="field-group" style="flex:1;min-width:160px">
-            <div class="field-label">Статус</div>
-            <select name="status">{status_opts}</select>
-          </div>
-        </div>
-        <div class="form-row" style="flex-wrap:wrap;gap:12px;margin-top:10px">
-          <div class="field-group" style="flex:1;min-width:200px">
-            <div class="field-label">Менеджер</div>
-            <select name="manager_name">{manager_opts}</select>
-          </div>
-          <div class="field-group" style="flex:1;min-width:200px">
-            <div class="field-label">Теги (через запятую)</div>
-            <input type="text" name="tags" placeholder="LA, опыт, english"/>
-          </div>
-          <div class="field-group" style="flex:1;min-width:200px">
-            <div class="field-label">📍 Город размещения</div>
-            <input type="text" name="city" placeholder="Los Angeles"/>
-          </div>
-          <div class="field-group" style="flex:1;min-width:200px">
-            <div class="field-label">📅 Дата добавления анкеты</div>
-            <input type="date" name="created_at_manual" value="{__import__('datetime').datetime.utcnow().strftime('%Y-%m-%d')}"/>
-            <span style="font-size:.72rem;color:var(--text3)">Если анкета поступила вне CRM</span>
-          </div>
-        </div>
-        <div class="form-row" style="flex-wrap:wrap;gap:12px;margin-top:10px">
-          <div class="field-group" style="flex:1;min-width:200px">
-            <div class="field-label">Фото</div>
-            <input type="file" name="staff_photo" accept="image/*" style="font-size:.82rem"/>
-          </div>
-        </div>
-        <div class="field-group" style="margin-top:10px">
-          <div class="field-label">Заметки</div>
-          <textarea name="notes" rows="3" placeholder="Дополнительная информация..."></textarea>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:16px">
-          <button class="btn-orange">💾 Создать карточку</button>
-          <a href="/staff"><button type="button" class="btn-gray">Отмена</button></a>
-        </div>
-      </form>
-    </div></div>
-    </div>"""
+        '<div style="margin-bottom:16px">'
+        '<div class="field-label" style="margin-bottom:6px">Главное фото</div>'
+        '<input type="file" name="staff_photo" accept="image/*" style="font-size:.82rem;color:var(--text3)"/>'
+        '<div style="font-size:.72rem;color:var(--text3);margin-top:4px">JPG, PNG до 5MB</div>'
+        '</div>'
+
+        '<div class="grid-3" style="margin-bottom:12px">'
+        '<div class="field-group"><div class="field-label">Имя *</div>'
+        '<input type="text" name="name" required placeholder="Анна Иванова"/></div>'
+
+        '<div class="field-group"><div class="field-label">Telegram</div>'
+        '<input type="text" name="phone" placeholder="@username или +номер"/></div>'
+
+        '<div class="field-group"><div class="field-label">WhatsApp</div>'
+        '<input type="text" name="email" placeholder="+1234567890"/></div>'
+
+        '<div class="field-group"><div class="field-label">Должность</div>'
+        '<input type="text" name="position" placeholder="Массажистка"/></div>'
+
+        '<div class="field-group"><div class="field-label">Статус</div>'
+        '<select name="status">' + status_opts + '</select></div>'
+        '</div>'
+
+        '<div class="field-group" style="margin-bottom:12px">'
+        '<div class="field-label">Заметки</div>'
+        '<textarea name="notes" rows="3" placeholder="Дополнительная информация..."></textarea>'
+        '</div>'
+
+        '<div class="field-group" style="margin-bottom:12px">'
+        '<div class="field-label">👤 Закреплён за менеджером</div>'
+        '<select name="manager_name" style="width:100%;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.84rem">'
+        + manager_opts +
+        '</select></div>'
+
+        '<div class="field-group" style="margin-bottom:12px">'
+        '<div class="field-label">📍 Город размещения</div>'
+        '<input type="text" name="city" placeholder="Los Angeles, Chicago..."/>'
+        '</div>'
+
+        '<div class="field-group" style="margin-bottom:12px">'
+        '<div class="field-label">📅 Дата добавления анкеты</div>'
+        '<input type="date" name="created_at_manual" value="' + _today + '"/>'
+        '<span style="font-size:.72rem;color:var(--text3)">Измени если анкета поступила вне CRM</span>'
+        '</div>'
+
+        '<div style="display:flex;gap:8px;margin-top:16px">'
+        '<button class="btn-orange">💾 Создать карточку</button>'
+        '<a href="/staff"><button type="button" class="btn-gray">Отмена</button></a>'
+        '</div>'
+        '</form></div></div></div>'
+    )
 
     return HTMLResponse(base(content, "staff", request))
 
 
 @router.post("/staff/create_manual")
 async def staff_create_manual(request: Request,
-                               name: str = Form(...), username: str = Form(""),
+                               name: str = Form(...),
                                phone: str = Form(""), email: str = Form(""),
                                position: str = Form(""), status: str = Form("new"),
                                notes: str = Form(""), tags: str = Form(""),
@@ -679,7 +669,7 @@ async def staff_create_manual(request: Request,
     staff_id = db.create_staff_manual(
         name=name, phone=phone, email=email, position=position,
         status=status, notes=notes, tags=tags,
-        username=username.lstrip("@"), manager_name=manager_name,
+        username="", manager_name=manager_name,
         city=city.strip(),
         created_at_override=created_at_manual.strip() or None
     )

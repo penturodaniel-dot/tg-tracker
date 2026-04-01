@@ -957,6 +957,20 @@ class Database:
                 cur.execute(f"SELECT * FROM staff {where} {order}", params)
                 return [dict(r) for r in cur.fetchall()]
 
+    def get_staff_tags(self) -> list:
+        """Все уникальные теги из поля tags сотрудников, отсортированные по частоте"""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT tags FROM staff WHERE tags IS NOT NULL AND tags != ''")
+                rows = cur.fetchall()
+        counts = {}
+        for r in rows:
+            for t in r["tags"].split(","):
+                t = t.strip()
+                if t:
+                    counts[t] = counts.get(t, 0) + 1
+        return sorted(counts.keys(), key=lambda x: -counts[x])
+
     def update_staff_status_only(self, staff_id: int, status: str):
         """Быстрое обновление только статуса"""
         with self._conn() as conn:

@@ -2661,16 +2661,42 @@ class Database:
                 cur.execute(f"SELECT * FROM staff {where} ORDER BY created_at DESC", params)
                 return [dict(r) for r in cur.fetchall()]
 
+    def get_status_at_date(self, staff_id: int, date_to: str) -> str | None:
+        """Возвращает статус сотрудника на конец указанной даты по истории staff_notes.
+        Ищет последнюю запись type='status' до date_to включительно.
+        Если истории нет — возвращает None (caller использует текущий статус)."""
+        deadline = (date_to + "T23:59:59") if date_to and "T" not in date_to else (date_to or "")
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT text FROM staff_notes "
+                    "WHERE staff_id=%s AND type='status' AND created_at <= %s "
+                    "ORDER BY created_at DESC LIMIT 1",
+                    (staff_id, deadline)
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                # Формат текста: "Статус: old → new"
+                text = row["text"] or ""
+                if "→" in text:
+                    return text.split("→")[-1].strip()
+                return None
+
     def get_staff_bonus_summary(self, date_from: str = None, date_to: str = None,
                                  manager: str = None) -> dict:
-        """Итоговая статистика бонусов за период"""
+        """Итоговая статистика бонусов за период.
+        Статус берётся из истории staff_notes на конец периода (date_to).
+        Если истории нет — используется текущий статус сотрудника."""
         staff = self.get_staff_filtered(date_from=date_from, date_to=date_to, manager=manager)
         rates = self.get_bonus_rates()
         summary = {}
         total_amount = 0.0
         total_count = len(staff)
         for s in staff:
-            st = s.get("status") or "new"
+            # Пробуем взять статус из истории на конец периода
+            hist_status = self.get_status_at_date(s["id"], date_to) if date_to else None
+            st = hist_status or s.get("status") or "new"
             _rate = rates.get(st, {}).get("rate", 0)
             if st not in summary:
                 summary[st] = {"count": 0, "rate": _rate, "amount": 0}

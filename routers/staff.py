@@ -53,6 +53,8 @@ async def staff_page(request: Request, edit: int = 0, status_filter: str = "", m
                           or _s in (s.get('phone') or '').lower()]
     else:
         staff_list = db.get_staff(status_filter if status_filter else None, sort=sort, search=search)
+    all_tags = db.get_staff_tags()
+
     # Если есть фильтр по датам — считаем funnel из отфильтрованного списка
     # Иначе используем быстрый запрос по всей базе
     if date_from or date_to or search:
@@ -441,7 +443,6 @@ async function deleteStaffNote(noteId, staffId) {{
         return opts
 
     # Фильтр по тегу — применяется поверх всех остальных фильтров
-    all_tags = db.get_staff_tags()
     if tag:
         staff_list = [s for s in staff_list
                       if tag in [t.strip() for t in (s.get("tags") or "").split(",") if t.strip()]]

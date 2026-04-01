@@ -701,271 +701,6 @@ async def staff_create_from_tga(request: Request, conv_id: int = 0):
 
 
 
-# ─── КАРТОЧКА СОТРУДНИКА (отдельная страница) ────────────────────────────────
-
-@router.get("/staff/{staff_id}", response_class=HTMLResponse)
-async def staff_card_page(request: Request, staff_id: int, msg: str = ""):
-    user, err = require_auth(request)
-    if err: return err
-
-    s = db.get_staff_by_id(staff_id)
-    if not s:
-        return RedirectResponse("/staff", 303)
-
-    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
-
-    notes_list    = db.get_staff_notes(staff_id)
-    gallery_items = db.get_staff_gallery(staff_id)
-    _days_ago     = db.get_staff_no_contact_days(staff_id)
-    import datetime as _dt2
-    _total_days = 0
-    try:
-        _added = _dt2.datetime.fromisoformat((s.get("created_at") or "")[:19])
-        _total_days = (_dt2.datetime.utcnow() - _added).days
-    except Exception:
-        pass
-    if _days_ago < 0:    last_contact_str = "касаний нет"
-    elif _days_ago == 0: last_contact_str = "сегодня"
-    elif _days_ago == 1: last_contact_str = "вчера"
-    else:                last_contact_str = f"{_days_ago} дн. назад"
-
-    _photo = s.get("photo_url") or ""
-    if _photo:
-        photo_html = f'<img src="{_photo}" style="width:100%;height:100%;object-fit:cover;display:block"/>'
-    else:
-        initials = "".join(w[0].upper() for w in (s.get("name") or "?").split()[:2])
-        photo_html = f'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:500;color:#5aaddd">{initials}</div>'
-
-    gallery_mini = ""
-    for gi in gallery_items[:5]:
-        gallery_mini += (
-            f'<div onclick="openLightbox(\'{gi["photo_url"]}\')" '
-            f'style="width:48px;height:48px;border-radius:6px;overflow:hidden;border:1px solid #2e3240;cursor:pointer;flex-shrink:0">'
-            f'<img src="{gi["photo_url"]}" style="width:100%;height:100%;object-fit:cover" loading="lazy"/></div>'
-        )
-    if len(gallery_items) > 5:
-        gallery_mini += f'<div style="width:48px;height:48px;border-radius:6px;background:#1e2130;border:1px solid #2e3240;display:flex;align-items:center;justify-content:center;font-size:12px;color:#666">+{len(gallery_items)-5}</div>'
-
-    _tg = s.get("phone") or ""
-    _wa = s.get("email") or ""
-    tg_html = f'<span style="color:#5aaddd">{_tg}</span>' if _tg else '<span style="color:#444">—</span>'
-    wa_html = f'<span style="color:#5cc87a">{_wa}</span>' if _wa else '<span style="color:#444">—</span>'
-
-    chat_btn = ""
-    if s.get("conversation_id"):
-        chat_btn = f'<a href="/chat?conv_id={s["conversation_id"]}" style="text-decoration:none"><button style="padding:5px 12px;border-radius:7px;background:#1a2535;border:1px solid #2a4060;color:#5aaddd;font-size:12px;cursor:pointer">💬 TG чат</button></a>'
-    elif s.get("wa_conv_id"):
-        chat_btn = f'<a href="/wa/chat?conv_id={s["wa_conv_id"]}" style="text-decoration:none"><button style="padding:5px 12px;border-radius:7px;background:#1a3a22;border:1px solid #2a5a35;color:#5cc87a;font-size:12px;cursor:pointer">💚 WA чат</button></a>'
-
-    status_opts_html = ""
-    for k, (ico, lbl, _) in STAFF_STATUSES.items():
-        sel = "selected" if k == s.get("status", "new") else ""
-        status_opts_html += f'<option value="{k}" {sel}>{ico} {lbl}</option>'
-
-    manager_opts_html = '<option value="">— не закреплён —</option>'
-    for u in db.get_users():
-        _un = u.get("display_name") or u["username"]
-        sel = "selected" if s.get("manager_name") == _un else ""
-        manager_opts_html += f'<option value="{_un}" {sel}>{_un} ({u["role"]})</option>'
-
-    next_remind = next((n for n in reversed(notes_list) if n.get("remind_at")), None)
-    remind_badge = ""
-    if next_remind:
-        remind_badge = (
-            f'<div style="background:#2a1a0a;border:1px solid #f97316;border-radius:7px;padding:8px 12px;display:flex;align-items:center;gap:8px">'
-            f'<span>⏰</span><div>'
-            f'<div style="font-size:11px;font-weight:500;color:#f97316">Следующий контакт</div>'
-            f'<div style="font-size:12px;color:#ddd;margin-top:1px">{next_remind["remind_at"]}</div>'
-            f'</div></div>'
-        )
-
-    _note_meta = {
-        "note":    ("#1a1a2e","#9a8aee","📝","заметка"),
-        "call":    ("#1a2a3a","#5aaddd","📞","звонок"),
-        "message": ("#1a2a35","#5cc87a","💬","написали"),
-        "meet":    ("#2a1a3a","#bb77ee","📅","встреча"),
-        "status":  ("#2a1a0a","#f97316","🔄","статус"),
-    }
-    timeline_html = ""
-    for i, n in enumerate(notes_list):
-        _nt2 = n.get("type", "note")
-        _bg, _col, _ico, _lbl = _note_meta.get(_nt2, ("#1a1a2e","#9a8aee","📝","заметка"))
-        _ndate = (n.get("created_at") or "")[:16].replace("T", " ")
-        _rem_span = f'<span style="font-size:.7rem;color:#f97316;margin-left:4px">⏰ {n["remind_at"]}</span>' if n.get("remind_at") else ""
-        _is_last = (i == len(notes_list) - 1)
-        _line = "" if _is_last else '<div style="width:1px;background:#2e3240;flex:1;margin-top:4px;min-height:16px"></div>'
-        timeline_html += (
-            f'<div style="display:flex;gap:10px;padding:10px 0;border-bottom:{"none" if _is_last else "1px solid #1e2130"}">'
-            f'<div style="display:flex;flex-direction:column;align-items:center;padding-top:2px">'
-            f'<div style="width:28px;height:28px;border-radius:50%;background:{_bg};display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">{_ico}</div>'
-            f'{_line}</div>'
-            f'<div style="flex:1">'
-            f'<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px;flex-wrap:wrap">'
-            f'<span style="font-size:.8rem;font-weight:600;color:#ddd">{n.get("manager_name") or "—"}</span>'
-            f'<span style="font-size:.72rem;color:#555">{_ndate}</span>'
-            f'<span style="font-size:.7rem;padding:1px 7px;border-radius:20px;background:{_bg};color:{_col}">{_lbl}</span>'
-            f'{_rem_span}'
-            f'<button type="button" onclick="deleteNote({n["id"]},{staff_id})" style="margin-left:auto;background:transparent;border:none;color:#444;font-size:.72rem;cursor:pointer;padding:0 4px">✕</button>'
-            f'</div>'
-            f'<div style="font-size:.82rem;color:#aaa;line-height:1.5">{n.get("text") or ""}</div>'
-            f'</div></div>'
-        )
-    if not timeline_html:
-        timeline_html = '<div style="color:#444;font-size:.82rem;padding:8px 0">Пока нет касаний — добавьте первую заметку</div>'
-
-    del_btn_html = ""
-    if user and user.get("role") == "admin":
-        del_btn_html = (
-            f'<form method="post" action="/staff/delete" style="display:inline;margin:0">'
-            f'<input type="hidden" name="staff_id" value="{staff_id}"/>'
-            f'<button onclick="return confirm(\'Удалить сотрудника полностью?\')" '
-            f'style="padding:5px 12px;border-radius:7px;background:transparent;border:1px solid #7f1d1d;color:#f87171;font-size:12px;cursor:pointer">🗑 Удалить</button>'
-            f'</form>'
-        )
-
-    gallery_grid_html = ""
-    for gi in gallery_items:
-        gallery_grid_html += (
-            f'<div style="position:relative;width:80px;height:80px;border-radius:7px;overflow:hidden;cursor:pointer" onclick="openLightbox(\'{gi["photo_url"]}\')" >'
-            f'<img src="{gi["photo_url"]}" style="width:100%;height:100%;object-fit:cover"/>'
-            f'<button onclick="event.stopPropagation();delGallery({gi["id"]},{staff_id})" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.7);border:none;color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button></div>'
-        )
-    if not gallery_grid_html:
-        gallery_grid_html = '<span style="color:#444;font-size:.82rem">Нет фото в галерее</span>'
-
-    gallery_row = ""
-    if gallery_items:
-        gallery_row = f'<div style="display:flex;gap:6px;flex-wrap:wrap">{gallery_mini}</div>'
-
-    css = (
-        ".sc-page{background:#16181f;padding:16px}"
-        ".sc-layout{display:grid;grid-template-columns:240px 1fr;gap:16px;max-width:1200px}"
-        ".sc-left{display:flex;flex-direction:column;gap:12px}"
-        ".sc-photo{width:100%;aspect-ratio:3/4;border-radius:10px;background:#1a2535;overflow:hidden}"
-        ".sc-info{background:#1e2130;border:1px solid #2e3240;border-radius:10px;padding:12px}"
-        ".sc-irow{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px}"
-        ".sc-irow:last-child{margin-bottom:0}"
-        ".sc-ilabel{color:#666;min-width:54px;flex-shrink:0}"
-        ".sc-stats{display:flex;gap:8px}"
-        ".sc-stat{flex:1;background:#13151c;border-radius:8px;padding:8px 10px;text-align:center}"
-        ".sc-stat-n{font-size:18px;font-weight:500;color:#ddd}"
-        ".sc-stat-l{font-size:11px;color:#555;margin-top:2px}"
-        ".sc-right{display:flex;flex-direction:column;gap:12px}"
-        ".sc-section{background:#1e2130;border:1px solid #2e3240;border-radius:10px}"
-        ".sc-sh{padding:10px 14px;border-bottom:1px solid #2e3240;font-size:13px;font-weight:500;color:#ddd;display:flex;align-items:center;justify-content:space-between}"
-        ".sc-sb{padding:12px 14px}"
-        ".sc-inp{width:100%;background:#13151c;border:1px solid #2e3240;border-radius:7px;color:#ccc;font-size:.84rem;padding:6px 10px}"
-        ".sc-inp:focus{outline:none;border-color:#f97316}"
-        ".sc-sel{width:100%;background:#13151c;border:1px solid #2e3240;border-radius:7px;color:#ccc;font-size:.84rem;padding:6px 10px;cursor:pointer}"
-        ".sc-ta{width:100%;background:#13151c;border:1px solid #2e3240;border-radius:7px;color:#ccc;font-size:.84rem;padding:8px 10px;resize:vertical;min-height:60px}"
-        ".nt-btn{padding:3px 10px;border-radius:20px;font-size:.75rem;border:1px solid #2e3240;background:transparent;color:#666;cursor:pointer}"
-    )
-
-    name_val = (s.get("name") or "").replace('"', '&quot;')
-    phone_val = (s.get("phone") or "").replace('"', '&quot;')
-    email_val = (s.get("email") or "").replace('"', '&quot;')
-    pos_val = (s.get("position") or "").replace('"', '&quot;')
-    city_val = (s.get("city") or "").replace('"', '&quot;')
-    date_val = (s.get("created_at") or "")[:10]
-    notes_val = (s.get("notes") or "")
-
-    content = (
-        f'<style>{css}</style>'
-        f'<div class="sc-page">'
-        f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
-        f'<a href="/staff" style="font-size:12px;color:#666;text-decoration:none">← База</a>'
-        f'<span style="color:#333">/</span>'
-        f'<span style="font-size:13px;color:#ddd">{s.get("name","—")}</span>'
-        f'<span style="margin-left:auto;font-size:11px;color:#555">последнее касание: {last_contact_str}</span>'
-        f'</div>{alert}'
-        f'<div class="sc-layout">'
-        f'<div class="sc-left">'
-        f'<div class="sc-photo">{photo_html}</div>'
-        f'{gallery_row}'
-        f'<div class="sc-info">'
-        f'<div class="sc-irow"><span class="sc-ilabel">Статус</span>'
-        f'<select onchange="quickSave({staff_id},this.value,this)" style="background:#1e2130;border:1px solid #2e3240;border-radius:6px;color:#ccc;font-size:11px;padding:2px 6px;cursor:pointer">{status_opts_html}</select></div>'
-        f'<div class="sc-irow"><span class="sc-ilabel">Город</span><span style="color:#69c9d0">{s.get("city") or "—"}</span></div>'
-        f'<div class="sc-irow"><span class="sc-ilabel">TG</span>{tg_html}</div>'
-        f'<div class="sc-irow"><span class="sc-ilabel">WA</span>{wa_html}</div>'
-        f'<div class="sc-irow"><span class="sc-ilabel">Менеджер</span><span style="color:#f97316">{s.get("manager_name") or "—"}</span></div>'
-        f'<div class="sc-irow"><span class="sc-ilabel">Добавлен</span><span style="color:#888">{date_val}</span></div>'
-        f'</div>'
-        f'<div class="sc-stats">'
-        f'<div class="sc-stat"><div class="sc-stat-n">{len(notes_list)}</div><div class="sc-stat-l">касаний</div></div>'
-        f'<div class="sc-stat"><div class="sc-stat-n">{_total_days}</div><div class="sc-stat-l">дней</div></div>'
-        f'<div class="sc-stat"><div class="sc-stat-n">{"—" if _days_ago < 0 else _days_ago}</div><div class="sc-stat-l">дн. назад</div></div>'
-        f'</div>{remind_badge}'
-        f'<div style="display:flex;gap:6px;flex-wrap:wrap">{chat_btn}{del_btn_html}</div>'
-        f'</div>'
-        f'<div class="sc-right">'
-        f'<div class="sc-section">'
-        f'<div class="sc-sh"><span>💬 История касаний</span><span style="font-size:11px;color:#555">{len(notes_list)} записей</span></div>'
-        f'<div class="sc-sb">'
-        f'<div style="margin-bottom:12px">'
-        f'<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">'
-        f'<button type="button" class="nt-btn" style="border-color:#818cf8;background:#1a1a3a;color:#818cf8" onclick="setNT(\'note\',this)">📝 Заметка</button>'
-        f'<button type="button" class="nt-btn" onclick="setNT(\'call\',this)">📞 Звонок</button>'
-        f'<button type="button" class="nt-btn" onclick="setNT(\'message\',this)">💬 Написали</button>'
-        f'<button type="button" class="nt-btn" onclick="setNT(\'meet\',this)">📅 Встреча</button>'
-        f'</div>'
-        f'<div style="display:flex;gap:8px;align-items:flex-start">'
-        f'<textarea id="nt-text" class="sc-ta" placeholder="Написал в WA, ответила что думает..."></textarea>'
-        f'<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">'
-        f'<button type="button" onclick="addNote({staff_id})" style="padding:6px 14px;border-radius:7px;background:#f97316;border:none;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Добавить</button>'
-        f'<div style="font-size:10px;color:#444;text-align:center">⏰ напомнить</div>'
-        f'<input type="date" id="nt-remind" style="background:#13151c;border:1px solid #2e3240;border-radius:6px;color:#888;font-size:10px;padding:3px 6px"/>'
-        f'</div></div></div>'
-        f'<div id="timeline">{timeline_html}</div>'
-        f'</div></div>'
-        f'<div class="sc-section">'
-        f'<div class="sc-sh"><span>✏️ Редактировать карточку</span></div>'
-        f'<div class="sc-sb">'
-        f'<form method="post" action="/staff/update" enctype="multipart/form-data">'
-        f'<input type="hidden" name="staff_id" value="{staff_id}"/>'
-        f'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">'
-        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Имя</div><input class="sc-inp" type="text" name="name" value="{name_val}"/></div>'
-        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Telegram</div><input class="sc-inp" type="text" name="phone" value="{phone_val}"/></div>'
-        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">WhatsApp</div><input class="sc-inp" type="text" name="email" value="{email_val}"/></div>'
-        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Должность</div><input class="sc-inp" type="text" name="position" value="{pos_val}"/></div>'
-        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Статус</div><select class="sc-sel" name="status">{status_opts_html}</select></div>'
-        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Менеджер</div><select class="sc-sel" name="manager_name">{manager_opts_html}</select></div>'
-        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Город</div><input class="sc-inp" type="text" name="city" value="{city_val}"/></div>'
-        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Дата анкеты</div><input class="sc-inp" type="date" name="created_at_manual" value="{date_val}"/></div>'
-        f'</div>'
-        f'<div style="margin-bottom:10px"><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Заметки</div><textarea class="sc-ta" name="notes">{notes_val}</textarea></div>'
-        f'<div style="margin-bottom:10px"><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Главное фото</div><input type="file" name="staff_photo" accept="image/*" style="font-size:.82rem;color:#666"/></div>'
-        f'<button type="submit" style="padding:7px 18px;border-radius:7px;background:#f97316;border:none;color:#fff;font-size:13px;font-weight:500;cursor:pointer">💾 Сохранить</button>'
-        f'</form></div></div>'
-        f'<div class="sc-section">'
-        f'<div class="sc-sh"><span>🖼 Галерея ({len(gallery_items)})</span>'
-        f'<label style="font-size:.78rem;color:#888;cursor:pointer;padding:3px 10px;border:1px solid #2e3240;border-radius:6px">'
-        f'➕ Добавить<input type="file" accept="image/*" multiple style="display:none" onchange="uploadGallery(this,{staff_id})"/>'
-        f'</label></div>'
-        f'<div class="sc-sb"><div style="display:flex;gap:8px;flex-wrap:wrap">{gallery_grid_html}</div></div>'
-        f'</div></div></div></div>'
-        f'<div id="lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;align-items:center;justify-content:center">'
-        f'<button onclick="document.getElementById(\'lightbox\').style.display=\'none\'" style="position:absolute;top:16px;right:20px;background:rgba(255,255,255,.1);border:none;color:#fff;font-size:1.4rem;width:36px;height:36px;border-radius:50%;cursor:pointer">✕</button>'
-        f'<img id="lb-img" style="max-width:90vw;max-height:90vh;border-radius:8px"/>'
-        f'</div>'
-        f'<script>'
-        f'var _nt="note";'
-        f'var _ntC={{note:["#818cf8","#1a1a3a"],call:["#5aaddd","#1a2a3a"],message:["#5cc87a","#1a2a35"],meet:["#bb77ee","#2a1a3a"]}};'
-        f'function setNT(t,btn){{_nt=t;document.querySelectorAll(".nt-btn").forEach(function(b){{b.style.borderColor="#2e3240";b.style.background="transparent";b.style.color="#666"}});var c=_ntC[t]||_ntC.note;btn.style.borderColor=c[0];btn.style.background=c[1];btn.style.color=c[0];}}'
-        f'async function addNote(sid){{var t=document.getElementById("nt-text"),r=document.getElementById("nt-remind");if(!t||!t.value.trim()){{alert("Введите текст");return;}}var res=await fetch("/staff/notes/add",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{staff_id:sid,type:_nt,text:t.value.trim(),remind_at:r?r.value:""}}) }});var d=await res.json();if(d.ok){{t.value="";if(r)r.value="";location.reload();}}else alert("Ошибка:"+(d.error||"?"));}}'
-        f'async function deleteNote(nid,sid){{if(!confirm("Удалить запись?"))return;var res=await fetch("/staff/notes/delete",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{note_id:nid,staff_id:sid}})}});var d=await res.json();if(d.ok)location.reload();else alert("Ошибка");}}'
-        f'async function quickSave(sid,val,el){{if(el){{el.disabled=true;el.style.opacity=".6";}}var res=await fetch("/staff/quick_status",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{id:sid,status:val}})}});var d=await res.json();if(el){{el.disabled=false;el.style.opacity="1";}}if(d.ok){{if(el){{el.style.outline="2px solid #22c55e";setTimeout(function(){{el.style.outline="";}},1200);}}}}else{{alert("Ошибка");if(el)location.reload();}}}}'
-        f'function openLightbox(url){{document.getElementById("lb-img").src=url;document.getElementById("lightbox").style.display="flex";}}'
-        f'document.getElementById("lightbox").addEventListener("click",function(e){{if(e.target===this)this.style.display="none";}});'
-        f'document.addEventListener("keydown",function(e){{if(e.key==="Escape")document.getElementById("lightbox").style.display="none";}});'
-        f'async function uploadGallery(inp,sid){{var files=Array.from(inp.files),ok=0;for(var i=0;i<files.length;i++){{var fd=new FormData();fd.append("staff_id",sid);fd.append("photo",files[i]);var r=await fetch("/staff/gallery/add",{{method:"POST",body:fd}});var d=await r.json();if(d.ok)ok++;}}if(ok>0)location.reload();else alert("Ошибка загрузки");}}'
-        f'async function delGallery(pid,sid){{if(!confirm("Удалить фото?"))return;var fd=new FormData();fd.append("photo_id",pid);fd.append("staff_id",sid);var r=await fetch("/staff/gallery/delete",{{method:"POST",body:fd}});var d=await r.json();if(d.ok)location.reload();else alert("Ошибка");}}'
-        f'</script>'
-    )
-    return HTMLResponse(base(content, "staff", request))
-
-
-
 # ─── РУЧНОЕ СОЗДАНИЕ СОТРУДНИКА ───────────────────────────────────────────────
 
 @router.get("/staff/new", response_class=HTMLResponse)
@@ -1400,6 +1135,271 @@ async def staff_bonuses_save(request: Request):
                 db.set_bonus_rate(status, rate, label)
             except: pass
     return RedirectResponse("/staff/bonuses?msg=Ставки+сохранены", 303)
+
+
+# ─── КАРТОЧКА СОТРУДНИКА (отдельная страница) ────────────────────────────────
+
+@router.get("/staff/{staff_id}", response_class=HTMLResponse)
+async def staff_card_page(request: Request, staff_id: int, msg: str = ""):
+    user, err = require_auth(request)
+    if err: return err
+
+    s = db.get_staff_by_id(staff_id)
+    if not s:
+        return RedirectResponse("/staff", 303)
+
+    alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
+
+    notes_list    = db.get_staff_notes(staff_id)
+    gallery_items = db.get_staff_gallery(staff_id)
+    _days_ago     = db.get_staff_no_contact_days(staff_id)
+    import datetime as _dt2
+    _total_days = 0
+    try:
+        _added = _dt2.datetime.fromisoformat((s.get("created_at") or "")[:19])
+        _total_days = (_dt2.datetime.utcnow() - _added).days
+    except Exception:
+        pass
+    if _days_ago < 0:    last_contact_str = "касаний нет"
+    elif _days_ago == 0: last_contact_str = "сегодня"
+    elif _days_ago == 1: last_contact_str = "вчера"
+    else:                last_contact_str = f"{_days_ago} дн. назад"
+
+    _photo = s.get("photo_url") or ""
+    if _photo:
+        photo_html = f'<img src="{_photo}" style="width:100%;height:100%;object-fit:cover;display:block"/>'
+    else:
+        initials = "".join(w[0].upper() for w in (s.get("name") or "?").split()[:2])
+        photo_html = f'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:500;color:#5aaddd">{initials}</div>'
+
+    gallery_mini = ""
+    for gi in gallery_items[:5]:
+        gallery_mini += (
+            f'<div onclick="openLightbox(\'{gi["photo_url"]}\')" '
+            f'style="width:48px;height:48px;border-radius:6px;overflow:hidden;border:1px solid #2e3240;cursor:pointer;flex-shrink:0">'
+            f'<img src="{gi["photo_url"]}" style="width:100%;height:100%;object-fit:cover" loading="lazy"/></div>'
+        )
+    if len(gallery_items) > 5:
+        gallery_mini += f'<div style="width:48px;height:48px;border-radius:6px;background:#1e2130;border:1px solid #2e3240;display:flex;align-items:center;justify-content:center;font-size:12px;color:#666">+{len(gallery_items)-5}</div>'
+
+    _tg = s.get("phone") or ""
+    _wa = s.get("email") or ""
+    tg_html = f'<span style="color:#5aaddd">{_tg}</span>' if _tg else '<span style="color:#444">—</span>'
+    wa_html = f'<span style="color:#5cc87a">{_wa}</span>' if _wa else '<span style="color:#444">—</span>'
+
+    chat_btn = ""
+    if s.get("conversation_id"):
+        chat_btn = f'<a href="/chat?conv_id={s["conversation_id"]}" style="text-decoration:none"><button style="padding:5px 12px;border-radius:7px;background:#1a2535;border:1px solid #2a4060;color:#5aaddd;font-size:12px;cursor:pointer">💬 TG чат</button></a>'
+    elif s.get("wa_conv_id"):
+        chat_btn = f'<a href="/wa/chat?conv_id={s["wa_conv_id"]}" style="text-decoration:none"><button style="padding:5px 12px;border-radius:7px;background:#1a3a22;border:1px solid #2a5a35;color:#5cc87a;font-size:12px;cursor:pointer">💚 WA чат</button></a>'
+
+    status_opts_html = ""
+    for k, (ico, lbl, _) in STAFF_STATUSES.items():
+        sel = "selected" if k == s.get("status", "new") else ""
+        status_opts_html += f'<option value="{k}" {sel}>{ico} {lbl}</option>'
+
+    manager_opts_html = '<option value="">— не закреплён —</option>'
+    for u in db.get_users():
+        _un = u.get("display_name") or u["username"]
+        sel = "selected" if s.get("manager_name") == _un else ""
+        manager_opts_html += f'<option value="{_un}" {sel}>{_un} ({u["role"]})</option>'
+
+    next_remind = next((n for n in reversed(notes_list) if n.get("remind_at")), None)
+    remind_badge = ""
+    if next_remind:
+        remind_badge = (
+            f'<div style="background:#2a1a0a;border:1px solid #f97316;border-radius:7px;padding:8px 12px;display:flex;align-items:center;gap:8px">'
+            f'<span>⏰</span><div>'
+            f'<div style="font-size:11px;font-weight:500;color:#f97316">Следующий контакт</div>'
+            f'<div style="font-size:12px;color:#ddd;margin-top:1px">{next_remind["remind_at"]}</div>'
+            f'</div></div>'
+        )
+
+    _note_meta = {
+        "note":    ("#1a1a2e","#9a8aee","📝","заметка"),
+        "call":    ("#1a2a3a","#5aaddd","📞","звонок"),
+        "message": ("#1a2a35","#5cc87a","💬","написали"),
+        "meet":    ("#2a1a3a","#bb77ee","📅","встреча"),
+        "status":  ("#2a1a0a","#f97316","🔄","статус"),
+    }
+    timeline_html = ""
+    for i, n in enumerate(notes_list):
+        _nt2 = n.get("type", "note")
+        _bg, _col, _ico, _lbl = _note_meta.get(_nt2, ("#1a1a2e","#9a8aee","📝","заметка"))
+        _ndate = (n.get("created_at") or "")[:16].replace("T", " ")
+        _rem_span = f'<span style="font-size:.7rem;color:#f97316;margin-left:4px">⏰ {n["remind_at"]}</span>' if n.get("remind_at") else ""
+        _is_last = (i == len(notes_list) - 1)
+        _line = "" if _is_last else '<div style="width:1px;background:#2e3240;flex:1;margin-top:4px;min-height:16px"></div>'
+        timeline_html += (
+            f'<div style="display:flex;gap:10px;padding:10px 0;border-bottom:{"none" if _is_last else "1px solid #1e2130"}">'
+            f'<div style="display:flex;flex-direction:column;align-items:center;padding-top:2px">'
+            f'<div style="width:28px;height:28px;border-radius:50%;background:{_bg};display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">{_ico}</div>'
+            f'{_line}</div>'
+            f'<div style="flex:1">'
+            f'<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px;flex-wrap:wrap">'
+            f'<span style="font-size:.8rem;font-weight:600;color:#ddd">{n.get("manager_name") or "—"}</span>'
+            f'<span style="font-size:.72rem;color:#555">{_ndate}</span>'
+            f'<span style="font-size:.7rem;padding:1px 7px;border-radius:20px;background:{_bg};color:{_col}">{_lbl}</span>'
+            f'{_rem_span}'
+            f'<button type="button" onclick="deleteNote({n["id"]},{staff_id})" style="margin-left:auto;background:transparent;border:none;color:#444;font-size:.72rem;cursor:pointer;padding:0 4px">✕</button>'
+            f'</div>'
+            f'<div style="font-size:.82rem;color:#aaa;line-height:1.5">{n.get("text") or ""}</div>'
+            f'</div></div>'
+        )
+    if not timeline_html:
+        timeline_html = '<div style="color:#444;font-size:.82rem;padding:8px 0">Пока нет касаний — добавьте первую заметку</div>'
+
+    del_btn_html = ""
+    if user and user.get("role") == "admin":
+        del_btn_html = (
+            f'<form method="post" action="/staff/delete" style="display:inline;margin:0">'
+            f'<input type="hidden" name="staff_id" value="{staff_id}"/>'
+            f'<button onclick="return confirm(\'Удалить сотрудника полностью?\')" '
+            f'style="padding:5px 12px;border-radius:7px;background:transparent;border:1px solid #7f1d1d;color:#f87171;font-size:12px;cursor:pointer">🗑 Удалить</button>'
+            f'</form>'
+        )
+
+    gallery_grid_html = ""
+    for gi in gallery_items:
+        gallery_grid_html += (
+            f'<div style="position:relative;width:80px;height:80px;border-radius:7px;overflow:hidden;cursor:pointer" onclick="openLightbox(\'{gi["photo_url"]}\')" >'
+            f'<img src="{gi["photo_url"]}" style="width:100%;height:100%;object-fit:cover"/>'
+            f'<button onclick="event.stopPropagation();delGallery({gi["id"]},{staff_id})" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.7);border:none;color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button></div>'
+        )
+    if not gallery_grid_html:
+        gallery_grid_html = '<span style="color:#444;font-size:.82rem">Нет фото в галерее</span>'
+
+    gallery_row = ""
+    if gallery_items:
+        gallery_row = f'<div style="display:flex;gap:6px;flex-wrap:wrap">{gallery_mini}</div>'
+
+    css = (
+        ".sc-page{background:#16181f;padding:16px}"
+        ".sc-layout{display:grid;grid-template-columns:240px 1fr;gap:16px;max-width:1200px}"
+        ".sc-left{display:flex;flex-direction:column;gap:12px}"
+        ".sc-photo{width:100%;aspect-ratio:3/4;border-radius:10px;background:#1a2535;overflow:hidden}"
+        ".sc-info{background:#1e2130;border:1px solid #2e3240;border-radius:10px;padding:12px}"
+        ".sc-irow{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px}"
+        ".sc-irow:last-child{margin-bottom:0}"
+        ".sc-ilabel{color:#666;min-width:54px;flex-shrink:0}"
+        ".sc-stats{display:flex;gap:8px}"
+        ".sc-stat{flex:1;background:#13151c;border-radius:8px;padding:8px 10px;text-align:center}"
+        ".sc-stat-n{font-size:18px;font-weight:500;color:#ddd}"
+        ".sc-stat-l{font-size:11px;color:#555;margin-top:2px}"
+        ".sc-right{display:flex;flex-direction:column;gap:12px}"
+        ".sc-section{background:#1e2130;border:1px solid #2e3240;border-radius:10px}"
+        ".sc-sh{padding:10px 14px;border-bottom:1px solid #2e3240;font-size:13px;font-weight:500;color:#ddd;display:flex;align-items:center;justify-content:space-between}"
+        ".sc-sb{padding:12px 14px}"
+        ".sc-inp{width:100%;background:#13151c;border:1px solid #2e3240;border-radius:7px;color:#ccc;font-size:.84rem;padding:6px 10px}"
+        ".sc-inp:focus{outline:none;border-color:#f97316}"
+        ".sc-sel{width:100%;background:#13151c;border:1px solid #2e3240;border-radius:7px;color:#ccc;font-size:.84rem;padding:6px 10px;cursor:pointer}"
+        ".sc-ta{width:100%;background:#13151c;border:1px solid #2e3240;border-radius:7px;color:#ccc;font-size:.84rem;padding:8px 10px;resize:vertical;min-height:60px}"
+        ".nt-btn{padding:3px 10px;border-radius:20px;font-size:.75rem;border:1px solid #2e3240;background:transparent;color:#666;cursor:pointer}"
+    )
+
+    name_val = (s.get("name") or "").replace('"', '&quot;')
+    phone_val = (s.get("phone") or "").replace('"', '&quot;')
+    email_val = (s.get("email") or "").replace('"', '&quot;')
+    pos_val = (s.get("position") or "").replace('"', '&quot;')
+    city_val = (s.get("city") or "").replace('"', '&quot;')
+    date_val = (s.get("created_at") or "")[:10]
+    notes_val = (s.get("notes") or "")
+
+    content = (
+        f'<style>{css}</style>'
+        f'<div class="sc-page">'
+        f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
+        f'<a href="/staff" style="font-size:12px;color:#666;text-decoration:none">← База</a>'
+        f'<span style="color:#333">/</span>'
+        f'<span style="font-size:13px;color:#ddd">{s.get("name","—")}</span>'
+        f'<span style="margin-left:auto;font-size:11px;color:#555">последнее касание: {last_contact_str}</span>'
+        f'</div>{alert}'
+        f'<div class="sc-layout">'
+        f'<div class="sc-left">'
+        f'<div class="sc-photo">{photo_html}</div>'
+        f'{gallery_row}'
+        f'<div class="sc-info">'
+        f'<div class="sc-irow"><span class="sc-ilabel">Статус</span>'
+        f'<select onchange="quickSave({staff_id},this.value,this)" style="background:#1e2130;border:1px solid #2e3240;border-radius:6px;color:#ccc;font-size:11px;padding:2px 6px;cursor:pointer">{status_opts_html}</select></div>'
+        f'<div class="sc-irow"><span class="sc-ilabel">Город</span><span style="color:#69c9d0">{s.get("city") or "—"}</span></div>'
+        f'<div class="sc-irow"><span class="sc-ilabel">TG</span>{tg_html}</div>'
+        f'<div class="sc-irow"><span class="sc-ilabel">WA</span>{wa_html}</div>'
+        f'<div class="sc-irow"><span class="sc-ilabel">Менеджер</span><span style="color:#f97316">{s.get("manager_name") or "—"}</span></div>'
+        f'<div class="sc-irow"><span class="sc-ilabel">Добавлен</span><span style="color:#888">{date_val}</span></div>'
+        f'</div>'
+        f'<div class="sc-stats">'
+        f'<div class="sc-stat"><div class="sc-stat-n">{len(notes_list)}</div><div class="sc-stat-l">касаний</div></div>'
+        f'<div class="sc-stat"><div class="sc-stat-n">{_total_days}</div><div class="sc-stat-l">дней</div></div>'
+        f'<div class="sc-stat"><div class="sc-stat-n">{"—" if _days_ago < 0 else _days_ago}</div><div class="sc-stat-l">дн. назад</div></div>'
+        f'</div>{remind_badge}'
+        f'<div style="display:flex;gap:6px;flex-wrap:wrap">{chat_btn}{del_btn_html}</div>'
+        f'</div>'
+        f'<div class="sc-right">'
+        f'<div class="sc-section">'
+        f'<div class="sc-sh"><span>💬 История касаний</span><span style="font-size:11px;color:#555">{len(notes_list)} записей</span></div>'
+        f'<div class="sc-sb">'
+        f'<div style="margin-bottom:12px">'
+        f'<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">'
+        f'<button type="button" class="nt-btn" style="border-color:#818cf8;background:#1a1a3a;color:#818cf8" onclick="setNT(\'note\',this)">📝 Заметка</button>'
+        f'<button type="button" class="nt-btn" onclick="setNT(\'call\',this)">📞 Звонок</button>'
+        f'<button type="button" class="nt-btn" onclick="setNT(\'message\',this)">💬 Написали</button>'
+        f'<button type="button" class="nt-btn" onclick="setNT(\'meet\',this)">📅 Встреча</button>'
+        f'</div>'
+        f'<div style="display:flex;gap:8px;align-items:flex-start">'
+        f'<textarea id="nt-text" class="sc-ta" placeholder="Написал в WA, ответила что думает..."></textarea>'
+        f'<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">'
+        f'<button type="button" onclick="addNote({staff_id})" style="padding:6px 14px;border-radius:7px;background:#f97316;border:none;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Добавить</button>'
+        f'<div style="font-size:10px;color:#444;text-align:center">⏰ напомнить</div>'
+        f'<input type="date" id="nt-remind" style="background:#13151c;border:1px solid #2e3240;border-radius:6px;color:#888;font-size:10px;padding:3px 6px"/>'
+        f'</div></div></div>'
+        f'<div id="timeline">{timeline_html}</div>'
+        f'</div></div>'
+        f'<div class="sc-section">'
+        f'<div class="sc-sh"><span>✏️ Редактировать карточку</span></div>'
+        f'<div class="sc-sb">'
+        f'<form method="post" action="/staff/update" enctype="multipart/form-data">'
+        f'<input type="hidden" name="staff_id" value="{staff_id}"/>'
+        f'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">'
+        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Имя</div><input class="sc-inp" type="text" name="name" value="{name_val}"/></div>'
+        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Telegram</div><input class="sc-inp" type="text" name="phone" value="{phone_val}"/></div>'
+        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">WhatsApp</div><input class="sc-inp" type="text" name="email" value="{email_val}"/></div>'
+        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Должность</div><input class="sc-inp" type="text" name="position" value="{pos_val}"/></div>'
+        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Статус</div><select class="sc-sel" name="status">{status_opts_html}</select></div>'
+        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Менеджер</div><select class="sc-sel" name="manager_name">{manager_opts_html}</select></div>'
+        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Город</div><input class="sc-inp" type="text" name="city" value="{city_val}"/></div>'
+        f'<div><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Дата анкеты</div><input class="sc-inp" type="date" name="created_at_manual" value="{date_val}"/></div>'
+        f'</div>'
+        f'<div style="margin-bottom:10px"><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Заметки</div><textarea class="sc-ta" name="notes">{notes_val}</textarea></div>'
+        f'<div style="margin-bottom:10px"><div style="font-size:.72rem;color:#555;margin-bottom:4px;text-transform:uppercase">Главное фото</div><input type="file" name="staff_photo" accept="image/*" style="font-size:.82rem;color:#666"/></div>'
+        f'<button type="submit" style="padding:7px 18px;border-radius:7px;background:#f97316;border:none;color:#fff;font-size:13px;font-weight:500;cursor:pointer">💾 Сохранить</button>'
+        f'</form></div></div>'
+        f'<div class="sc-section">'
+        f'<div class="sc-sh"><span>🖼 Галерея ({len(gallery_items)})</span>'
+        f'<label style="font-size:.78rem;color:#888;cursor:pointer;padding:3px 10px;border:1px solid #2e3240;border-radius:6px">'
+        f'➕ Добавить<input type="file" accept="image/*" multiple style="display:none" onchange="uploadGallery(this,{staff_id})"/>'
+        f'</label></div>'
+        f'<div class="sc-sb"><div style="display:flex;gap:8px;flex-wrap:wrap">{gallery_grid_html}</div></div>'
+        f'</div></div></div></div>'
+        f'<div id="lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;align-items:center;justify-content:center">'
+        f'<button onclick="document.getElementById(\'lightbox\').style.display=\'none\'" style="position:absolute;top:16px;right:20px;background:rgba(255,255,255,.1);border:none;color:#fff;font-size:1.4rem;width:36px;height:36px;border-radius:50%;cursor:pointer">✕</button>'
+        f'<img id="lb-img" style="max-width:90vw;max-height:90vh;border-radius:8px"/>'
+        f'</div>'
+        f'<script>'
+        f'var _nt="note";'
+        f'var _ntC={{note:["#818cf8","#1a1a3a"],call:["#5aaddd","#1a2a3a"],message:["#5cc87a","#1a2a35"],meet:["#bb77ee","#2a1a3a"]}};'
+        f'function setNT(t,btn){{_nt=t;document.querySelectorAll(".nt-btn").forEach(function(b){{b.style.borderColor="#2e3240";b.style.background="transparent";b.style.color="#666"}});var c=_ntC[t]||_ntC.note;btn.style.borderColor=c[0];btn.style.background=c[1];btn.style.color=c[0];}}'
+        f'async function addNote(sid){{var t=document.getElementById("nt-text"),r=document.getElementById("nt-remind");if(!t||!t.value.trim()){{alert("Введите текст");return;}}var res=await fetch("/staff/notes/add",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{staff_id:sid,type:_nt,text:t.value.trim(),remind_at:r?r.value:""}}) }});var d=await res.json();if(d.ok){{t.value="";if(r)r.value="";location.reload();}}else alert("Ошибка:"+(d.error||"?"));}}'
+        f'async function deleteNote(nid,sid){{if(!confirm("Удалить запись?"))return;var res=await fetch("/staff/notes/delete",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{note_id:nid,staff_id:sid}})}});var d=await res.json();if(d.ok)location.reload();else alert("Ошибка");}}'
+        f'async function quickSave(sid,val,el){{if(el){{el.disabled=true;el.style.opacity=".6";}}var res=await fetch("/staff/quick_status",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{id:sid,status:val}})}});var d=await res.json();if(el){{el.disabled=false;el.style.opacity="1";}}if(d.ok){{if(el){{el.style.outline="2px solid #22c55e";setTimeout(function(){{el.style.outline="";}},1200);}}}}else{{alert("Ошибка");if(el)location.reload();}}}}'
+        f'function openLightbox(url){{document.getElementById("lb-img").src=url;document.getElementById("lightbox").style.display="flex";}}'
+        f'document.getElementById("lightbox").addEventListener("click",function(e){{if(e.target===this)this.style.display="none";}});'
+        f'document.addEventListener("keydown",function(e){{if(e.key==="Escape")document.getElementById("lightbox").style.display="none";}});'
+        f'async function uploadGallery(inp,sid){{var files=Array.from(inp.files),ok=0;for(var i=0;i<files.length;i++){{var fd=new FormData();fd.append("staff_id",sid);fd.append("photo",files[i]);var r=await fetch("/staff/gallery/add",{{method:"POST",body:fd}});var d=await r.json();if(d.ok)ok++;}}if(ok>0)location.reload();else alert("Ошибка загрузки");}}'
+        f'async function delGallery(pid,sid){{if(!confirm("Удалить фото?"))return;var fd=new FormData();fd.append("photo_id",pid);fd.append("staff_id",sid);var r=await fetch("/staff/gallery/delete",{{method:"POST",body:fd}});var d=await r.json();if(d.ok)location.reload();else alert("Ошибка");}}'
+        f'</script>'
+    )
+    return HTMLResponse(base(content, "staff", request))
+
 
 
 @router.post("/staff/notes/add")

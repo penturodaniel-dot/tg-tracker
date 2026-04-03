@@ -65,18 +65,30 @@ def _parse_list(texts: dict, key: str) -> list:
 
 
 def _build_contact_buttons(contacts: list) -> str:
+    """Строит кнопки-триггеры попапа контактов. Каждый клик = попап со ссылками."""
     TG_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>'
     WA_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5Z"/></svg>'
-    html = ""
+    # Собираем элементы попапа
+    popup_items = ""
     for c in contacts:
         ctype = c.get("type", "")
         if ctype == "telegram":
-            html += f'<a class="cl-btn cl-btn-tg call-button" href="{c["url"]}" target="_blank" rel="noopener">{TG_SVG}<span>{c["label"]}</span></a>'
+            popup_items += f'<a class="cl-cpop-item cl-btn-tg call-button" href="{c["url"]}" target="_blank" rel="noopener" onclick="closeContactPopup()">{TG_SVG}<span>{c["label"]}</span></a>'
         elif ctype == "whatsapp":
-            html += f'<a class="cl-btn cl-btn-wa call-button" href="{c["url"]}" target="_blank" rel="noopener">{WA_SVG}<span>{c["label"]}</span></a>'
-    if not html:
-        html = '<p style="color:rgba(255,255,255,.3);font-size:.85rem;text-align:center;padding:8px 0">Контакты не настроены</p>'
-    return html
+            popup_items += f'<a class="cl-cpop-item cl-btn-wa call-button" href="{c["url"]}" target="_blank" rel="noopener" onclick="closeContactPopup()">{WA_SVG}<span>{c["label"]}</span></a>'
+    if not popup_items:
+        popup_items = '<p style="color:rgba(255,255,255,.4);font-size:.85rem;text-align:center;padding:12px 0">Контакты не настроены</p>'
+    # Один попап + кнопка-триггер
+    return f"""<button class="cl-btn cl-btn-contact-trigger" onclick="openContactPopup()">
+  {TG_SVG} <span>Contact on Telegram</span>
+</button>
+<div class="cl-cpop" id="cl-contact-popup">
+  <div class="cl-cpop-overlay" onclick="closeContactPopup()"></div>
+  <div class="cl-cpop-box">
+    <div class="cl-cpop-hdr"><span>Выбери мессенджер</span><button onclick="closeContactPopup()" class="cl-cpop-x">✕</button></div>
+    {popup_items}
+  </div>
+</div>"""
 
 
 def _phones_block(phones: list, num_color: str = "#a5f3fc") -> str:
@@ -91,85 +103,69 @@ def _phones_block(phones: list, num_color: str = "#a5f3fc") -> str:
     )
 
 
-def _shared_popup_and_js(photos: list, videos: list, accent: str = "#6b21a8") -> str:
-    photos_json = _json.dumps(photos)
-    videos_json = _json.dumps(videos)
-
-    photos_thumbs = "".join(
-        f'<div class="cl-gitem" onclick="openMedia(\'photo\',{i})">'
-        f'<img src="{url}" loading="lazy" alt=""/></div>'
-        for i, url in enumerate(photos)
-    ) if photos else '<p class="cl-gempty">Фото не добавлены</p>'
-
-    videos_thumbs = "".join(
-        f'<div class="cl-gitem cl-gvideo" onclick="openMedia(\'video\',{i})">'
-        f'<video src="{url}" muted preload="none"></video>'
-        f'<div class="cl-play">▶</div></div>'
-        for i, url in enumerate(videos)
-    ) if videos else '<p class="cl-gempty">Видео не добавлены</p>'
-
+def _shared_popup_and_js(accent: str = "#6b21a8") -> str:
+    """Общий JS + попап контактов. Фото/видео — прямые ссылки."""
     return f"""
-<div class="cl-popup" id="popup-photos">
-  <div class="cl-popup-hdr"><span class="cl-popup-ttl">📸 Photos</span><button class="cl-popup-x" onclick="closePopup('photos')">✕</button></div>
-  <div class="cl-popup-gal">{photos_thumbs}</div>
-</div>
-<div class="cl-popup" id="popup-videos">
-  <div class="cl-popup-hdr"><span class="cl-popup-ttl">🎬 Videos</span><button class="cl-popup-x" onclick="closePopup('videos')">✕</button></div>
-  <div class="cl-popup-gal">{videos_thumbs}</div>
-</div>
-<div class="cl-lb" id="lightbox">
-  <button class="cl-lb-x" onclick="closeLb()">✕</button>
-  <div id="lb-cnt"></div>
-  <div class="cl-lb-nav"><button onclick="lbNav(-1)">← Prev</button><button onclick="lbNav(1)">Next →</button></div>
-</div>
-<button class="cl-stb" id="stb" onclick="window.scrollTo({{top:0,behavior:'smooth'}})">↑</button>
 <style>
-.cl-popup{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:9000;flex-direction:column;align-items:center;overscroll-behavior:contain}}
-.cl-popup.open{{display:flex}}
-.cl-popup-hdr{{width:100%;max-width:600px;display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;flex-shrink:0}}
-.cl-popup-ttl{{font-weight:700;font-size:1rem;color:#fff}}
-.cl-popup-x{{background:rgba(255,255,255,.1);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}}
-.cl-popup-x:hover{{background:rgba(255,255,255,.22)}}
-.cl-popup-gal{{width:100%;max-width:600px;flex:1;overflow-y:auto;padding:0 16px 24px;display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}}
-.cl-gitem{{aspect-ratio:3/4;border-radius:12px;overflow:hidden;background:rgba(255,255,255,.05);cursor:pointer;position:relative;border:2px solid transparent;transition:border-color .15s}}
-.cl-gitem:hover{{border-color:rgba(255,255,255,.3)}}
-.cl-gitem img,.cl-gitem video{{width:100%;height:100%;object-fit:cover;display:block}}
-.cl-play{{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2.2rem;color:rgba(255,255,255,.85);pointer-events:none}}
-.cl-gempty{{grid-column:1/-1;text-align:center;color:rgba(255,255,255,.3);padding:32px;font-size:.85rem}}
-.cl-lb{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.97);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:16px}}
-.cl-lb.open{{display:flex}}
-.cl-lb img,.cl-lb video{{max-width:min(500px,90vw);max-height:min(500px,80vh);object-fit:contain;border-radius:12px;box-shadow:0 16px 64px rgba(0,0,0,.8)}}
-.cl-lb-x{{position:absolute;top:20px;right:20px;background:rgba(255,255,255,.12);border:none;color:#fff;width:42px;height:42px;border-radius:50%;font-size:1.3rem;cursor:pointer;display:flex;align-items:center;justify-content:center}}
-.cl-lb-nav{{display:flex;gap:16px}}.cl-lb-nav button{{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;padding:8px 22px;border-radius:8px;font-size:.9rem;cursor:pointer}}
-.cl-lb-nav button:hover{{background:rgba(255,255,255,.2)}}
+/* ── SCROLL TOP ── */
 .cl-stb{{position:fixed;bottom:24px;right:20px;width:44px;height:44px;border-radius:50%;background:{accent};color:#fff;border:none;font-size:1.3rem;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;z-index:8000;transform:translateY(12px)}}
 .cl-stb.visible{{opacity:1;pointer-events:auto;transform:translateY(0)}}
+/* ── PHONES ── */
 .cl-phones-list{{display:none;flex-direction:column;border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden;margin-top:10px;background:rgba(255,255,255,.03)}}
 .cl-phones-list.open{{display:flex}}
 .cl-phone-item{{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid rgba(255,255,255,.06);gap:12px}}
 .cl-phone-item:last-child{{border-bottom:none}}
 .cl-phone-city{{font-size:.82rem;color:rgba(255,255,255,.4);font-weight:500;min-width:80px}}
 .cl-phone-num{{font-size:.9rem;font-weight:700;letter-spacing:.02em;text-decoration:none}}
-.cl-btn{{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:15px;font-weight:700;font-size:.94rem;text-decoration:none;transition:opacity .15s,transform .15s}}
+/* ── CONTACT BUTTONS ── */
+.cl-btn{{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:15px;font-weight:700;font-size:.94rem;text-decoration:none;transition:opacity .15s,transform .15s;cursor:pointer;border:none}}
 .cl-btn:hover{{opacity:.88;transform:translateY(-1px)}}
 .cl-btn-tg{{background:#26A5E4;color:#fff}}
 .cl-btn-wa{{background:#25D366;color:#fff}}
+.cl-btn-contact-trigger{{background:#26A5E4;color:#fff;width:100%}}
+/* ── CONTACT POPUP ── */
+.cl-cpop{{display:none;position:fixed;inset:0;z-index:9500;align-items:flex-end;justify-content:center}}
+.cl-cpop.open{{display:flex}}
+.cl-cpop-overlay{{position:absolute;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)}}
+.cl-cpop-box{{position:relative;z-index:1;width:100%;max-width:560px;background:#13131f;border-radius:20px 20px 0 0;padding:8px 16px 32px;box-shadow:0 -8px 40px rgba(0,0,0,.5);animation:slideUp .25s ease}}
+@keyframes slideUp{{from{{transform:translateY(60px);opacity:0}}to{{transform:translateY(0);opacity:1}}}}
+.cl-cpop-hdr{{display:flex;align-items:center;justify-content:space-between;padding:14px 4px 12px;color:rgba(255,255,255,.7);font-size:.85rem;font-weight:600}}
+.cl-cpop-x{{background:rgba(255,255,255,.1);border:none;color:#fff;width:30px;height:30px;border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}}
+.cl-cpop-item{{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;border-radius:12px;font-weight:700;font-size:.94rem;text-decoration:none;margin-bottom:10px;transition:opacity .15s}}
+.cl-cpop-item:hover{{opacity:.88}}
+.cl-cpop-item:last-child{{margin-bottom:0}}
+/* drag handle */
+.cl-cpop-box::before{{content:'';display:block;width:40px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 8px}}
 </style>
+<button class="cl-stb" id="stb" onclick="window.scrollTo({{top:0,behavior:'smooth'}})">↑</button>
 <script>
-var _ph={photos_json},_vi={videos_json},_lbM='photo',_lbI=0;
-function openPopup(t){{document.getElementById('popup-'+t).classList.add('open');document.body.style.overflow='hidden'}}
-function closePopup(t){{document.getElementById('popup-'+t).classList.remove('open');document.body.style.overflow=''}}
-['popup-photos','popup-videos'].forEach(function(id){{var el=document.getElementById(id);if(el)el.addEventListener('click',function(e){{if(e.target===el)closePopup(id.replace('popup-',''))}});}});
-function openMedia(t,i){{_lbM=t;_lbI=i;renderLb();document.getElementById('lightbox').classList.add('open')}}
-function closeLb(){{document.getElementById('lightbox').classList.remove('open');document.getElementById('lb-cnt').innerHTML=''}}
-function renderLb(){{var a=_lbM==='photo'?_ph:_vi;var u=a[_lbI];document.getElementById('lb-cnt').innerHTML=_lbM==='video'?'<video src="'+u+'" controls autoplay style="max-width:min(500px,90vw);max-height:min(500px,80vh);border-radius:12px"></video>':'<img src="'+u+'" alt=""/>'}}
-function lbNav(d){{var a=_lbM==='photo'?_ph:_vi;_lbI=(_lbI+d+a.length)%a.length;renderLb()}}
-document.getElementById('lightbox').addEventListener('click',function(e){{if(e.target===this)closeLb()}});
-function togglePhones(){{var l=document.getElementById('cl-phones-list');var b=document.getElementById('cl-call-btn');var a=document.getElementById('cl-call-arrow');var o=l.classList.toggle('open');if(b)b.classList.toggle('open',o);if(a)a.style.transform=o?'rotate(180deg)':'rotate(0)'}}
-(function(){{var btn=document.getElementById('stb');function upd(){{var th=document.documentElement.scrollHeight*0.25;btn.classList.toggle('visible',window.scrollY>th)}}window.addEventListener('scroll',upd,{{passive:true}});upd();}})();
+function openContactPopup(){{
+  var p=document.getElementById('cl-contact-popup');
+  if(p){{p.classList.add('open');document.body.style.overflow='hidden';}}
+  // FB pixel Contact event
+  if(typeof fbq!=='undefined'){{fbq('track','Contact');}}
+  // TikTok
+  if(typeof ttq!=='undefined'){{ttq.track('Contact');}}
+}}
+function closeContactPopup(){{
+  var p=document.getElementById('cl-contact-popup');
+  if(p){{p.classList.remove('open');document.body.style.overflow='';}}
+}}
+function togglePhones(){{
+  var l=document.getElementById('cl-phones-list');
+  var b=document.getElementById('cl-call-btn');
+  var a=document.getElementById('cl-call-arrow');
+  var o=l.classList.toggle('open');
+  if(b)b.classList.toggle('open',o);
+  if(a)a.style.transform=o?'rotate(180deg)':'rotate(0)';
+}}
+(function(){{
+  var btn=document.getElementById('stb');
+  function upd(){{var th=document.documentElement.scrollHeight*0.25;btn.classList.toggle('visible',window.scrollY>th)}}
+  window.addEventListener('scroll',upd,{{passive:true}});upd();
+}})();
 (function(){{if(!document.cookie.includes('_fbp')){{var f='fb.1.'+Date.now()+'.'+Math.random().toString(36).substr(2,9);document.cookie='_fbp='+f+';max-age=7776000;path=/;SameSite=Lax'}}}})();
 </script>"""
-
 
 def _get_texts(texts: dict) -> dict:
     return {
@@ -197,6 +193,11 @@ def _get_texts(texts: dict) -> dict:
         "book_msg":     _t(texts, "book_msg",     "💌 Message me to book your session!"),
         "sec_contact":  _t(texts, "sec_contact",  "Contact me:"),
         "btn_call":     _t(texts, "btn_call",     "Call me or text me"),
+        "hero_bg":      _t(texts, "hero_bg",      ""),
+        "photo_url":    _t(texts, "photo_url",    ""),
+        "video_url":    _t(texts, "video_url",    ""),
+        "btn_photo":    _t(texts, "btn_photo",    "📷 Photos"),
+        "btn_video":    _t(texts, "btn_video",    "🎬 Videos"),
     }
 
 
@@ -216,28 +217,39 @@ def _render_client_landing(landing: dict, contacts: list, pixel_id: str = "", tt
     tt_pixel_id = tt_pixel or (db.get_setting("tiktok_pixel_id", "") if db else "") or (db.get_setting("tt_pixel_id", "") if db else "")
     px     = _pixel_js(pixel_id) + _tiktok_pixel_js(tt_pixel_id)
     phones = _parse_list(texts, "phones")
-    photos = _parse_list(texts, "photos")
-    videos = _parse_list(texts, "videos")
 
     if template == "rose_elegant":
-        return _tpl_rose_elegant(texts, contacts, px, phones, photos, videos)
+        return _tpl_rose_elegant(texts, contacts, px, phones)
     elif template == "neon_modern":
-        return _tpl_neon_modern(texts, contacts, px, phones, photos, videos)
+        return _tpl_neon_modern(texts, contacts, px, phones)
     elif template == "midnight_blue":
-        return _tpl_midnight_blue(texts, contacts, px, phones, photos, videos)
+        return _tpl_midnight_blue(texts, contacts, px, phones)
     else:
-        return _tpl_dark_luxury(texts, contacts, px, phones, photos, videos)
+        return _tpl_dark_luxury(texts, contacts, px, phones)
+
+
+def _media_buttons(T: dict, css_class_ph: str = "", css_class_vi: str = "") -> str:
+    """Кнопки Фото и Видео — прямые ссылки, без галереи."""
+    ph_url = T.get("photo_url", "")
+    vi_url = T.get("video_url", "")
+    ph_label = T.get("btn_photo", "📷 Photos")
+    vi_label = T.get("btn_video", "🎬 Videos")
+    ph_btn = (f'<a class="media-btn {css_class_ph}" href="{ph_url}" target="_blank" rel="noopener">{ph_label}</a>'
+              if ph_url else f'<button class="media-btn {css_class_ph}" disabled style="opacity:.4;cursor:default">{ph_label}</button>')
+    vi_btn = (f'<a class="media-btn {css_class_vi}" href="{vi_url}" target="_blank" rel="noopener">{vi_label}</a>'
+              if vi_url else f'<button class="media-btn {css_class_vi}" disabled style="opacity:.4;cursor:default">{vi_label}</button>')
+    return ph_btn + vi_btn
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TPL 1 — DARK LUXURY  (тёмный, золото, Playfair Display)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _tpl_dark_luxury(texts, contacts, pixel_js, phones, photos, videos):
+def _tpl_dark_luxury(texts, contacts, pixel_js, phones):
     T  = _get_texts(texts)
     ph = _phones_block(phones, "#d4a843")
     bt = _build_contact_buttons(contacts)
-    sh = _shared_popup_and_js(photos, videos, "#b8862d")
+    sh = _shared_popup_and_js(accent="#b8862d")
     return f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{T["hero_title"]}</title>{pixel_js}
@@ -248,7 +260,7 @@ body{{font-family:'Inter',sans-serif;background:#080608;color:#e8ddd0;min-height
 .w{{max-width:560px;margin:0 auto;padding:0 20px}}
 .topbar{{background:linear-gradient(90deg,#1a0e00,#2d1f05,#1a0e00);border-bottom:1px solid rgba(184,134,45,.25);padding:11px 20px;text-align:center;font-size:.73rem;font-weight:700;color:#d4a843;letter-spacing:.12em;text-transform:uppercase}}
 .hero{{position:relative;min-height:58vh;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}}
-.hero::before{{content:"";position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop') center/cover;filter:brightness(.22)}}
+.hero::before{{content:"";position:absolute;inset:0;background:url('{{T["hero_bg"] or "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop"}}') center/cover;filter:brightness(.22)}}
 .hero::after{{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(8,6,8,.2),rgba(8,6,8,1) 96%)}}
 .hero-in{{position:relative;z-index:1;padding:64px 20px 52px}}
 h1{{font-family:'Playfair Display',serif;font-size:clamp(2rem,5.5vw,3rem);font-weight:800;line-height:1.1;margin-bottom:16px;background:linear-gradient(135deg,#f0d080,#d4a843,#f0d080);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
@@ -288,7 +300,7 @@ h1{{font-family:'Playfair Display',serif;font-size:clamp(2rem,5.5vw,3rem);font-w
   <div class="utp"><div class="utp-i">{T["utp_1"]}</div><div class="utp-i">{T["utp_2"]}</div><div class="utp-i">{T["utp_3"]}</div></div></div>
   <div class="desc">{T["desc_box"]}</div>
   <div class="sec" style="padding-bottom:0"><div class="sec-t">{T["media_title"]}</div></div>
-  <div class="media"><button class="media-btn" onclick="openPopup('photos')">📷 Photos</button><button class="media-btn" onclick="openPopup('videos')">🎬 Videos</button></div>
+  <div class="media">{_media_buttons(T)}</div>
   <button class="cta-o" style="margin-bottom:28px" onclick="document.getElementById('ca').scrollIntoView({{behavior:'smooth'}})">{T["btn_contact"]}</button>
   <hr class="divider">
   <div class="sec"><div class="sec-t">{T["sec_rates"]}</div>
@@ -313,11 +325,11 @@ h1{{font-family:'Playfair Display',serif;font-size:clamp(2rem,5.5vw,3rem);font-w
 # TPL 2 — ROSE ELEGANT  (светлый, розово-бежевый, Cormorant Garamond)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _tpl_rose_elegant(texts, contacts, pixel_js, phones, photos, videos):
+def _tpl_rose_elegant(texts, contacts, pixel_js, phones):
     T  = _get_texts(texts)
     ph = _phones_block(phones, "#c2185b")
     bt = _build_contact_buttons(contacts)
-    sh = _shared_popup_and_js(photos, videos, "#c2185b")
+    sh = _shared_popup_and_js(accent="#c2185b")
     return f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{T["hero_title"]}</title>{pixel_js}
@@ -328,7 +340,7 @@ body{{font-family:'Inter',sans-serif;background:#fdf8f5;color:#2d1f1a;min-height
 .w{{max-width:560px;margin:0 auto;padding:0 20px}}
 .topbar{{background:#2d1f1a;padding:11px 20px;text-align:center;font-size:.72rem;font-weight:600;color:#f5e6d3;letter-spacing:.1em;text-transform:uppercase}}
 .hero{{position:relative;min-height:56vh;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}}
-.hero::before{{content:"";position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1552693673-1bf958298935?q=80&w=1920&auto=format&fit=crop') center/cover;filter:brightness(.52) saturate(.85)}}
+.hero::before{{content:"";position:absolute;inset:0;background:url('{{T["hero_bg"] or "https://images.unsplash.com/photo-1552693673-1bf958298935?q=80&w=1920&auto=format&fit=crop"}}') center/cover;filter:brightness(.52) saturate(.85)}}
 .hero::after{{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(253,248,245,.05),rgba(253,248,245,1) 96%)}}
 .hero-in{{position:relative;z-index:1;padding:72px 20px 56px}}
 h1{{font-family:'Cormorant Garamond',serif;font-size:clamp(2.2rem,6vw,3.4rem);font-weight:700;line-height:1.1;margin-bottom:16px;color:#2d1f1a}}
@@ -370,7 +382,7 @@ h1{{font-family:'Cormorant Garamond',serif;font-size:clamp(2.2rem,6vw,3.4rem);fo
   <div class="utp"><div class="utp-i">{T["utp_1"]}</div><div class="utp-i">{T["utp_2"]}</div><div class="utp-i">{T["utp_3"]}</div></div></div>
   <div class="desc">{T["desc_box"]}</div>
   <div class="sec" style="padding-bottom:0"><div class="sec-t">{T["media_title"]}</div></div>
-  <div class="media"><button class="media-btn" onclick="openPopup('photos')">📷 Photos</button><button class="media-btn" onclick="openPopup('videos')">🎬 Videos</button></div>
+  <div class="media">{_media_buttons(T)}</div>
   <button class="cta-o" style="margin-bottom:28px" onclick="document.getElementById('ca').scrollIntoView({{behavior:'smooth'}})">{T["btn_contact"]}</button>
   <hr class="divider">
   <div class="sec"><div class="sec-t">{T["sec_rates"]}</div>
@@ -395,11 +407,11 @@ h1{{font-family:'Cormorant Garamond',serif;font-size:clamp(2.2rem,6vw,3.4rem);fo
 # TPL 3 — NEON MODERN  (тёмный, пурпурный неон, Space Grotesk)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _tpl_neon_modern(texts, contacts, pixel_js, phones, photos, videos):
+def _tpl_neon_modern(texts, contacts, pixel_js, phones):
     T  = _get_texts(texts)
     ph = _phones_block(phones, "#e879f9")
     bt = _build_contact_buttons(contacts)
-    sh = _shared_popup_and_js(photos, videos, "#d946ef")
+    sh = _shared_popup_and_js(accent="#d946ef")
     return f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{T["hero_title"]}</title>{pixel_js}
@@ -410,7 +422,7 @@ body{{font-family:'Space Grotesk',sans-serif;background:#080010;color:#f0e6ff;mi
 .w{{max-width:560px;margin:0 auto;padding:0 20px}}
 .topbar{{background:linear-gradient(90deg,#0d001a,#1a0030,#0d001a);border-bottom:1px solid rgba(217,70,239,.3);padding:11px 20px;text-align:center;font-size:.72rem;font-weight:700;color:#e879f9;letter-spacing:.12em;text-transform:uppercase}}
 .hero{{position:relative;min-height:60vh;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}}
-.hero::before{{content:"";position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop') center/cover;filter:brightness(.18) saturate(.5)}}
+.hero::before{{content:"";position:absolute;inset:0;background:url('{{T["hero_bg"] or "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop"}}') center/cover;filter:brightness(.18) saturate(.5)}}
 .hero::after{{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(8,0,16,.1),rgba(8,0,16,1) 92%)}}
 .hero-glow{{position:absolute;top:0;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(217,70,239,.22),transparent 70%);pointer-events:none;z-index:1}}
 .hero-in{{position:relative;z-index:2;padding:72px 20px 60px}}
@@ -452,7 +464,7 @@ h1{{font-size:clamp(2rem,5.5vw,2.9rem);font-weight:800;line-height:1.1;margin-bo
   <div class="utp"><div class="utp-i">{T["utp_1"]}</div><div class="utp-i">{T["utp_2"]}</div><div class="utp-i">{T["utp_3"]}</div></div></div>
   <div class="desc">{T["desc_box"]}</div>
   <div class="sec" style="padding-bottom:0"><div class="sec-t">{T["media_title"]}</div></div>
-  <div class="media"><button class="media-btn ph" onclick="openPopup('photos')">📷 Photos</button><button class="media-btn vi" onclick="openPopup('videos')">🎬 Videos</button></div>
+  <div class="media">{_media_buttons(T, 'ph', 'vi')}</div>
   <button class="cta-o" style="margin-bottom:28px" onclick="document.getElementById('ca').scrollIntoView({{behavior:'smooth'}})">{T["btn_contact"]}</button>
   <hr class="divider">
   <div class="sec"><div class="sec-t">{T["sec_rates"]}</div>
@@ -477,11 +489,11 @@ h1{{font-size:clamp(2rem,5.5vw,2.9rem);font-weight:800;line-height:1.1;margin-bo
 # TPL 4 — MIDNIGHT BLUE  (глубокий синий, DM Serif Display)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _tpl_midnight_blue(texts, contacts, pixel_js, phones, photos, videos):
+def _tpl_midnight_blue(texts, contacts, pixel_js, phones):
     T  = _get_texts(texts)
     ph = _phones_block(phones, "#93c5fd")
     bt = _build_contact_buttons(contacts)
-    sh = _shared_popup_and_js(photos, videos, "#3b82f6")
+    sh = _shared_popup_and_js(accent="#3b82f6")
     return f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{T["hero_title"]}</title>{pixel_js}
@@ -492,7 +504,7 @@ body{{font-family:'DM Sans',sans-serif;background:#050d1a;color:#dce8f5;min-heig
 .w{{max-width:560px;margin:0 auto;padding:0 20px}}
 .topbar{{background:linear-gradient(90deg,#060f1f,#0a1628,#060f1f);border-bottom:1px solid rgba(59,130,246,.2);padding:11px 20px;text-align:center;font-size:.72rem;font-weight:600;color:#93c5fd;letter-spacing:.1em;text-transform:uppercase}}
 .hero{{position:relative;min-height:58vh;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}}
-.hero::before{{content:"";position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop') center/cover;filter:brightness(.2) saturate(.7) hue-rotate(200deg)}}
+.hero::before{{content:"";position:absolute;inset:0;background:url('{{T["hero_bg"] or "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop"}}') center/cover;filter:brightness(.2) saturate(.7) hue-rotate(200deg)}}
 .hero::after{{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(5,13,26,.2),rgba(5,13,26,1) 94%)}}
 .hero-in{{position:relative;z-index:1;padding:68px 20px 56px}}
 h1{{font-family:'DM Serif Display',serif;font-size:clamp(2rem,5.5vw,3rem);font-weight:400;font-style:italic;line-height:1.15;margin-bottom:16px;color:#dce8f5}}
@@ -532,7 +544,7 @@ h1{{font-family:'DM Serif Display',serif;font-size:clamp(2rem,5.5vw,3rem);font-w
   <div class="utp"><div class="utp-i">{T["utp_1"]}</div><div class="utp-i">{T["utp_2"]}</div><div class="utp-i">{T["utp_3"]}</div></div></div>
   <div class="desc">{T["desc_box"]}</div>
   <div class="sec" style="padding-bottom:0"><div class="sec-t">{T["media_title"]}</div></div>
-  <div class="media"><button class="media-btn" onclick="openPopup('photos')">📷 Photos</button><button class="media-btn" onclick="openPopup('videos')">🎬 Videos</button></div>
+  <div class="media">{_media_buttons(T)}</div>
   <button class="cta-o" style="margin-bottom:28px" onclick="document.getElementById('ca').scrollIntoView({{behavior:'smooth'}})">{T["btn_contact"]}</button>
   <hr class="divider">
   <div class="sec"><div class="sec-t">{T["sec_rates"]}</div>

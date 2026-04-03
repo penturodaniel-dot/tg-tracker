@@ -1628,10 +1628,11 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
           {_ctab("rates",  "💰 Прайс")}
           {_ctab("info",   "📋 Важная информация")}
           {_ctab("phones", "📞 Телефоны / локации")}
-          {_ctab("media",  "📸 Медиа (фото/видео)")}
+
         </div>
 
         {_cdiv("main", (
+            _tf("hero_bg",     "https://images.unsplash.com/...", "Фоновое фото героя (URL)") +
             _tf("top_bar",     "⚠️ No Fake Service 💯",   "Верхняя плашка (top bar)") +
             _tf("hero_title",  "Relaxation and Balance 🌿✨", "Заголовок героя") +
             _tf("hero_sub",    "I invite you to enjoy...",  "Подзаголовок героя", textarea=True, rows=2) +
@@ -1645,7 +1646,11 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
             _tf("sec_contact", "Contact me:",               "Заголовок секции контактов") +
             _tf("btn_tg",      "Contact on Telegram",       "Текст кнопки Telegram") +
             _tf("btn_call",    "Call me or text me",        "Текст кнопки телефонов") +
-            _tf("media_title", "📸 Photos and Videos",      "Заголовок блока медиа")
+            _tf("media_title", "📸 Photos and Videos",      "Заголовок блока медиа") +
+            _tf("photo_url",   "",                           "Ссылка на Фото (URL для кнопки Photos)") +
+            _tf("video_url",   "",                           "Ссылка на Видео (URL для кнопки Videos)") +
+            _tf("btn_photo",   "📷 Photos",                  "Текст кнопки Фото") +
+            _tf("btn_video",   "🎬 Videos",                  "Текст кнопки Видео")
         ), True)}
 
         {_cdiv("rates", (
@@ -1674,17 +1679,10 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
             '<div id="phones-container">' + _phones_rows_html + '</div>'
         )}
 
-        {_cdiv("media",
-            '<div class="field-label" style="margin-bottom:8px">Фото (ссылки на изображения)</div>' +
-            '<div id="media-photos-container">' + _photos_rows + '</div>' +
-            '<div class="field-label" style="margin-bottom:8px;margin-top:16px">Видео (прямые ссылки на .mp4 или Cloudinary)</div>' +
-            '<div id="media-videos-container">' + _videos_rows + '</div>'
-        )}
+
 
         <script>
         var _cPhoneCount = {len(_phones)};
-        var _cPhotoCount = {len(_photos)};
-        var _cVideoCount = {len(_videos)};
 
         function showCtab(id) {{
             ['main','rates','info','phones','media'].forEach(function(t){{
@@ -1706,18 +1704,6 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
             div.style.cssText='display:flex;gap:8px;margin-bottom:6px';
             div.innerHTML = '<input type="text" name="phone_city_'+idx+'" placeholder="New York" style="width:140px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.82rem"/>'
               + '<input type="text" name="phone_num_'+idx+'" placeholder="+1 212 555-0100" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.82rem"/>'
-              + '<button type="button" onclick="this.parentElement.remove()" style="background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem">✕</button>';
-            c.insertBefore(div, c.lastElementChild);
-        }}
-
-        function addMediaRow(type) {{
-            var cid = 'media-'+type+'s-container';
-            var fname = 'media_'+type+'_';
-            var c = document.getElementById(cid);
-            var idx = type==='photo' ? _cPhotoCount++ : _cVideoCount++;
-            var div = document.createElement('div');
-            div.style.cssText='display:flex;gap:6px;margin-bottom:6px';
-            div.innerHTML = '<input type="text" name="'+fname+idx+'" placeholder="https://..." style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.82rem;font-family:monospace"/>'
               + '<button type="button" onclick="this.parentElement.remove()" style="background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem">✕</button>';
             c.insertBefore(div, c.lastElementChild);
         }}

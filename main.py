@@ -1191,8 +1191,82 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
         sub   = "Создай несколько дизайнов. При создании кампании выбираешь какой шаблон использовать."
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
 
-    # Превью шаблонов для staff
+    # Превью шаблонов
     tpl_select = ""
+    if ltype == "client":
+        tpl_select = """
+        <div class="field-group" style="margin-bottom:14px">
+          <div class="field-label">Шаблон дизайна</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:6px" id="tpl-grid">
+            <label style="cursor:pointer">
+              <input type="radio" name="template" value="dark_luxury" checked style="display:none">
+              <div class="tpl-card" data-tpl="dark_luxury" style="border:2px solid var(--orange);border-radius:8px;overflow:hidden;transition:all .15s">
+                <div style="height:70px;background:linear-gradient(135deg,#1a0e00,#2d1f05);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+                  <div style="width:40px;height:5px;background:linear-gradient(135deg,#d4a843,#f0d080);border-radius:3px"></div>
+                  <div style="width:60px;height:3px;background:#d4a843;opacity:.4;border-radius:3px"></div>
+                  <div style="display:flex;gap:4px;margin-top:4px">
+                    <div style="width:50px;height:14px;background:#26A5E4;border-radius:3px"></div>
+                    <div style="width:50px;height:14px;background:#25D366;border-radius:3px"></div>
+                  </div>
+                </div>
+                <div style="padding:6px 8px;background:var(--bg3)"><div style="font-size:.72rem;font-weight:600;color:var(--text)">Dark Luxury</div><div style="font-size:.65rem;color:var(--text3)">Тёмный + золото</div></div>
+              </div>
+            </label>
+            <label style="cursor:pointer">
+              <input type="radio" name="template" value="rose_elegant" style="display:none">
+              <div class="tpl-card" data-tpl="rose_elegant" style="border:2px solid var(--border);border-radius:8px;overflow:hidden;transition:all .15s">
+                <div style="height:70px;background:linear-gradient(135deg,#fdf8f5,#fceee8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+                  <div style="width:40px;height:5px;background:#c2185b;border-radius:2px"></div>
+                  <div style="width:60px;height:3px;background:#c2185b;opacity:.3;border-radius:2px"></div>
+                  <div style="display:flex;gap:4px;margin-top:4px">
+                    <div style="width:50px;height:14px;background:#26A5E4;border-radius:2px"></div>
+                    <div style="width:50px;height:14px;background:#25D366;border-radius:2px"></div>
+                  </div>
+                </div>
+                <div style="padding:6px 8px;background:var(--bg3)"><div style="font-size:.72rem;font-weight:600;color:var(--text)">Rose Elegant</div><div style="font-size:.65rem;color:var(--text3)">Светлый + розовый</div></div>
+              </div>
+            </label>
+            <label style="cursor:pointer">
+              <input type="radio" name="template" value="neon_modern" style="display:none">
+              <div class="tpl-card" data-tpl="neon_modern" style="border:2px solid var(--border);border-radius:8px;overflow:hidden;transition:all .15s">
+                <div style="height:70px;background:#080010;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;position:relative;overflow:hidden">
+                  <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:100px;height:80px;background:radial-gradient(ellipse,rgba(217,70,239,.4),transparent 70%)"></div>
+                  <div style="width:40px;height:5px;background:linear-gradient(135deg,#d946ef,#9333ea);border-radius:50px;position:relative"></div>
+                  <div style="width:60px;height:3px;background:#d946ef;opacity:.35;border-radius:50px"></div>
+                  <div style="display:flex;gap:4px;margin-top:4px">
+                    <div style="width:50px;height:14px;background:#26A5E4;border-radius:50px"></div>
+                    <div style="width:50px;height:14px;background:#25D366;border-radius:50px"></div>
+                  </div>
+                </div>
+                <div style="padding:6px 8px;background:var(--bg3)"><div style="font-size:.72rem;font-weight:600;color:var(--text)">Neon Modern</div><div style="font-size:.65rem;color:var(--text3)">Тёмный неон</div></div>
+              </div>
+            </label>
+            <label style="cursor:pointer">
+              <input type="radio" name="template" value="midnight_blue" style="display:none">
+              <div class="tpl-card" data-tpl="midnight_blue" style="border:2px solid var(--border);border-radius:8px;overflow:hidden;transition:all .15s">
+                <div style="height:70px;background:linear-gradient(135deg,#050d1a,#0a1628);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+                  <div style="width:40px;height:5px;background:linear-gradient(135deg,#1d4ed8,#3b82f6);border-radius:6px"></div>
+                  <div style="width:60px;height:3px;background:#3b82f6;opacity:.35;border-radius:6px"></div>
+                  <div style="display:flex;gap:4px;margin-top:4px">
+                    <div style="width:50px;height:14px;background:#26A5E4;border-radius:6px"></div>
+                    <div style="width:50px;height:14px;background:#25D366;border-radius:6px"></div>
+                  </div>
+                </div>
+                <div style="padding:6px 8px;background:var(--bg3)"><div style="font-size:.72rem;font-weight:600;color:var(--text)">Midnight Blue</div><div style="font-size:.65rem;color:var(--text3)">Синий премиум</div></div>
+              </div>
+            </label>
+          </div>
+        </div>
+        <script>
+        document.querySelectorAll('.tpl-card').forEach(function(card){
+          card.addEventListener('click',function(){
+            document.querySelectorAll('.tpl-card').forEach(function(c){c.style.borderColor='var(--border)'});
+            card.style.borderColor='var(--orange)';
+            var radio=document.querySelector('input[value="'+card.dataset.tpl+'"]');
+            if(radio) radio.checked=true;
+          });
+        });
+        </script>"""
     if ltype == "staff":
         tpl_select = """
         <div class="field-group" style="margin-bottom:14px">
@@ -1834,8 +1908,9 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
         '</div></div></div></div>'
     )
 
-    # Блок смены шаблона (только для staff)
+    # Блок смены шаблона
     tpl_block = ""
+    client_tpl_names = {"dark_luxury": "Dark Luxury", "rose_elegant": "Rose Elegant", "neon_modern": "Neon Modern", "midnight_blue": "Midnight Blue"}
     if landing["type"] == "staff":
         tpl_opts = "".join(
             f'<option value="{k}" {"selected" if k==cur_tpl else ""}>{v}</option>'
@@ -1856,6 +1931,40 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
               <button class="btn-orange">Применить</button>
             </form>
             <div style="margin-top:12px;display:flex;gap:8px">
+              <a href="{public_url}" target="_blank" class="btn btn-sm">Предпросмотр →</a>
+            </div>
+          </div>
+        </div>"""
+    elif landing["type"] == "client":
+        client_tpl_opts = "".join(
+            f'<option value="{k}" {"selected" if k==cur_tpl else ""}>{v}</option>'
+            for k,v in client_tpl_names.items()
+        )
+        tpl_block = f"""
+        <div class="section">
+          <div class="section-head"><h3>Шаблон дизайна</h3>
+            <span class="badge-gray" style="font-size:.7rem">Сейчас: {client_tpl_names.get(cur_tpl, cur_tpl)}</span>
+          </div>
+          <div class="section-body">
+            <form method="post" action="/landings/set_template" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+              <input type="hidden" name="landing_id" value="{id}"/>
+              <div class="field-group" style="max-width:220px">
+                <div class="field-label">Выбрать шаблон</div>
+                <select name="template">{client_tpl_opts}</select>
+              </div>
+              <button class="btn-orange">Применить</button>
+            </form>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px">
+              {"".join(
+                f'<div style="border:2px solid {"var(--orange)" if k==cur_tpl else "var(--border)"};border-radius:8px;overflow:hidden">'
+                f'<div style="height:50px;background:{"linear-gradient(135deg,#1a0e00,#2d1f05)" if k=="dark_luxury" else ("linear-gradient(135deg,#fdf8f5,#fceee8)" if k=="rose_elegant" else ("#080010" if k=="neon_modern" else "linear-gradient(135deg,#050d1a,#0a1628)"))};display:flex;align-items:center;justify-content:center">'
+                f'<div style="width:32px;height:4px;background:{"#d4a843" if k=="dark_luxury" else ("#c2185b" if k=="rose_elegant" else ("#d946ef" if k=="neon_modern" else "#3b82f6"))};border-radius:3px"></div></div>'
+                f'<div style="padding:4px 6px;background:var(--bg3);font-size:.65rem;font-weight:600;color:{"var(--orange)" if k==cur_tpl else "var(--text3)"}">{v}</div>'
+                f'</div>'
+                for k,v in client_tpl_names.items()
+              )}
+            </div>
+            <div style="margin-top:12px">
               <a href="{public_url}" target="_blank" class="btn btn-sm">Предпросмотр →</a>
             </div>
           </div>

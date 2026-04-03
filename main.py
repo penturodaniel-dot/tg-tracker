@@ -1359,9 +1359,10 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
         import json as _json
         try:
             lcontent = _json.loads(l.get("content","{}"))
-            tpl_name = {"dark_hr":"Dark Spa","light_clean":"Light Clean","bold_cta":"Bold Purple"}.get(lcontent.get("template","dark_hr"),"Dark Spa")
+            _all_tpl_names = {"dark_hr":"Dark Spa","light_clean":"Light Clean","bold_cta":"Bold Purple","tiktok_spa":"TikTok Spa","massage_job":"Massage Job","dark_luxury":"Dark Luxury","rose_elegant":"Rose Elegant","neon_modern":"Neon Modern","midnight_blue":"Midnight Blue"}
+            tpl_name = _all_tpl_names.get(lcontent.get("template",""), lcontent.get("template","—") or "—")
         except:
-            tpl_name = "Dark Spa"
+            tpl_name = "—"
         slug_url = f"/l/{l['slug']}"
         full_url = f"{app_url_base}/l/{l['slug']}"
         _cdomain = l.get("custom_domain") or ""
@@ -1449,7 +1450,7 @@ async def landings_create(request: Request, name: str = Form(...), slug: str = F
     import re, json
     form = await request.form()
     clean_slug = re.sub(r'[^a-z0-9-]', '-', slug.lower().strip())
-    template = form.get("template", "dark_hr") if ltype == "staff" else "relaxation"
+    template = form.get("template", "dark_hr") if ltype == "staff" else form.get("template", "dark_luxury")
     content = json.dumps({"type": ltype, "template": template})
     # Если slug занят — добавляем -2, -3, ...
     final_slug = clean_slug

@@ -7,7 +7,7 @@ landing_templates.py — HTML рендеры лендингов и пиксел�
   _t(), _tshow()            — хелперы текстов
   _build_buttons()          — генерация кнопок контактов
   _render_campaign_landing()— лендинг кампании (каналы)
-  _render_client_landing()  — лендинг клиентского лендинга
+  _render_client_landing()  — перенесена в client_templates.py
   _render_staff_landing()   — лендинг HR/staff с диспетчером шаблонов
   _tpl_dark_hr()            — шаблон Dark HR
   _tpl_light_clean()        — шаблон Light Clean
@@ -130,94 +130,7 @@ def _render_campaign_landing(campaign, btns: list, pixel_id: str, fbclid: str = 
     </body></html>"""
 
 
-def _render_client_landing(landing, contacts, pixel_id: str = "", tt_pixel: str = "", db=None) -> str:
-    btn_html = ""
-    for c in contacts:
-        if c["type"] == "telegram":
-            btn_html += f'<a class="lnd-btn lnd-tg call-button" href="{c["url"]}" target="_blank"><svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>{c["label"]}</a>'
-        elif c["type"] == "whatsapp":
-            btn_html += f'<a class="lnd-btn lnd-wa call-button" href="{c["url"]}" target="_blank"><svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5Z"/></svg>{c["label"]}</a>'
-        else:
-            btn_html += f'<a class="lnd-btn call-button" href="{c["url"]}" target="_blank" style="background:rgba(255,255,255,.12)">{c["label"]}</a>'
-
-    if not btn_html:
-        btn_html = '<p style="color:rgba(255,255,255,.5);text-align:center">Контакты не настроены</p>'
-
-    tt_pixel_id = tt_pixel or (db.get_setting("tiktok_pixel_id", "") if db else "") or (db.get_setting("tt_pixel_id", "") if db else "")
-    px = _pixel_js(pixel_id) + _tiktok_pixel_js(tt_pixel_id)
-
-    return f"""<!DOCTYPE html><html lang="en"><head>
-    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Relaxation and Balance 🌿✨</title>
-    {px}
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-    *{{box-sizing:border-box;margin:0;padding:0}}
-    body{{font-family:'Inter',system-ui,sans-serif;background:#060a0f;color:#e8f0f8;min-height:100vh;font-size:14px;-webkit-font-smoothing:antialiased}}
-    .top-bar{{background:linear-gradient(135deg,#1a0a2e,#0d1a2e);border-bottom:1px solid rgba(255,255,255,.08);padding:12px 20px;text-align:center;font-size:.82rem;font-weight:600;color:#f8d56b;letter-spacing:.02em}}
-    .hero{{position:relative;min-height:50vh;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}}
-    .hero::before{{content:"";position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1920&auto=format&fit=crop') center/cover;filter:brightness(.35)}}
-    .hero::after{{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 30%,#060a0f)}}
-    .hero-inner{{position:relative;z-index:1;padding:48px 20px 32px}}
-    .hero h1{{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:800;line-height:1.15;margin-bottom:10px}}
-    .hero p{{color:rgba(255,255,255,.7);max-width:500px;margin:0 auto;font-size:.95rem;line-height:1.7}}
-    .wrap{{max-width:600px;margin:0 auto;padding:0 20px 60px}}
-    .section-title{{font-size:1.1rem;font-weight:700;margin:32px 0 16px;color:#e8f0f8}}
-    .utp-list{{display:flex;flex-direction:column;gap:10px;margin-bottom:32px}}
-    .utp-item{{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:13px;padding:14px 18px;font-size:.9rem;line-height:1.5}}
-    .desc-box{{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);border-radius:13px;padding:16px 20px;font-size:.88rem;line-height:1.7;color:rgba(255,255,255,.8);margin-bottom:32px}}
-    .rates{{display:flex;flex-direction:column;gap:8px;margin-bottom:32px}}
-    .rate-item{{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:14px 20px;font-weight:600}}
-    .rate-price{{font-size:1.15rem;color:#a5f3fc}}
-    .info-box{{background:rgba(248,212,0,.06);border:1px solid rgba(248,212,0,.2);border-radius:13px;padding:16px 20px;margin-bottom:32px}}
-    .info-item{{font-size:.86rem;line-height:1.8;color:rgba(255,255,255,.8)}}
-    .contact-section{{text-align:center;padding:32px 0}}
-    #contact-anchor{{scroll-margin-top:20px}}
-    .contact-title{{font-size:1.3rem;font-weight:800;margin-bottom:8px}}
-    .contact-sub{{color:rgba(255,255,255,.5);font-size:.88rem;margin-bottom:24px}}
-    .lnd-btn{{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:15px;border-radius:13px;font-weight:700;font-size:.95rem;text-decoration:none;margin-bottom:10px;transition:opacity .15s}}
-    .lnd-btn:hover{{opacity:.88}}
-    .lnd-tg{{background:#26A5E4;color:#fff}}
-    .lnd-wa{{background:#25D366;color:#fff}}
-    .cta-btn{{display:flex;align-items:center;justify-content:center;width:100%;padding:15px;border-radius:13px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;font-weight:600;font-size:.9rem;text-decoration:none;margin-bottom:10px;cursor:pointer;transition:background .15s}}
-    .cta-btn:hover{{background:rgba(255,255,255,.16)}}
-    .media-row{{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:32px}}
-    .msg-book{{text-align:center;font-size:1rem;color:rgba(255,255,255,.6);padding:20px;border-top:1px solid rgba(255,255,255,.07)}}
-    </style></head><body>
-    <div class="top-bar">⚠️ No Fake Service 💯</div>
-    <div class="hero"><div class="hero-inner">
-      <h1>Relaxation and Balance 🌿✨</h1>
-      <p>I invite you to enjoy a soothing body massage in a comfortable, private setting.</p>
-      <a href="#contact-anchor" class="cta-btn" style="max-width:280px;margin:20px auto 0" onclick="document.getElementById('contact-anchor').scrollIntoView({{behavior:'smooth'}});return false">Contact me ↓</a>
-    </div></div>
-    <div class="wrap">
-      <div class="section-title">Included in the session:</div>
-      <div class="utp-list">
-        <div class="utp-item">💆‍♂️ Full body massage</div>
-        <div class="utp-item">🤍 Full body contact massage</div>
-        <div class="utp-item">🔥 Relaxation completion</div>
-      </div>
-      <div class="desc-box">✨ I'll greet you in elegant attire and provide a relaxing massage in comfortable, minimal clothing. Touching me is not allowed.</div>
-      <a href="#contact-anchor" class="cta-btn" onclick="document.getElementById('contact-anchor').scrollIntoView({{behavior:'smooth'}});return false">Contact me ↓</a>
-      <div class="section-title">💰 Rates:</div>
-      <div class="rates">
-        <div class="rate-item"><span>60 min</span><span class="rate-price">$230</span></div>
-        <div class="rate-item"><span>30 min</span><span class="rate-price">$200</span></div>
-        <div class="rate-item"><span>15 min</span><span class="rate-price">$140</span></div>
-      </div>
-      <a href="#contact-anchor" class="cta-btn" onclick="document.getElementById('contact-anchor').scrollIntoView({{behavior:'smooth'}});return false">Contact me ↓</a>
-      <div class="info-box">
-        <div class="info-item">📌 Extra services can only be discussed in person during the session.</div>
-        <div class="info-item">💵 Payment is accepted in cash only. Please prepare the exact amount.</div>
-        <div class="info-item">⚠️ Same-day appointments only. Advance bookings are not available.</div>
-      </div>
-      <div class="msg-book">💌 Message me to book your session!</div>
-      <div class="contact-section" id="contact-anchor">
-        <div class="contact-title">Contact me:</div>
-        <div class="contact-sub">Choose your preferred way to reach out</div>
-        {btn_html}
-      </div>
-    </div></body></html>"""
+# _render_client_landing перенесена в client_templates.py
 
 
 def _pixel_js(pixel_id: str) -> str:

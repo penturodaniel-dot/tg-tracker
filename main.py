@@ -16,9 +16,9 @@ import meta_capi
 import tiktok_capi
 import bot_manager
 from database import Database
+from client_templates import _render_client_landing
 from landing_templates import (
     _render_campaign_landing,
-    _render_client_landing,
     _render_staff_landing,
     _pixel_js,
     _tiktok_pixel_js,
@@ -1483,6 +1483,172 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
 
     # Строим блок текстов в зависимости от шаблона
     _texts_fields = ""
+
+    # ── CLIENT шаблон (relaxation) ────────────────────────────────────────────
+    if landing["type"] == "client":
+        # Телефоны из texts["phones"] (JSON-список)
+        import json as _j2
+        try:
+            _phones_raw = _texts.get("phones", "[]")
+            _phones = _j2.loads(_phones_raw) if isinstance(_phones_raw, str) else (_phones_raw or [])
+        except Exception:
+            _phones = []
+
+        # Медиа из texts
+        try:
+            _photos_raw = _texts.get("photos", "[]")
+            _photos = _j2.loads(_photos_raw) if isinstance(_photos_raw, str) else (_photos_raw or [])
+        except Exception:
+            _photos = []
+        try:
+            _videos_raw = _texts.get("videos", "[]")
+            _videos = _j2.loads(_videos_raw) if isinstance(_videos_raw, str) else (_videos_raw or [])
+        except Exception:
+            _videos = []
+
+        # Строки телефонов для редактирования
+        _phones_rows_html = ""
+        for _pi, _ph in enumerate(_phones):
+            _phones_rows_html += (
+                f'<div class="rl-phone-row" style="display:flex;gap:8px;margin-bottom:6px">'
+                f'<input type="text" name="phone_city_{_pi}" value="{_ph.get("city","")}" placeholder="New York" style="width:140px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.82rem"/>'
+                f'<input type="text" name="phone_num_{_pi}" value="{_ph.get("phone","")}" placeholder="+1 212 555-0100" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.82rem"/>'
+                f'<button type="button" onclick="this.parentElement.remove()" style="background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem">✕</button>'
+                f'</div>'
+            )
+        _phones_rows_html += (
+            f'<button type="button" onclick="addPhoneRow()" style="margin-top:4px;padding:6px 14px;background:var(--bg3);border:1px dashed var(--border2);border-radius:7px;color:var(--text3);cursor:pointer;font-size:.8rem">+ Добавить локацию</button>'
+        )
+
+        # Фото-ссылки
+        _photos_rows = "\n".join(
+            f'<div style="display:flex;gap:6px;margin-bottom:6px">'
+            f'<input type="text" name="media_photo_{_pi}" value="{_u}" placeholder="https://..." style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.82rem;font-family:monospace"/>'
+            f'<button type="button" onclick="this.parentElement.remove()" style="background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem">✕</button>'
+            f'</div>'
+            for _pi, _u in enumerate(_photos)
+        )
+        _photos_rows += f'<button type="button" onclick="addMediaRow(\'photo\')" style="margin-top:4px;padding:6px 14px;background:var(--bg3);border:1px dashed var(--border2);border-radius:7px;color:var(--text3);cursor:pointer;font-size:.8rem">+ Добавить фото URL</button>'
+
+        # Видео-ссылки
+        _videos_rows = "\n".join(
+            f'<div style="display:flex;gap:6px;margin-bottom:6px">'
+            f'<input type="text" name="media_video_{_pi}" value="{_u}" placeholder="https://..." style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.82rem;font-family:monospace"/>'
+            f'<button type="button" onclick="this.parentElement.remove()" style="background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem">✕</button>'
+            f'</div>'
+            for _pi, _u in enumerate(_videos)
+        )
+        _videos_rows += f'<button type="button" onclick="addMediaRow(\'video\')" style="margin-top:4px;padding:6px 14px;background:var(--bg3);border:1px dashed var(--border2);border-radius:7px;color:var(--text3);cursor:pointer;font-size:.8rem">+ Добавить видео URL</button>'
+
+        def _ctab(tab_id, label, active=False):
+            _a = "background:var(--orange);color:#fff" if active else "background:var(--bg3);color:var(--text3)"
+            return f'<button type="button" onclick="showCtab(\'{tab_id}\')" id="ctab-btn-{tab_id}" style="{_a};border:none;padding:6px 14px;border-radius:7px;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit">{label}</button>'
+
+        def _cdiv(tab_id, content, active=False):
+            return f'<div id="ctab-{tab_id}" style="display:{"block" if active else "none"};margin-top:14px">{content}</div>'
+
+        _texts_fields = f"""
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+          {_ctab("main",   "📝 Основные тексты", True)}
+          {_ctab("rates",  "💰 Прайс")}
+          {_ctab("info",   "📋 Важная информация")}
+          {_ctab("phones", "📞 Телефоны / локации")}
+          {_ctab("media",  "📸 Медиа (фото/видео)")}
+        </div>
+
+        {_cdiv("main", (
+            _tf("top_bar",     "⚠️ No Fake Service 💯",   "Верхняя плашка (top bar)") +
+            _tf("hero_title",  "Relaxation and Balance 🌿✨", "Заголовок героя") +
+            _tf("hero_sub",    "I invite you to enjoy...",  "Подзаголовок героя", textarea=True, rows=2) +
+            _tf("btn_contact", "Contact me",                "Текст кнопки «Contact me»") +
+            _tf("sec_included","Included in the session:",  "Заголовок секции УТП") +
+            _tf("utp_1",       "💆‍♂️ Full body massage",    "УТП 1") +
+            _tf("utp_2",       "🤍 Full body contact massage","УТП 2") +
+            _tf("utp_3",       "🔥 Relaxation completion",  "УТП 3") +
+            _tf("desc_box",    "✨ I'll greet you in elegant attire...", "Описание (серый блок)", textarea=True, rows=3) +
+            _tf("book_msg",    "💌 Message me to book your session!", "Сообщение перед контактами") +
+            _tf("sec_contact", "Contact me:",               "Заголовок секции контактов") +
+            _tf("btn_tg",      "Contact on Telegram",       "Текст кнопки Telegram") +
+            _tf("btn_call",    "Call me or text me",        "Текст кнопки телефонов") +
+            _tf("media_title", "📸 Photos and Videos",      "Заголовок блока медиа")
+        ), True)}
+
+        {_cdiv("rates", (
+            _tf("sec_rates",    "💰 Rates:",  "Заголовок прайса") +
+            '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:6px"><div style="font-size:.72rem;color:var(--orange);font-weight:600;margin-bottom:6px">Строка 1</div>' +
+            _tf("rate_1_dur",   "60 min",    "Длительность") +
+            _tf("rate_1_price", "$230",      "Цена") +
+            '</div><div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:6px"><div style="font-size:.72rem;color:var(--orange);font-weight:600;margin-bottom:6px">Строка 2</div>' +
+            _tf("rate_2_dur",   "30 min",    "Длительность") +
+            _tf("rate_2_price", "$200",      "Цена") +
+            '</div><div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:6px"><div style="font-size:.72rem;color:var(--orange);font-weight:600;margin-bottom:6px">Строка 3</div>' +
+            _tf("rate_3_dur",   "15 min",    "Длительность") +
+            _tf("rate_3_price", "$140",      "Цена") +
+            '</div>'
+        ))}
+
+        {_cdiv("info", (
+            _tf("sec_info", "📋 Important Information:", "Заголовок блока") +
+            _tf("info_1", "📌 Extra services...", "Пункт 1", textarea=True, rows=2) +
+            _tf("info_2", "💵 Payment is accepted...", "Пункт 2", textarea=True, rows=2) +
+            _tf("info_3", "⚠️ Same-day appointments...", "Пункт 3", textarea=True, rows=2)
+        ))}
+
+        {_cdiv("phones",
+            '<div class="field-label" style="margin-bottom:8px">Локации с телефонами (город + номер)</div>' +
+            '<div id="phones-container">' + _phones_rows_html + '</div>'
+        )}
+
+        {_cdiv("media",
+            '<div class="field-label" style="margin-bottom:8px">Фото (ссылки на изображения)</div>' +
+            '<div id="media-photos-container">' + _photos_rows + '</div>' +
+            '<div class="field-label" style="margin-bottom:8px;margin-top:16px">Видео (прямые ссылки на .mp4 или Cloudinary)</div>' +
+            '<div id="media-videos-container">' + _videos_rows + '</div>'
+        )}
+
+        <script>
+        var _cPhoneCount = {len(_phones)};
+        var _cPhotoCount = {len(_photos)};
+        var _cVideoCount = {len(_videos)};
+
+        function showCtab(id) {{
+            ['main','rates','info','phones','media'].forEach(function(t){{
+                var d=document.getElementById('ctab-'+t);
+                var b=document.getElementById('ctab-btn-'+t);
+                if(d) d.style.display=(t===id)?'block':'none';
+                if(b){{
+                    b.style.background=t===id?'var(--orange)':'var(--bg3)';
+                    b.style.color=t===id?'#fff':'var(--text3)';
+                }}
+            }});
+        }}
+
+        function addPhoneRow() {{
+            var c = document.getElementById('phones-container');
+            var idx = _cPhoneCount++;
+            var div = document.createElement('div');
+            div.className='rl-phone-row';
+            div.style.cssText='display:flex;gap:8px;margin-bottom:6px';
+            div.innerHTML = '<input type="text" name="phone_city_'+idx+'" placeholder="New York" style="width:140px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.82rem"/>'
+              + '<input type="text" name="phone_num_'+idx+'" placeholder="+1 212 555-0100" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.82rem"/>'
+              + '<button type="button" onclick="this.parentElement.remove()" style="background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem">✕</button>';
+            c.insertBefore(div, c.lastElementChild);
+        }}
+
+        function addMediaRow(type) {{
+            var cid = 'media-'+type+'s-container';
+            var fname = 'media_'+type+'_';
+            var c = document.getElementById(cid);
+            var idx = type==='photo' ? _cPhotoCount++ : _cVideoCount++;
+            var div = document.createElement('div');
+            div.style.cssText='display:flex;gap:6px;margin-bottom:6px';
+            div.innerHTML = '<input type="text" name="'+fname+idx+'" placeholder="https://..." style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.82rem;font-family:monospace"/>'
+              + '<button type="button" onclick="this.parentElement.remove()" style="background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem">✕</button>';
+            c.insertBefore(div, c.lastElementChild);
+        }}
+        </script>"""
+
+    # ── STAFF шаблоны ─────────────────────────────────────────────────────────
     if cur_tpl in ("dark_hr", "light_clean", "bold_cta", "tiktok_spa"):
         # Общие поля для всех шаблонов
         _hero_fields = (
@@ -1824,6 +1990,33 @@ async def landings_save_texts(request: Request):
         if key.startswith("txt_"):
             field = key[4:]  # убираем префикс txt_
             texts[field] = val.strip()
+
+    # ── CLIENT: телефоны (phone_city_N / phone_num_N) ─────────────────────────
+    if landing.get("type") == "client":
+        _phone_map = {}
+        for key, val in form.items():
+            if key.startswith("phone_city_") or key.startswith("phone_num_"):
+                parts = key.rsplit("_", 1)
+                if len(parts) == 2:
+                    idx = parts[1]
+                    field = "city" if "city" in key else "phone"
+                    _phone_map.setdefault(idx, {})[field] = val.strip()
+        phones_list = [v for k, v in sorted(_phone_map.items(), key=lambda x: int(x[0]) if x[0].isdigit() else 0) if v.get("phone")]
+        texts["phones"] = _json.dumps(phones_list, ensure_ascii=False)
+
+        # ── Медиа (media_photo_N / media_video_N) ────────────────────────────
+        photos_list = []
+        videos_list = []
+        for key, val in form.items():
+            if key.startswith("media_photo_") and val.strip():
+                photos_list.append((key, val.strip()))
+            elif key.startswith("media_video_") and val.strip():
+                videos_list.append((key, val.strip()))
+        photos_list.sort(key=lambda x: int(x[0].rsplit("_",1)[1]) if x[0].rsplit("_",1)[1].isdigit() else 0)
+        videos_list.sort(key=lambda x: int(x[0].rsplit("_",1)[1]) if x[0].rsplit("_",1)[1].isdigit() else 0)
+        texts["photos"] = _json.dumps([v for _, v in photos_list], ensure_ascii=False)
+        texts["videos"] = _json.dumps([v for _, v in videos_list], ensure_ascii=False)
+
     lcontent["texts"] = texts
     db.update_landing_content(landing_id, _json.dumps(lcontent, ensure_ascii=False))
     return RedirectResponse(f"/landings/edit?id={landing_id}&msg=Тексты+сохранены", 303)

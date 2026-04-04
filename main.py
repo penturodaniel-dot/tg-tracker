@@ -1628,7 +1628,7 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
           {_ctab("main",   "📝 Основные тексты", True)}
           {_ctab("rates",  "💰 Прайс")}
           {_ctab("info",   "📋 Важная информация")}
-          {_ctab("phones", "📞 Телефоны / локации")}
+
 
         </div>
 
@@ -1675,10 +1675,7 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
             _tf("info_3", "⚠️ Same-day appointments...", "Пункт 3", textarea=True, rows=2)
         ))}
 
-        {_cdiv("phones",
-            '<div class="field-label" style="margin-bottom:8px">Локации с телефонами (город + номер)</div>' +
-            '<div id="phones-container">' + _phones_rows_html + '</div>'
-        )}
+
 
 
 
@@ -1697,17 +1694,6 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
             }});
         }}
 
-        function addPhoneRow() {{
-            var c = document.getElementById('phones-container');
-            var idx = _cPhoneCount++;
-            var div = document.createElement('div');
-            div.className='rl-phone-row';
-            div.style.cssText='display:flex;gap:8px;margin-bottom:6px';
-            div.innerHTML = '<input type="text" name="phone_city_'+idx+'" placeholder="New York" style="width:140px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.82rem"/>'
-              + '<input type="text" name="phone_num_'+idx+'" placeholder="+1 212 555-0100" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:.82rem"/>'
-              + '<button type="button" onclick="this.parentElement.remove()" style="background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem">✕</button>';
-            c.insertBefore(div, c.lastElementChild);
-        }}
         </script>"""
 
     # ── STAFF шаблоны ─────────────────────────────────────────────────────────
@@ -2065,9 +2051,8 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
     </div></div>
     {tpl_block}
     {texts_block}
-    {fb_event_block}
-    {domain_block}
     {project_block}
+    {"" if landing["type"] == "client" else f'''
     <div class="section"><div class="section-head"><h3>Добавить кнопку</h3><small style="color:var(--text3)">Кнопки появятся на лендинге</small></div>
     <div class="section-body"><form method="post" action="/landings/contact/add"><input type="hidden" name="landing_id" value="{id}"/>
     <div class="form-row">
@@ -2082,7 +2067,8 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
       <small style="color:var(--text3);font-size:.72rem">Укажи город — и на лендинге появится попап выбора города</small>
     </div>
     <table><thead><tr><th>Тип</th><th>Текст / Город</th><th>URL</th><th></th></tr></thead>
-    <tbody>{contact_rows}</tbody></table></div></div>"""
+    <tbody>{contact_rows}</tbody></table></div></div>
+    '''}"""
     return HTMLResponse(base(content, landing["type"] + "_landing", request))
 
 
@@ -2266,6 +2252,7 @@ async def public_landing(request: Request, slug: str,
                 "url":   go_url,
                 "label": cc.get("channel_name") or "Вступить в группу",
                 "city":  (cc.get("city") or "").strip(),
+                "phone": (cc.get("phone") or "").strip(),
             })
 
         if campaign.get("landing_id"):
@@ -2274,16 +2261,14 @@ async def public_landing(request: Request, slug: str,
                 # Контакты = TG каналы кампании с их city-тегами
                 chan_contacts = [
                     {"type": "telegram", "label": b["label"], "url": b["url"],
-                     "city": (b.get("city") or "").strip()}
+                     "city": (b.get("city") or "").strip(),
+                     "phone": (b.get("phone") or "").strip()}
                     for b in btns
                 ]
-                # Телефоны берём из кампании (не из шаблона)
-                _camp_phones = db.get_campaign_phones(campaign["id"])
                 fb_pixel, tt_pixel = _get_landing_pixels(landing)
                 return HTMLResponse(_render_client_landing(
                     landing, chan_contacts,
                     pixel_id=fb_pixel, tt_pixel=tt_pixel, db=db,
-                    campaign_phones=_camp_phones,
                 ))
 
         tt_pixel = db.get_setting("tiktok_pixel_id", "") or ""

@@ -2219,10 +2219,22 @@ async def public_landing(request: Request, slug: str,
     if campaign:
         channels = db.get_campaign_channels(campaign["id"])
 
+        # UTM campaign: приоритет — первый utm из проекта кампании, fallback — имя кампании
+        _camp_proj_for_utm = None
+        if campaign.get("project_id"):
+            _camp_proj_for_utm = db.get_project(int(campaign["project_id"]))
+        if _camp_proj_for_utm:
+            _utms_list = [u.strip() for u in (_camp_proj_for_utm.get("utm_campaigns") or "").split(",") if u.strip()]
+            _utm_campaign_val = _utms_list[0] if _utms_list else campaign["name"]
+            _utm_source_val   = utm_source or (_camp_proj_for_utm.get("traffic_source") or "facebook").lower() or "facebook"
+        else:
+            _utm_campaign_val = campaign["name"]
+            _utm_source_val   = utm_source or "facebook"
+
         # Строим /go ссылки для каждого канала
         btns = []
         for cc in channels:
-            go_url = f"{app_url}/go?to={cc['invite_link']}&utm_campaign={campaign['name']}&utm_source={utm_source or 'facebook'}&utm_medium={utm_medium or 'paid'}"
+            go_url = f"{app_url}/go?to={cc['invite_link']}&utm_campaign={_utm_campaign_val}&utm_source={_utm_source_val}&utm_medium={utm_medium or 'paid'}"
             if fbclid:      go_url += f"&fbclid={fbclid}"
             if utm_content: go_url += f"&utm_content={utm_content}"
             btns.append({

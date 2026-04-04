@@ -105,12 +105,12 @@ async def channels_delete(request: Request, channel_id: str = Form(...)):
 # КАМПАНИИ
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _build_utm_block(slug_url: str, camp_name: str, app_url: str, db_ref) -> str:
+def _build_utm_block(slug_url: str, camp_name: str, app_url: str, db_ref,
+                     project_id=None) -> str:
     """Генерирует блок UTM ссылок для Facebook и TikTok."""
-    # Ищем проект по utm_campaign совпадающему с именем кампании
-    _proj = db_ref.get_project_by_utm(camp_name)
+    # Приоритет: проект привязанный к кампании
+    _proj = db_ref.get_project(int(project_id)) if project_id else None
     if not _proj:
-        # Показываем обе ссылки с именем кампании как utm_campaign
         _src = "both"
         _utm_val = camp_name
     else:
@@ -174,7 +174,7 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
     Отдельная секция телефонов убрана.
     """
     slug_url  = f"{app_url}/l/{c.get('slug', '')}"
-    utm_block = _build_utm_block(slug_url, c['name'], app_url, db)
+    utm_block = _build_utm_block(slug_url, c['name'], app_url, db, c.get('project_id'))
     camp_id   = c["id"]
     camp_name = c["name"]
     total_joins = c["total_joins"]
@@ -196,6 +196,31 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
         f'<select name="landing_id" style="font-size:.77rem;padding:4px 8px;border-radius:7px;width:auto">'
         f'{tpl_select_opts}</select>'
         f'<button class="btn btn-sm" style="font-size:.74rem;padding:5px 10px">Сменить шаблон</button>'
+        f'</form>'
+    )
+
+    # ── Выбор проекта (пиксель) ───────────────────────────────────────────────
+    _projects = db.get_projects()
+    _cur_proj_id = c.get('project_id')
+    _cur_proj = next((p for p in _projects if p['id'] == _cur_proj_id), None)
+    _proj_badge = (
+        f'<span class="badge-green" style="font-size:.71rem">🎯 {_cur_proj["name"]}</span>'
+        if _cur_proj else
+        '<span class="badge-gray" style="font-size:.71rem">🎯 Проект не выбран</span>'
+    )
+    _proj_opts = '<option value="">— Без проекта (глобальный пиксель) —</option>' + ''.join(
+        f'<option value="{p["id"]}" {"selected" if p["id"] == _cur_proj_id else ""}'
+        f'>{p["name"]} [{"FB✓" if p.get("fb_pixel_id") else "FB✗"}'  
+        f'{" TT✓" if p.get("tt_pixel_id") else ""}]</option>'
+        for p in _projects
+    )
+    _proj_switch = (
+        f'<form method="post" action="/campaigns/set_project"'
+        f' style="display:flex;gap:6px;align-items:center;margin-top:6px">'
+        f'<input type="hidden" name="campaign_id" value="{camp_id}"/>'
+        f'<select name="project_id" style="font-size:.77rem;padding:4px 8px;border-radius:7px;width:auto">'
+        f'{_proj_opts}</select>'
+        f'<button class="btn btn-sm" style="font-size:.74rem;padding:5px 10px">Применить</button>'
         f'</form>'
     )
 
@@ -263,6 +288,7 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
           <h3>🎯 {camp_name}</h3>
           <span class="badge" style="font-size:.72rem">{total_joins} подписок</span>
           {tpl_badge}
+          {_proj_badge}
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <a href="{slug_url}" target="_blank" class="btn-gray btn-sm">🌐 Лендинг</a>
@@ -282,6 +308,10 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
           <div class="link-box">{slug_url}</div>
           {utm_block}
           <div style="margin-top:10px">{tpl_switch}</div>
+          <div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:.72rem;color:var(--text3);font-weight:600">🎯 Пиксель:</span>
+            {_proj_switch}
+          </div>
         </div>
 
         <!-- Каналы с inline город + телефон -->
@@ -404,6 +434,18 @@ async def campaigns_create(request: Request, name: str = Form(...),
         return RedirectResponse(f"/campaigns?msg=Кампания+{name}+создана", 303)
     except Exception as e:
         return RedirectResponse(f"/campaigns?err_msg={str(e)}", 303)
+
+
+@router.post("/campaigns/set_project")
+async def campaigns_set_project(request: Request, campaign_id: int = Form(...),
+                                 project_id: str = Form("")):
+    """Привязать проект (пиксель) к кампании."""
+    user, err = require_auth(request)
+    if err: return err
+    pid = int(project_id) if project_id.strip().isdigit() else None
+    db.set_campaign_project(campaign_id, pid)
+    msg = "Проект привязан" if pid else "Проект отвязан"
+    return RedirectResponse(f"/campaigns?msg={msg}", 303)
 
 
 @router.post("/campaigns/set_template")

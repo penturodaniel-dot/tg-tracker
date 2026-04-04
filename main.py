@@ -1958,6 +1958,69 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
           </div>
         </div>"""
 
+    # ── Блок выбора FB-события (только для client) ──────────────────────────────
+    fb_event_block = ""
+    if landing["type"] == "client":
+        _cur_fb_event = landing.get("fb_event", "") or "Lead"
+        _fb_event_opts = "".join(
+            f'<option value="{ev}" {"selected" if ev == _cur_fb_event else ""}>{label}</option>'
+            for ev, label in [
+                ("Lead",                 "Lead — заявка (рекомендуется)"),
+                ("Subscribe",            "Subscribe — подписка"),
+                ("Contact",              "Contact — контакт"),
+                ("Purchase",             "Purchase — покупка"),
+                ("CompleteRegistration", "CompleteRegistration — регистрация"),
+                ("ViewContent",          "ViewContent — просмотр контента"),
+                ("Search",               "Search — поиск"),
+            ]
+        )
+        _fb_event_desc = {
+            "Lead":                 "Оптимизация под заявки — FB ищет людей склонных оставлять заявки",
+            "Subscribe":            "Оптимизация под подписки — подходит если цель рост канала",
+            "Contact":              "Контакт — нейтральное событие, подходит для начала",
+            "Purchase":             "Покупка — только если реальная транзакция, иначе данные будут грязными",
+            "CompleteRegistration": "Регистрация — если есть форма регистрации",
+            "ViewContent":          "Просмотр — слабый сигнал, не рекомендуется как конверсия",
+            "Search":               "Поиск — редко используется",
+        }.get(_cur_fb_event, "")
+        fb_event_block = f'''
+        <div class="section" style="border-left:3px solid #1877f2">
+          <div class="section-head">
+            <h3>🎯 FB CAPI — событие при клике на контакт</h3>
+            <span style="font-size:.72rem;color:#60a5fa">Server-side, при нажатии на Telegram/WhatsApp</span>
+          </div>
+          <div class="section-body">
+            <form method="post" action="/landings/set_fb_event" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+              <input type="hidden" name="landing_id" value="{id}"/>
+              <div class="field-group" style="flex:1;min-width:240px">
+                <div class="field-label">Событие</div>
+                <select name="fb_event" onchange="document.getElementById('fb-ev-hint').textContent=document.getElementById('fb-ev-hints-'+this.value)?.textContent||''">
+                  {_fb_event_opts}
+                </select>
+              </div>
+              <button class="btn-orange">Применить</button>
+            </form>
+            <div id="fb-ev-hint" style="margin-top:10px;font-size:.78rem;color:var(--text3);line-height:1.6">{_fb_event_desc}</div>
+            <div style="display:none">
+              {"".join(f'<span id="fb-ev-hints-{ev}">{desc}</span>' for ev, desc in {
+                "Lead": "Оптимизация под заявки — FB ищет людей склонных оставлять заявки",
+                "Subscribe": "Оптимизация под подписки — подходит если цель рост канала",
+                "Contact": "Контакт — нейтральное событие, подходит для начала",
+                "Purchase": "Покупка — только если реальная транзакция, иначе данные будут грязными",
+                "CompleteRegistration": "Регистрация — если есть форма регистрации",
+                "ViewContent": "Просмотр — слабый сигнал, не рекомендуется как конверсия",
+                "Search": "Поиск — редко используется",
+              }.items())}
+            </div>
+            <div style="margin-top:12px;padding:10px 14px;background:rgba(24,119,242,.08);border:1px solid rgba(24,119,242,.2);border-radius:8px;font-size:.78rem;color:rgba(255,255,255,.7);line-height:1.7">
+              <b style="color:#60a5fa">Как работает:</b> когда пользователь нажимает на кнопку Telegram/WhatsApp,
+              сервер отправляет это событие в FB CAPI с <b>fbclid, fbp, fbc, ip, user_agent</b> —
+              для точного матчинга с рекламными кампаниями. Браузерный пиксель (<i>fbq</i>) отправляет
+              <i>Contact</i> параллельно — дедупликация происходит автоматически.
+            </div>
+          </div>
+        </div>'''
+
     # Блок привязки проекта
     projects = db.get_projects()
     cur_project_id = landing.get("project_id")
@@ -2002,6 +2065,7 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
     </div></div>
     {tpl_block}
     {texts_block}
+    {fb_event_block}
     {domain_block}
     {project_block}
     <div class="section"><div class="section-head"><h3>Добавить кнопку</h3><small style="color:var(--text3)">Кнопки появятся на лендинге</small></div>
@@ -2049,6 +2113,28 @@ async def landings_set_project(request: Request, landing_id: int = Form(...), pr
     db.set_landing_project(landing_id, pid)
     msg = "Проект привязан" if pid else "Проект отвязан"
     return RedirectResponse(f"/landings/edit?id={landing_id}&msg={msg}", 303)
+
+
+@app.post("/landings/set_fb_event")
+async def landings_set_fb_event(request: Request, landing_id: int = Form(...), fb_event: str = Form(...)):
+    """Сохранить выбранное FB CAPI событие для лендинга"""
+    user, err = require_auth(request)
+    if err: return err
+    _allowed = {"Lead","Subscribe","Contact","Purchase","CompleteRegistration","ViewContent","Search"}
+    if fb_event not in _allowed:
+        return RedirectResponse(f"/landings/edit?id={landing_id}&msg=Неверное+событие", 303)
+    import json as _json
+    landing = db.get_landing(landing_id)
+    if not landing: return RedirectResponse("/landings", 303)
+    try:
+        # Сохраняем в отдельное поле landing.fb_event через UPDATE
+        with db._conn() as _conn:
+            with _conn.cursor() as _cur:
+                _cur.execute("UPDATE landings SET fb_event=%s WHERE id=%s", (fb_event, landing_id))
+            _conn.commit()
+    except Exception as _e:
+        return RedirectResponse(f"/landings/edit?id={landing_id}&msg=Ошибка:+{str(_e)[:40]}", 303)
+    return RedirectResponse(f"/landings/edit?id={landing_id}&msg=Событие+{fb_event}+сохранено", 303)
 
 
 @app.post("/landings/set_template")
@@ -2283,6 +2369,48 @@ async def go_staff_redirect(request: Request, ref: str = ""):
         destination = f"{target_url}{sep}text={pre_text}"
 
     log.info(f"[/go-staff] ref={ref} type={target_type} src={click.get('utm_source')} utm={click.get('utm_campaign')} fbclid={'✓' if click.get('fbclid') else '—'} ttclid={'✓' if click.get('ttclid') else '—'} ttp={'✓' if click.get('ttp') else '—'}")
+
+    # Facebook CAPI — событие при клике на кнопку лендинга
+    try:
+        _fb_landing_slug = click.get("landing_slug", "")
+        _fb_landing_obj  = db.get_landing_by_slug(_fb_landing_slug) if _fb_landing_slug else None
+        _fb_pixel, _fb_token = "", ""
+        _fb_event_name = "Lead"  # дефолт
+        if _fb_landing_obj:
+            # Пиксель из проекта или глобальный
+            _fb_pid = _fb_landing_obj.get("project_id")
+            if _fb_pid:
+                _fb_proj = db.get_project(int(_fb_pid))
+                if _fb_proj:
+                    _fb_pixel = _fb_proj.get("fb_pixel_id", "") or ""
+                    _fb_token = _fb_proj.get("fb_token", "") or ""
+            if not _fb_pixel:
+                _fb_pixel = db.get_setting("pixel_id", "") or ""
+                _fb_token = db.get_setting("meta_token", "") or ""
+            # Событие из настроек лендинга
+            _fb_event_name = (_fb_landing_obj.get("fb_event") or "Lead").strip() or "Lead"
+        if _fb_pixel and _fb_token:
+            import asyncio as _asyncio_fb
+            _fb_app_url = db.get_setting("app_url", "").rstrip("/")
+            _asyncio_fb.create_task(meta_capi.send_event(
+                pixel_id=_fb_pixel,
+                access_token=_fb_token,
+                event_name=_fb_event_name,
+                user_id=str(click.get("ref_id", "")),
+                fbclid=click.get("fbclid") or None,
+                fbp=click.get("fbp") or cookie_fbp or None,
+                fbc=click.get("fbc") or None,
+                utm_source=click.get("utm_source") or None,
+                utm_campaign=click.get("utm_campaign") or None,
+                client_ip=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent", "") or None,
+                event_source_url=f"{_fb_app_url}/l/{_fb_landing_slug}" if _fb_landing_slug else None,
+            ))
+            log.info(f"[/go-staff] FB CAPI {_fb_event_name} queued pixel={_fb_pixel[:8]}... fbclid={'✓' if click.get('fbclid') else '—'} fbp={'✓' if (click.get('fbp') or cookie_fbp) else '—'}")
+        else:
+            log.debug(f"[/go-staff] FB CAPI skipped — pixel or token not set")
+    except Exception as _fb_err:
+        log.warning(f"[/go-staff] FB CAPI error: {_fb_err}")
 
     # TikTok CAPI — Subscribe событие при клике на кнопку лендинга
     try:

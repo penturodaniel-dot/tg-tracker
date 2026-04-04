@@ -41,14 +41,15 @@ def _build_tracker_dp() -> Dispatcher:
         cid = str(event.chat.id)
         if cid not in channel_ids:
             return
-        user = event.new_chat_member.user
-        raw_link = event.invite_link.invite_link if event.invite_link else None
-        campaign = _db.get_campaign_by_link(raw_link)
+
+        user      = event.new_chat_member.user
+        raw_link  = event.invite_link.invite_link if event.invite_link else None
+        campaign  = _db.get_campaign_by_link(raw_link)
         campaign_name = campaign["name"] if campaign else "organic"
 
-        click_id = None
-        if campaign:
-            click_id = campaign.get("click_id")
+        # ── Находим click_data (fbclid, fbp, utm и т.д.) ──────────────────────
+        click_id   = campaign.get("click_id") if campaign else None
+        click_data = _db.get_click(click_id) if click_id else {}
 
         join_id = _db.log_join(
             user_id=user.id,
@@ -57,23 +58,78 @@ def _build_tracker_dp() -> Dispatcher:
             campaign_name=campaign_name,
             click_id=click_id
         )
-
-        click_data = _db.get_click(click_id) if click_id else {}
         if click_data:
             _db.save_utm(click_data, join_id=join_id)
 
-        pixel_id   = _db.get_setting("pixel_id")
-        meta_token = _db.get_setting("meta_token")
+        # ── Разрешаем пиксель: проект кампании → лендинг → проект ────────────
+        # Приоритет 1: проект привязанный к лендингу кампании
+        pixel_id   = None
+        meta_token = None
+        _project   = None
+
+        if campaign and campaign.get("landing_id"):
+            _landing = _db.get_landing(int(campaign["landing_id"]))
+            if _landing and _landing.get("project_id"):
+                _project = _db.get_project(int(_landing["project_id"]))
+
+        # Приоритет 2: проект найденный по utm_campaign
+        if not _project and click_data and click_data.get("utm_campaign"):
+            _project = _db.get_project_by_utm(click_data["utm_campaign"])
+
+        # Приоритет 3: глобальные настройки
+        if _project:
+            pixel_id   = _project.get("fb_pixel_id") or ""
+            meta_token = _project.get("fb_token") or ""
+
+        if not pixel_id:
+            pixel_id   = _db.get_setting("pixel_id") or ""
+        if not meta_token:
+            meta_token = _db.get_setting("meta_token") or ""
+
+        # ── Matching данные ────────────────────────────────────────────────────
+        _fbclid = click_data.get("fbclid") if click_data else None
+        _fbp    = click_data.get("fbp")    if click_data else None
+        _fbc    = click_data.get("fbc")    if click_data else None
+
+        # Генерируем fbc из fbclid если fbc не сохранён
+        if _fbclid and not _fbc:
+            import time as _time
+            _fbc = f"fb.1.{int(_time.time()*1000)}.{_fbclid}"
+
+        _utm_source   = click_data.get("utm_source")   if click_data else None
+        _utm_campaign = click_data.get("utm_campaign")  if click_data else None
+
         test_event_code = _db.get_setting("test_event_code") or None
+
+        # ── Качество matching для лога ─────────────────────────────────────────
+        _matching_score = sum([
+            bool(_fbclid), bool(_fbp), bool(_fbc),
+        ])
+        _matching_label = ["❌ нет данных", "⚠️ слабый", "✅ хороший", "✅✅ отличный"][_matching_score]
+        _pixel_source = f"проект '{_project['name']}'" if _project else "глобальный"
+
+        log.info(
+            f"[BOT1] JOIN user={user.id} channel={cid} campaign={campaign_name} | "
+            f"pixel={_pixel_source} | matching={_matching_label} | "
+            f"fbclid={'✓' if _fbclid else '—'} fbp={'✓' if _fbp else '—'} fbc={'✓' if _fbc else '—'}"
+        )
+
+        if not _matching_score:
+            log.warning(
+                f"[BOT1] CAPI без matching данных — событие уйдёт но не свяжется с рекламой. "
+                f"Причина: пользователь вошёл не через трекинговую ссылку лендинга."
+            )
+
+        # ── Отправляем событие ─────────────────────────────────────────────────
         await _meta.send_subscribe_event(
             pixel_id, meta_token, str(user.id), campaign_name,
-            fbclid=click_data.get("fbclid") if click_data else None,
-            fbp=click_data.get("fbp") if click_data else None,
-            utm_source=click_data.get("utm_source") if click_data else None,
-            utm_campaign=click_data.get("utm_campaign") if click_data else None,
+            fbclid=_fbclid,
+            fbp=_fbp,
+            fbc=_fbc,
+            utm_source=_utm_source,
+            utm_campaign=_utm_campaign,
             test_event_code=test_event_code,
         )
-        log.info(f"[BOT1] JOIN user={user.id} channel={cid} campaign={campaign_name}")
         asyncio.create_task(_run_flow(user.id, cid, _tracker_bot))
 
     return dp

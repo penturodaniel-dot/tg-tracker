@@ -281,6 +281,7 @@ class Database:
                     "ALTER TABLE projects ADD COLUMN IF NOT EXISTS traffic_source TEXT DEFAULT ''",
                     "ALTER TABLE landings ADD COLUMN IF NOT EXISTS traffic_source TEXT DEFAULT ''",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS ttp TEXT",
+                "ALTER TABLE landings ADD COLUMN IF NOT EXISTS fb_event TEXT DEFAULT ''",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS tg_user_id TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
                     "ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",

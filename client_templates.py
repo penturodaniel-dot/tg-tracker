@@ -100,8 +100,8 @@ def _build_contact_section(contacts: list) -> str:
 
     return f"""
 <!-- ОДНА КНОПКА -->
-<button class="cl-btn cl-btn-tg cl-btn-contact-trigger" onclick="clOpenMain()">
-  {TG_SVG} <span>Contact on Telegram</span>
+<button class="cl-btn cl-btn-contact-trigger" onclick="clOpenMain()">
+  {TG_SVG} <span>Contact me</span>
 </button>
 
 <!-- ПОПАП ГОРОДОВ -->
@@ -130,7 +130,7 @@ def _build_contact_section(contacts: list) -> str:
 </div>
 
 <style>
-.cl-btn-contact-trigger{{background:#26A5E4;color:#fff;border:none;border-radius:inherit;cursor:pointer;font-family:inherit;font-weight:700;font-size:.94rem}}
+.cl-btn-contact-trigger{{width:100%;border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:.94rem;transition:opacity .15s,transform .15s;letter-spacing:.02em}}.cl-btn-contact-trigger:hover{{opacity:.88;transform:translateY(-1px)}}
 .cl-cpop{{display:none;position:fixed;inset:0;z-index:9500;align-items:flex-end;justify-content:center}}
 .cl-cpop.open{{display:flex}}
 .cl-cpop-overlay{{position:absolute;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px)}}
@@ -339,20 +339,15 @@ def _render_client_landing(landing: dict, contacts: list, pixel_id: str = "", tt
     tt_pixel_id = tt_pixel or (db.get_setting("tiktok_pixel_id", "") if db else "") or (db.get_setting("tt_pixel_id", "") if db else "")
     px = _pixel_js(pixel_id) + _tiktok_pixel_js(tt_pixel_id)
 
-    # Телефоны: приоритет — из кампании, fallback — из шаблона
-    if campaign_phones is not None:
-        phones = campaign_phones  # список dict {city, phone} из кампании
-    else:
-        phones = _parse_list(texts, "phones")
 
     if template == "rose_elegant":
-        return _tpl_rose_elegant(texts, contacts, px, phones)
+        return _tpl_rose_elegant(texts, contacts, px)
     elif template == "neon_modern":
-        return _tpl_neon_modern(texts, contacts, px, phones)
+        return _tpl_neon_modern(texts, contacts, px)
     elif template == "midnight_blue":
-        return _tpl_midnight_blue(texts, contacts, px, phones)
+        return _tpl_midnight_blue(texts, contacts, px)
     else:
-        return _tpl_dark_luxury(texts, contacts, px, phones)
+        return _tpl_dark_luxury(texts, contacts, px)
 
 
 def _media_buttons(T: dict, css_class_ph: str = "", css_class_vi: str = "") -> str:
@@ -372,9 +367,8 @@ def _media_buttons(T: dict, css_class_ph: str = "", css_class_vi: str = "") -> s
 # TPL 1 — DARK LUXURY  (тёмный, золото, Playfair Display)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _tpl_dark_luxury(texts, contacts, pixel_js, phones):
+def _tpl_dark_luxury(texts, contacts, pixel_js):
     T  = _get_texts(texts)
-    ph = _phones_block(phones, "#d4a843")
     bt = _build_contact_section(contacts)
     sh = _shared_popup_and_js(accent="#b8862d")
     return f"""<!DOCTYPE html><html lang="en"><head>
@@ -393,6 +387,7 @@ body{{font-family:'Inter',sans-serif;background:#080608;color:#e8ddd0;min-height
 h1{{font-family:'Playfair Display',serif;font-size:clamp(2rem,5.5vw,3rem);font-weight:800;line-height:1.1;margin-bottom:16px;background:linear-gradient(135deg,#f0d080,#d4a843,#f0d080);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
 .hero p{{color:rgba(232,221,208,.6);max-width:420px;margin:0 auto 32px;font-size:.93rem;font-weight:300;line-height:1.8}}
 .cta{{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;border-radius:3px;background:linear-gradient(135deg,#b8862d,#d4a843);color:#0a0700;font-weight:700;font-size:.93rem;cursor:pointer;border:none;transition:opacity .15s;font-family:'Inter',sans-serif;letter-spacing:.04em}}
+.cl-btn-contact-trigger{{background:linear-gradient(135deg,#b8862d,#d4a843)!important;color:#0a0700!important;border-radius:3px;padding:15px 32px;font-family:'Inter',sans-serif;letter-spacing:.04em}}
 .cta:hover{{opacity:.9}}
 .cta-o{{display:flex;align-items:center;justify-content:center;width:100%;padding:14px;border-radius:3px;background:transparent;border:1px solid rgba(184,134,45,.4);color:#d4a843;font-weight:600;font-size:.93rem;cursor:pointer;transition:background .15s;font-family:'Inter',sans-serif}}
 .cta-o:hover{{background:rgba(184,134,45,.08)}}
@@ -440,10 +435,6 @@ h1{{font-family:'Playfair Display',serif;font-size:clamp(2rem,5.5vw,3rem);font-w
   <div class="contact" id="ca">
     <div class="contact-t">{T["sec_contact"]}</div>
     <div class="btns">{bt}</div>
-    <button class="call-tog" id="cl-call-btn" onclick="togglePhones()">📞 {T["btn_call"]}
-      <svg id="cl-call-arrow" viewBox="0 0 20 20" fill="currentColor" width="16" height="16" style="transition:transform .25s"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
-    </button>
-    <div class="cl-phones-list" id="cl-phones-list">{ph}</div>
   </div>
 </div>{sh}</body></html>"""
 
@@ -452,9 +443,8 @@ h1{{font-family:'Playfair Display',serif;font-size:clamp(2rem,5.5vw,3rem);font-w
 # TPL 2 — ROSE ELEGANT  (светлый, розово-бежевый, Cormorant Garamond)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _tpl_rose_elegant(texts, contacts, pixel_js, phones):
+def _tpl_rose_elegant(texts, contacts, pixel_js):
     T  = _get_texts(texts)
-    ph = _phones_block(phones, "#c2185b")
     bt = _build_contact_section(contacts)
     sh = _shared_popup_and_js(accent="#c2185b")
     return f"""<!DOCTYPE html><html lang="en"><head>
@@ -473,6 +463,7 @@ body{{font-family:'Inter',sans-serif;background:#fdf8f5;color:#2d1f1a;min-height
 h1{{font-family:'Cormorant Garamond',serif;font-size:clamp(2.2rem,6vw,3.4rem);font-weight:700;line-height:1.1;margin-bottom:16px;color:#2d1f1a}}
 .hero p{{color:#7a5a50;max-width:380px;margin:0 auto 32px;font-size:.92rem;font-weight:300;line-height:1.85}}
 .cta{{display:inline-flex;align-items:center;gap:8px;padding:14px 36px;border-radius:2px;background:#2d1f1a;color:#f5e6d3;font-weight:600;font-size:.9rem;cursor:pointer;border:none;transition:background .15s;letter-spacing:.06em;font-family:'Inter',sans-serif}}
+.cl-btn-contact-trigger{{background:#2d1f1a!important;color:#f5e6d3!important;border-radius:2px;padding:15px;font-family:'Inter',sans-serif;letter-spacing:.05em}}
 .cta:hover{{background:#3d2f2a}}
 .cta-o{{display:flex;align-items:center;justify-content:center;width:100%;padding:14px;border-radius:2px;background:transparent;border:1px solid #c8a99a;color:#2d1f1a;font-weight:600;font-size:.9rem;cursor:pointer;transition:background .15s;font-family:'Inter',sans-serif}}
 .cta-o:hover{{background:rgba(45,31,26,.05)}}
@@ -522,10 +513,6 @@ h1{{font-family:'Cormorant Garamond',serif;font-size:clamp(2.2rem,6vw,3.4rem);fo
   <div class="contact" id="ca">
     <div class="contact-t">{T["sec_contact"]}</div>
     <div class="btns">{bt}</div>
-    <button class="call-tog" id="cl-call-btn" onclick="togglePhones()">📞 {T["btn_call"]}
-      <svg id="cl-call-arrow" viewBox="0 0 20 20" fill="currentColor" width="16" height="16" style="transition:transform .25s"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
-    </button>
-    <div class="cl-phones-list" id="cl-phones-list">{ph}</div>
   </div>
 </div>{sh}</body></html>"""
 
@@ -534,9 +521,8 @@ h1{{font-family:'Cormorant Garamond',serif;font-size:clamp(2.2rem,6vw,3.4rem);fo
 # TPL 3 — NEON MODERN  (тёмный, пурпурный неон, Space Grotesk)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _tpl_neon_modern(texts, contacts, pixel_js, phones):
+def _tpl_neon_modern(texts, contacts, pixel_js):
     T  = _get_texts(texts)
-    ph = _phones_block(phones, "#e879f9")
     bt = _build_contact_section(contacts)
     sh = _shared_popup_and_js(accent="#d946ef")
     return f"""<!DOCTYPE html><html lang="en"><head>
@@ -556,6 +542,7 @@ body{{font-family:'Space Grotesk',sans-serif;background:#080010;color:#f0e6ff;mi
 h1{{font-size:clamp(2rem,5.5vw,2.9rem);font-weight:800;line-height:1.1;margin-bottom:16px;background:linear-gradient(135deg,#f0e6ff,#e879f9,#c026d3);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
 .hero p{{color:rgba(240,230,255,.52);max-width:400px;margin:0 auto 32px;font-size:.93rem;font-weight:300;line-height:1.8}}
 .cta{{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;border-radius:50px;background:linear-gradient(135deg,#d946ef,#9333ea);color:#fff;font-weight:700;font-size:.93rem;cursor:pointer;border:none;transition:opacity .15s,box-shadow .15s;box-shadow:0 0 24px rgba(217,70,239,.35);font-family:'Space Grotesk',sans-serif}}
+.cl-btn-contact-trigger{{background:linear-gradient(135deg,#d946ef,#9333ea)!important;color:#fff!important;border-radius:50px;padding:15px;box-shadow:0 0 24px rgba(217,70,239,.35);font-family:'Space Grotesk',sans-serif}}
 .cta:hover{{opacity:.9;box-shadow:0 0 36px rgba(217,70,239,.5)}}
 .cta-o{{display:flex;align-items:center;justify-content:center;width:100%;padding:14px;border-radius:50px;background:transparent;border:1px solid rgba(217,70,239,.32);color:#e879f9;font-weight:600;font-size:.93rem;cursor:pointer;transition:background .15s;font-family:'Space Grotesk',sans-serif}}
 .cta-o:hover{{background:rgba(217,70,239,.08)}}
@@ -604,10 +591,6 @@ h1{{font-size:clamp(2rem,5.5vw,2.9rem);font-weight:800;line-height:1.1;margin-bo
   <div class="contact" id="ca">
     <div class="contact-t">{T["sec_contact"]}</div>
     <div class="btns">{bt}</div>
-    <button class="call-tog" id="cl-call-btn" onclick="togglePhones()">📞 {T["btn_call"]}
-      <svg id="cl-call-arrow" viewBox="0 0 20 20" fill="currentColor" width="16" height="16" style="transition:transform .25s"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
-    </button>
-    <div class="cl-phones-list" id="cl-phones-list">{ph}</div>
   </div>
 </div>{sh}</body></html>"""
 
@@ -616,9 +599,8 @@ h1{{font-size:clamp(2rem,5.5vw,2.9rem);font-weight:800;line-height:1.1;margin-bo
 # TPL 4 — MIDNIGHT BLUE  (глубокий синий, DM Serif Display)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _tpl_midnight_blue(texts, contacts, pixel_js, phones):
+def _tpl_midnight_blue(texts, contacts, pixel_js):
     T  = _get_texts(texts)
-    ph = _phones_block(phones, "#93c5fd")
     bt = _build_contact_section(contacts)
     sh = _shared_popup_and_js(accent="#3b82f6")
     return f"""<!DOCTYPE html><html lang="en"><head>
@@ -637,6 +619,7 @@ body{{font-family:'DM Sans',sans-serif;background:#050d1a;color:#dce8f5;min-heig
 h1{{font-family:'DM Serif Display',serif;font-size:clamp(2rem,5.5vw,3rem);font-weight:400;font-style:italic;line-height:1.15;margin-bottom:16px;color:#dce8f5}}
 .hero p{{color:rgba(220,232,245,.48);max-width:400px;margin:0 auto 32px;font-size:.93rem;font-weight:300;line-height:1.85}}
 .cta{{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;border-radius:6px;background:linear-gradient(135deg,#1d4ed8,#3b82f6);color:#fff;font-weight:600;font-size:.92rem;cursor:pointer;border:none;transition:opacity .15s,box-shadow .15s;box-shadow:0 4px 20px rgba(59,130,246,.3);font-family:'DM Sans',sans-serif}}
+.cl-btn-contact-trigger{{background:linear-gradient(135deg,#1d4ed8,#3b82f6)!important;color:#fff!important;border-radius:6px;padding:15px;box-shadow:0 4px 20px rgba(59,130,246,.3);font-family:'DM Sans',sans-serif}}
 .cta:hover{{opacity:.92;box-shadow:0 6px 28px rgba(59,130,246,.45)}}
 .cta-o{{display:flex;align-items:center;justify-content:center;width:100%;padding:14px;border-radius:6px;background:transparent;border:1px solid rgba(59,130,246,.28);color:#93c5fd;font-weight:600;font-size:.92rem;cursor:pointer;transition:background .15s;font-family:'DM Sans',sans-serif}}
 .cta-o:hover{{background:rgba(59,130,246,.07)}}
@@ -684,9 +667,5 @@ h1{{font-family:'DM Serif Display',serif;font-size:clamp(2rem,5.5vw,3rem);font-w
   <div class="contact" id="ca">
     <div class="contact-t">{T["sec_contact"]}</div>
     <div class="btns">{bt}</div>
-    <button class="call-tog" id="cl-call-btn" onclick="togglePhones()">📞 {T["btn_call"]}
-      <svg id="cl-call-arrow" viewBox="0 0 20 20" fill="currentColor" width="16" height="16" style="transition:transform .25s"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
-    </button>
-    <div class="cl-phones-list" id="cl-phones-list">{ph}</div>
   </div>
 </div>{sh}</body></html>"""

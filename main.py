@@ -2262,15 +2262,29 @@ async def public_landing(request: Request, slug: str,
             go_url = f"{app_url}/go?to={cc['invite_link']}&utm_campaign={campaign['name']}&utm_source={utm_source or 'facebook'}&utm_medium={utm_medium or 'paid'}"
             if fbclid:      go_url += f"&fbclid={fbclid}"
             if utm_content: go_url += f"&utm_content={utm_content}"
-            btns.append({"url": go_url, "label": cc.get("channel_name") or "Вступить в группу"})
+            btns.append({
+                "url":   go_url,
+                "label": cc.get("channel_name") or "Вступить в группу",
+                "city":  (cc.get("city") or "").strip(),
+            })
 
         if campaign.get("landing_id"):
             landing  = db.get_landing(campaign["landing_id"])
-            contacts = db.get_landing_contacts(campaign["landing_id"]) if landing else []
             if landing:
-                chan_contacts = [{"type": "telegram", "label": b["label"], "url": b["url"]} for b in btns]
+                # Контакты = TG каналы кампании с их city-тегами
+                chan_contacts = [
+                    {"type": "telegram", "label": b["label"], "url": b["url"],
+                     "city": (b.get("city") or "").strip()}
+                    for b in btns
+                ]
+                # Телефоны берём из кампании (не из шаблона)
+                _camp_phones = db.get_campaign_phones(campaign["id"])
                 fb_pixel, tt_pixel = _get_landing_pixels(landing)
-                return HTMLResponse(_render_client_landing(landing, chan_contacts, pixel_id=fb_pixel, tt_pixel=tt_pixel, db=db))
+                return HTMLResponse(_render_client_landing(
+                    landing, chan_contacts,
+                    pixel_id=fb_pixel, tt_pixel=tt_pixel, db=db,
+                    campaign_phones=_camp_phones,
+                ))
 
         tt_pixel = db.get_setting("tiktok_pixel_id", "") or ""
         return HTMLResponse(_render_campaign_landing(campaign, btns, pixel_clients, fbclid, tt_pixel))

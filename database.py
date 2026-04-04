@@ -69,6 +69,14 @@ class Database:
                 );
 
                 -- Каналы внутри кампании (каждый со своей invite-ссылкой)
+                CREATE TABLE IF NOT EXISTS campaign_phones (
+                    id          SERIAL PRIMARY KEY,
+                    campaign_id INTEGER NOT NULL,
+                    city        TEXT NOT NULL DEFAULT '',
+                    phone       TEXT NOT NULL DEFAULT '',
+                    position    INTEGER DEFAULT 0
+                );
+                -- city-тег для каналов внутри кампании
                 CREATE TABLE IF NOT EXISTS campaign_channels (
                     id          SERIAL PRIMARY KEY,
                     campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
@@ -219,6 +227,8 @@ class Database:
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS slug TEXT",
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''",
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS landing_id INTEGER DEFAULT NULL",
+                    "ALTER TABLE campaign_channels ADD COLUMN IF NOT EXISTS city TEXT DEFAULT ''",
+                    "CREATE TABLE IF NOT EXISTS campaign_phones (id SERIAL PRIMARY KEY, campaign_id INTEGER NOT NULL, city TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', position INTEGER DEFAULT 0)",
                     "ALTER TABLE campaigns ALTER COLUMN channel_id DROP NOT NULL",
                     "ALTER TABLE campaigns ALTER COLUMN invite_link DROP NOT NULL",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_source TEXT",
@@ -603,6 +613,33 @@ class Database:
                     WHERE cc.campaign_id=%s
                     GROUP BY cc.id ORDER BY cc.position""", (campaign_id,))
                 return [dict(r) for r in cur.fetchall()]
+
+    def get_campaign_phones(self, campaign_id: int) -> list:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM campaign_phones WHERE campaign_id=%s ORDER BY position", (campaign_id,))
+                return [dict(r) for r in cur.fetchall()]
+
+    def add_campaign_phone(self, campaign_id: int, city: str, phone: str):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COALESCE(MAX(position),0)+1 as p FROM campaign_phones WHERE campaign_id=%s", (campaign_id,))
+                pos = cur.fetchone()["p"]
+                cur.execute("INSERT INTO campaign_phones (campaign_id,city,phone,position) VALUES (%s,%s,%s,%s)",
+                            (campaign_id, city.strip(), phone.strip(), pos))
+            conn.commit()
+
+    def delete_campaign_phone(self, phone_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM campaign_phones WHERE id=%s", (phone_id,))
+            conn.commit()
+
+    def set_campaign_channel_city(self, cc_id: int, city: str):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE campaign_channels SET city=%s WHERE id=%s", (city.strip(), cc_id))
+            conn.commit()
 
     def remove_campaign_channel(self, cc_id: int):
         with self._conn() as conn:

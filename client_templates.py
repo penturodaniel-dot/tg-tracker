@@ -345,7 +345,12 @@ def _get_texts(texts: dict) -> dict:
 # DISPATCHER
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _render_client_landing(landing: dict, contacts: list, pixel_id: str = "", tt_pixel: str = "", db=None) -> str:
+def _render_client_landing(landing: dict, contacts: list, pixel_id: str = "", tt_pixel: str = "",
+                           db=None, campaign_phones: list = None) -> str:
+    """
+    campaign_phones — список {city, phone} из кампании (приоритет над phones в шаблоне).
+    Если передан — используем его. Если нет — берём из texts шаблона (для прямого /l/{slug}).
+    """
     try:
         lcontent = _json.loads(landing.get("content", "{}"))
         template = lcontent.get("template", "dark_luxury")
@@ -355,8 +360,13 @@ def _render_client_landing(landing: dict, contacts: list, pixel_id: str = "", tt
         texts    = {}
 
     tt_pixel_id = tt_pixel or (db.get_setting("tiktok_pixel_id", "") if db else "") or (db.get_setting("tt_pixel_id", "") if db else "")
-    px     = _pixel_js(pixel_id) + _tiktok_pixel_js(tt_pixel_id)
-    phones = _parse_list(texts, "phones")
+    px = _pixel_js(pixel_id) + _tiktok_pixel_js(tt_pixel_id)
+
+    # Телефоны: приоритет — из кампании, fallback — из шаблона
+    if campaign_phones is not None:
+        phones = campaign_phones  # список dict {city, phone} из кампании
+    else:
+        phones = _parse_list(texts, "phones")
 
     if template == "rose_elegant":
         return _tpl_rose_elegant(texts, contacts, px, phones)

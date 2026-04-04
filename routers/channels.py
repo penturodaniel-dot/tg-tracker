@@ -105,6 +105,67 @@ async def channels_delete(request: Request, channel_id: str = Form(...)):
 # КАМПАНИИ
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _build_utm_block(slug_url: str, camp_name: str, app_url: str, db_ref) -> str:
+    """Генерирует блок UTM ссылок для Facebook и TikTok."""
+    # Ищем проект по utm_campaign совпадающему с именем кампании
+    _proj = db_ref.get_project_by_utm(camp_name)
+    if not _proj:
+        # Показываем обе ссылки с именем кампании как utm_campaign
+        _src = "both"
+        _utm_val = camp_name
+    else:
+        _src = (_proj.get("traffic_source") or "both").lower()
+        _utms = [u.strip() for u in (_proj.get("utm_campaigns") or "").split(",") if u.strip()]
+        _utm_val = _utms[0] if _utms else camp_name
+
+    _tt_u = (slug_url + "?utm_source=tiktok&utm_medium=paid"
+             "&utm_campaign=" + _utm_val +
+             "&utm_content=__CID__&utm_term=__AID__&ttclid=__CLICKID__")
+    _fb_u = (slug_url + "?utm_source=facebook&utm_medium=paid"
+             "&utm_campaign=" + _utm_val +
+             "&utm_content={{ad.name}}&utm_term={{adset.name}}&fbclid={{fbclid}}")
+
+    def _row(icon_color, icon, url, btn_color, btn_border):
+        uid = "utm_" + str(abs(hash(url)) % 99999)
+        js_onclick = (
+            "var i=document.getElementById('" + uid + "');"
+            "navigator.clipboard.writeText(i.value);"
+            "this.textContent='\u2713';"
+            "setTimeout(()=>this.textContent='\U0001f4cb',1500)"
+        )
+        return (
+            '<div style="margin-top:6px;display:flex;gap:4px;align-items:center">'
+            + '<span style="color:' + icon_color + ';font-size:.7rem;flex-shrink:0">' + icon + '</span>'
+            + '<input id="' + uid + '" readonly value="' + url + '" onclick="this.select()"'
+            + ' style="flex:1;min-width:0;background:var(--bg);border:1px solid ' + btn_border + ';'
+            + 'border-radius:5px;padding:3px 8px;color:' + icon_color + ';font-size:.65rem;'
+            + 'font-family:monospace;cursor:pointer"/>'
+            + '<button onclick="' + js_onclick + '"'
+            + ' style="padding:2px 8px;background:' + btn_color + ';color:' + icon_color + ';'
+            + 'border:1px solid ' + btn_border + ';border-radius:5px;cursor:pointer;'
+            + 'font-size:.75rem;flex-shrink:0">\U0001f4cb</button>'
+            + '</div>'
+        )
+
+    tt_row = _row("#69c9d0", "🎵 TikTok", _tt_u, "#1a1a2a", "#2a2a4a")
+    fb_row = _row("#60a5fa", "🔵 Facebook", _fb_u, "#1e3a5f", "#3b5998")
+
+    if _src == "tiktok":
+        rows_html = tt_row
+    elif _src == "facebook":
+        rows_html = fb_row
+    else:
+        rows_html = tt_row + fb_row
+
+    return (
+        f'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'
+        f'<div style="font-size:.7rem;color:var(--text3);font-weight:600;margin-bottom:2px">'
+        f'📊 UTM ссылки для рекламы</div>'
+        f'{rows_html}'
+        f'</div>'
+    )
+
+
 def _build_campaign_card(c: dict, cchans: list, templates: list,
                           channels: list, app_url: str) -> str:
     """
@@ -112,7 +173,8 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
     Город и телефон — прямо в строке каждого канала (inline).
     Отдельная секция телефонов убрана.
     """
-    slug_url = f"{app_url}/l/{c.get('slug', '')}"
+    slug_url  = f"{app_url}/l/{c.get('slug', '')}"
+    utm_block = _build_utm_block(slug_url, c['name'], app_url, db)
     camp_id   = c["id"]
     camp_name = c["name"]
     total_joins = c["total_joins"]
@@ -212,12 +274,13 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
       </div>
       <div class="section-body">
 
-        <!-- Ссылка в рекламу + смена шаблона -->
+        <!-- Ссылка в рекламу + UTM + смена шаблона -->
         <div style="margin-bottom:16px;padding:10px 14px;background:var(--bg3);
                     border-radius:9px;border:1px solid var(--border)">
           <div style="font-size:.74rem;color:var(--text3);margin-bottom:5px;font-weight:700;
                       text-transform:uppercase;letter-spacing:.05em">🔗 Ссылка в рекламу</div>
           <div class="link-box">{slug_url}</div>
+          {utm_block}
           <div style="margin-top:10px">{tpl_switch}</div>
         </div>
 

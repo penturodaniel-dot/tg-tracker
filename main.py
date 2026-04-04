@@ -1368,34 +1368,11 @@ def _landings_page(ltype: str, active: str, msg: str, request: Request) -> str:
         _cdomain = l.get("custom_domain") or ""
         _domain_badge = f'<div style="margin-top:4px"><span style="font-family:monospace;font-size:.68rem;background:#052e16;color:#86efac;border:1px solid #166534;border-radius:4px;padding:1px 6px">🌐 {_cdomain}</span></div>' if _cdomain else ""
 
-        # UTM ссылки
-        _proj = db.get_project(int(l["project_id"])) if l.get("project_id") else None
-        _utm_links_html = ""
-        if _proj:
-            _src = (_proj.get("traffic_source") or "").lower()
-            _utms = [u.strip() for u in (_proj.get("utm_campaigns") or "").split(",") if u.strip()]
-            _utm_val = _utms[0] if _utms else "campaign"
-            _tt_u = full_url + "?utm_source=tiktok&utm_medium=paid&utm_campaign=" + _utm_val + "&utm_content=__CID__&utm_term=__AID__&ttclid=__CLICKID__"
-            _fb_u = full_url + "?utm_source=facebook&utm_medium=paid&utm_campaign=" + _utm_val + "&utm_content={ad.name}&utm_term={adset.name}&fbclid={fbclid}"
-            _tt_row = ("<div style=\"margin-top:3px;display:flex;gap:3px\">"
-                + "<span style=\"color:#69c9d0;font-size:.65rem\">🎵</span>"
-                + "<input readonly value=\"" + _tt_u + "\" onclick=\"this.select()\""
-                + " style=\"flex:1;min-width:0;background:var(--bg);border:1px solid #2a2a4a;border-radius:4px;padding:2px 5px;color:#69c9d0;font-size:.6rem;font-family:monospace\"/>"
-                + "<button onclick=\"navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='✓'\""
-                + " style=\"padding:1px 5px;background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a;border-radius:4px;cursor:pointer;font-size:.65rem\">📋</button></div>")
-            _fb_row = ("<div style=\"margin-top:3px;display:flex;gap:3px\">"
-                + "<span style=\"color:#60a5fa;font-size:.65rem\">🔵</span>"
-                + "<input readonly value=\"" + _fb_u + "\" onclick=\"this.select()\""
-                + " style=\"flex:1;min-width:0;background:var(--bg);border:1px solid #1e3a5f;border-radius:4px;padding:2px 5px;color:#60a5fa;font-size:.6rem;font-family:monospace\"/>"
-                + "<button onclick=\"navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='✓'\""
-                + " style=\"padding:1px 5px;background:#1e3a5f;color:#60a5fa;border:1px solid #3b5998;border-radius:4px;cursor:pointer;font-size:.65rem\">📋</button></div>")
-            if _src == "tiktok": _utm_links_html = _tt_row
-            elif _src == "facebook": _utm_links_html = _fb_row
-            else: _utm_links_html = _tt_row + _fb_row
+
         rows += f"""<tr>
           <td><b>{l['name']}</b>{_domain_badge}</td>
           <td><span class="badge-gray" style="font-size:.68rem">{tpl_name}</span></td>
-          <td><a href="{slug_url}" target="_blank" class="link-box" style="display:inline-block">{slug_url}</a>{_utm_links_html}</td>
+          <td><a href="{slug_url}" target="_blank" class="link-box" style="display:inline-block">{slug_url}</a></td>
           <td><span class="{'badge-green' if l['active'] else 'badge-gray'}">{'Активен' if l['active'] else 'Скрыт'}</span></td>
           <td>
             <a href="/landings/edit?id={l['id']}" class="btn-gray btn-sm">✏️ Редакт.</a>

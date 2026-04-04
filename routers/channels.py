@@ -232,19 +232,33 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
         city_val  = cc.get("city") or ""
         phone_val = cc.get("phone") or ""
 
-        # Форма сохранения города + телефона одновременно
+        # Получаем доп. поля
+        address_val    = cc.get("address") or ""
+        tg_label_val   = cc.get("tg_label") or ""
+        phone_label_val= cc.get("phone_label") or ""
+
+        # Inline форма — город + телефон + кнопка деталей
+        detail_filled = any([address_val, tg_label_val, phone_label_val])
+        detail_badge  = '<span style="color:var(--green);font-size:.65rem;margin-left:2px">●</span>' if detail_filled else ""
         inline_form = (
             f'<form method="post" action="/campaigns/channel/location"'
             f' style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
             f'<input type="hidden" name="cc_id" value="{cc_id}"/>'
             f'<input type="hidden" name="campaign_id" value="{camp_id}"/>'
+            f'<input type="hidden" name="address" value="{address_val}"/>'
+            f'<input type="hidden" name="tg_label" value="{tg_label_val}"/>'
+            f'<input type="hidden" name="phone_label" value="{phone_label_val}"/>'
             f'<input type="text" name="city" value="{city_val}" placeholder="New York"'
-            f' style="width:110px;background:var(--bg);border:1px solid var(--border);'
+            f' style="width:105px;background:var(--bg);border:1px solid var(--border);'
             f'border-radius:5px;padding:3px 7px;color:var(--text);font-size:.75rem"/>'
             f'<input type="text" name="phone" value="{phone_val}" placeholder="+1 212 555-0100"'
-            f' style="width:140px;background:var(--bg);border:1px solid var(--border);'
+            f' style="width:135px;background:var(--bg);border:1px solid var(--border);'
             f'border-radius:5px;padding:3px 7px;color:var(--text);font-size:.75rem;font-family:monospace"/>'
             f'<button class="btn-gray btn-sm" style="padding:3px 10px;font-size:.72rem">✓</button>'
+            + '<button type="button" onclick="openLocDetail(' + str(cc_id) + ')"'
+            + ' class="btn-gray btn-sm" style="padding:3px 8px;font-size:.72rem;background:var(--bg3)"'
+            + ' title="Адрес и заголовки">\u2699\ufe0f' + detail_badge + '</button>'
+            + '</form>'
             f'</form>'
         )
 
@@ -415,6 +429,81 @@ async def campaigns_page(request: Request, msg: str = "", err_msg: str = ""):
     </div>
     {campaign_cards}
     </div>"""
+    # Попап для адреса и заголовков (один на всю страницу)
+    popup_html = """
+<div id="loc-detail-popup" style="display:none;position:fixed;inset:0;z-index:9000;align-items:center;justify-content:center">
+  <div onclick="closeLocDetail()" style="position:absolute;inset:0;background:rgba(0,0,0,.6)"></div>
+  <div style="position:relative;z-index:1;background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:24px;width:min(420px,94vw);max-height:80vh;overflow-y:auto">
+    <div style="font-weight:700;font-size:.95rem;margin-bottom:16px">⚙ Детали локации — <span id="loc-city-title"></span></div>
+    <form method="post" action="/campaigns/channel/location" id="loc-detail-form">
+      <input type="hidden" name="cc_id" id="loc-cc-id"/>
+      <input type="hidden" name="campaign_id" id="loc-camp-id"/>
+      <input type="hidden" name="city" id="loc-city"/>
+      <input type="hidden" name="phone" id="loc-phone"/>
+      <div class="field-group" style="margin-bottom:12px">
+        <div class="field-label">📍 Адрес локации</div>
+        <input type="text" name="address" id="loc-address" placeholder="123 Main St, New York, NY 10001"
+               style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:.85rem"/>
+        <div style="font-size:.72rem;color:var(--text3);margin-top:3px">Показывается над кнопкой Telegram в попапе</div>
+      </div>
+      <div class="field-group" style="margin-bottom:12px">
+        <div class="field-label">💬 Заголовок перед Telegram кнопкой</div>
+        <input type="text" name="tg_label" id="loc-tg-label" placeholder="Write to our manager:"
+               style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:.85rem"/>
+      </div>
+      <div class="field-group" style="margin-bottom:16px">
+        <div class="field-label">📞 Заголовок перед телефоном</div>
+        <input type="text" name="phone_label" id="loc-phone-label" placeholder="Or call us:"
+               style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:.85rem"/>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-orange" style="flex:1">💾 Сохранить</button>
+        <button type="button" onclick="closeLocDetail()" class="btn-gray">Отмена</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+// Данные каналов для попапа
+var _ccData = {};
+</script>"""
+
+    # Собираем данные каналов для JS
+    all_cc_data = {}
+    for c in campaigns:
+        for cc in db.get_campaign_channels(c["id"]):
+            all_cc_data[cc["id"]] = {
+                "camp_id":     c["id"],
+                "city":        cc.get("city") or "",
+                "phone":       cc.get("phone") or "",
+                "address":     cc.get("address") or "",
+                "tg_label":    cc.get("tg_label") or "",
+                "phone_label": cc.get("phone_label") or "",
+            }
+    import json as _j
+    cc_data_js = f"<script>var _ccData = {_j.dumps(all_cc_data)};</script>"
+
+    open_js = """<script>
+function openLocDetail(ccId, city) {
+  var d = _ccData[ccId] || {};
+  document.getElementById('loc-cc-id').value       = ccId;
+  document.getElementById('loc-camp-id').value      = d.camp_id || '';
+  document.getElementById('loc-city').value         = d.city || city || '';
+  document.getElementById('loc-phone').value        = d.phone || '';
+  document.getElementById('loc-address').value      = d.address || '';
+  document.getElementById('loc-tg-label').value     = d.tg_label || '';
+  document.getElementById('loc-phone-label').value  = d.phone_label || '';
+  document.getElementById('loc-city-title').textContent = d.city || city || '';
+  document.getElementById('loc-detail-popup').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeLocDetail() {
+  document.getElementById('loc-detail-popup').style.display = 'none';
+  document.body.style.overflow = '';
+}
+</script>"""
+
+    content = popup_html + cc_data_js + open_js + content
     return HTMLResponse(base(content, "campaigns", request))
 
 
@@ -502,9 +591,14 @@ async def campaigns_channel_delete(request: Request, cc_id: int = Form(...),
 @router.post("/campaigns/channel/location")
 async def campaigns_channel_location(request: Request, cc_id: int = Form(...),
                                       campaign_id: int = Form(...),
-                                      city: str = Form(""), phone: str = Form("")):
-    """Сохранить город и телефон для канала — одним запросом."""
+                                      city: str = Form(""), phone: str = Form(""),
+                                      address: str = Form(""), tg_label: str = Form(""),
+                                      phone_label: str = Form("")):
+    """Сохранить город, телефон, адрес и заголовки для канала."""
     user, err = require_auth(request)
     if err: return err
-    db.set_campaign_channel_location(cc_id, city.strip(), phone.strip())
+    db.set_campaign_channel_location(
+        cc_id, city.strip(), phone.strip(),
+        address.strip(), tg_label.strip(), phone_label.strip()
+    )
     return RedirectResponse("/campaigns?msg=Локация+сохранена", 303)

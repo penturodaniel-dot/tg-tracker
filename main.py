@@ -2235,19 +2235,34 @@ async def public_landing(request: Request, slug: str,
         if campaign.get("landing_id"):
             landing  = db.get_landing(campaign["landing_id"])
             if landing:
-                # Контакты = TG каналы кампании с их city-тегами
                 chan_contacts = [
                     {"type": "telegram", "label": b["label"], "url": b["url"],
                      "city": (b.get("city") or "").strip(),
                      "phone": (b.get("phone") or "").strip()}
                     for b in btns
                 ]
-                fb_pixel, tt_pixel = _get_landing_pixels(landing)
+                # Пиксель: приоритет — проект кампании → проект шаблона → глобальный
+                _camp_proj_id = campaign.get("project_id")
+                if _camp_proj_id:
+                    _camp_proj = db.get_project(int(_camp_proj_id))
+                    if _camp_proj:
+                        fb_pixel = _camp_proj.get("fb_pixel_id") or pixel_clients
+                        tt_pixel = _camp_proj.get("tt_pixel_id") or db.get_setting("tiktok_pixel_id", "") or ""
+                    else:
+                        fb_pixel, tt_pixel = _get_landing_pixels(landing)
+                else:
+                    fb_pixel, tt_pixel = _get_landing_pixels(landing)
                 return HTMLResponse(_render_client_landing(
                     landing, chan_contacts,
                     pixel_id=fb_pixel, tt_pixel=tt_pixel, db=db,
                 ))
 
+        # Нет кастомного лендинга — рендерим дефолтный, но пиксель из проекта кампании
+        _c_proj_id = campaign.get("project_id")
+        if _c_proj_id:
+            _c_proj = db.get_project(int(_c_proj_id))
+            if _c_proj:
+                pixel_clients = _c_proj.get("fb_pixel_id") or pixel_clients
         tt_pixel = db.get_setting("tiktok_pixel_id", "") or ""
         return HTMLResponse(_render_campaign_landing(campaign, btns, pixel_clients, fbclid, tt_pixel))
 

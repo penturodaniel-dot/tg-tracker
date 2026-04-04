@@ -219,6 +219,7 @@ class Database:
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS slug TEXT",
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''",
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS landing_id INTEGER DEFAULT NULL",
+                    "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS project_id INTEGER DEFAULT NULL",
                     "ALTER TABLE campaigns ALTER COLUMN channel_id DROP NOT NULL",
                     "ALTER TABLE campaigns ALTER COLUMN invite_link DROP NOT NULL",
                     "ALTER TABLE campaign_channels ADD COLUMN IF NOT EXISTS city TEXT DEFAULT ''",
@@ -549,6 +550,25 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("UPDATE campaigns SET landing_id=%s WHERE id=%s", (landing_id, campaign_id))
             conn.commit()
+
+    def set_campaign_project(self, campaign_id: int, project_id):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE campaigns SET project_id=%s WHERE id=%s",
+                            (project_id, campaign_id))
+            conn.commit()
+
+    def get_campaign_project(self, campaign_id: int):
+        """Возвращает проект привязанный к кампании или None."""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT p.* FROM projects p "
+                    "JOIN campaigns c ON c.project_id = p.id "
+                    "WHERE c.id=%s", (campaign_id,)
+                )
+                r = cur.fetchone()
+                return dict(r) if r else None
 
     def get_campaigns(self, channel_id=None):
         with self._conn() as conn:

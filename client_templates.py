@@ -85,11 +85,14 @@ def _build_contact_section(contacts: list) -> str:
     # Данные для JS
     contacts_js = _j.dumps([
         {
-            "type":  c.get("type", "telegram"),
-            "label": c.get("label", ""),
-            "url":   c.get("url", ""),
-            "city":  (c.get("city") or "").strip(),
-            "phone": (c.get("phone") or "").strip(),
+            "type":        c.get("type", "telegram"),
+            "label":       c.get("label", ""),
+            "url":         c.get("url", ""),
+            "city":        (c.get("city") or "").strip(),
+            "phone":       (c.get("phone") or "").strip(),
+            "address":     (c.get("address") or "").strip(),
+            "tg_label":    (c.get("tg_label") or "").strip(),
+            "phone_label": (c.get("phone_label") or "").strip(),
         }
         for c in contacts
     ])
@@ -198,17 +201,7 @@ def _build_contact_section(contacts: list) -> str:
       }};
       list.appendChild(btn);
     }});
-    // Кнопка "All cities" только если городов > 1
-    if (_cities.length > 1) {{
-      var all = document.createElement('button');
-      all.className = 'cl-city-btn cl-city-all';
-      all.innerHTML = '🌐 All cities';
-      all.onclick = function() {{
-        document.getElementById('cl-city-popup').classList.remove('open');
-        _showContacts(_contacts, null);
-      }};
-      list.appendChild(all);
-    }}
+
     document.getElementById('cl-city-popup').classList.add('open');
     _lock();
   }}
@@ -228,10 +221,30 @@ def _build_contact_section(contacts: list) -> str:
     if (!list.length) {{
       el.innerHTML = '<p style="color:rgba(255,255,255,.4);text-align:center;padding:16px;font-size:.85rem">Нет контактов для этого города</p>';
     }} else {{
-      // Телефон — из первого контакта с телефоном для этого города
-      var phone = '';
+      // Берём общие данные из первого контакта (address, tg_label, phone_label, phone)
+      var phone = '', address = '', tgLabel = '', phoneLabel = '';
       for (var i = 0; i < list.length; i++) {{
-        if (list[i].phone) {{ phone = list[i].phone; break; }}
+        if (!phone && list[i].phone)       phone = list[i].phone;
+        if (!address && list[i].address)   address = list[i].address;
+        if (!tgLabel && list[i].tg_label)  tgLabel = list[i].tg_label;
+        if (!phoneLabel && list[i].phone_label) phoneLabel = list[i].phone_label;
+      }}
+      // Адрес над кнопками
+      if (address) {{
+        var addrEl = document.createElement('div');
+        addrEl.style.cssText = 'display:flex;align-items:flex-start;gap:8px;padding:10px 14px;'
+          + 'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);'
+          + 'border-radius:10px;margin-bottom:12px;font-size:.83rem;color:rgba(255,255,255,.65);line-height:1.5';
+        addrEl.innerHTML = '<span style="flex-shrink:0;font-size:1rem">📍</span><span>' + address + '</span>';
+        el.appendChild(addrEl);
+      }}
+      // Заголовок перед TG кнопками
+      if (tgLabel) {{
+        var tgH = document.createElement('div');
+        tgH.style.cssText = 'font-size:.76rem;font-weight:600;color:rgba(255,255,255,.45);'
+          + 'text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;margin-top:4px';
+        tgH.textContent = tgLabel;
+        el.appendChild(tgH);
       }}
       // Кнопки каналов
       list.forEach(function(c) {{
@@ -250,8 +263,15 @@ def _build_contact_section(contacts: list) -> str:
         }});
         el.appendChild(a);
       }});
-      // Телефон под кнопками если есть
+      // Заголовок перед телефоном
       if (phone) {{
+        if (phoneLabel) {{
+          var phH = document.createElement('div');
+          phH.style.cssText = 'font-size:.76rem;font-weight:600;color:rgba(255,255,255,.45);'
+            + 'text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;margin-top:10px';
+          phH.textContent = phoneLabel;
+          el.appendChild(phH);
+        }}
         var ph = document.createElement('div');
         ph.className = 'cl-phone-item';
         ph.innerHTML = '<span class="cl-phone-city">📞 ' + (cityLabel || 'Phone') + '</span>'

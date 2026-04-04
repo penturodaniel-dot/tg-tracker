@@ -2238,10 +2238,13 @@ async def public_landing(request: Request, slug: str,
             if fbclid:      go_url += f"&fbclid={fbclid}"
             if utm_content: go_url += f"&utm_content={utm_content}"
             btns.append({
-                "url":   go_url,
-                "label": cc.get("channel_name") or "Вступить в группу",
-                "city":  (cc.get("city") or "").strip(),
-                "phone": (cc.get("phone") or "").strip(),
+                "url":         go_url,
+                "label":       cc.get("channel_name") or "Вступить в группу",
+                "city":        (cc.get("city") or "").strip(),
+                "phone":       (cc.get("phone") or "").strip(),
+                "address":     (cc.get("address") or "").strip(),
+                "tg_label":    (cc.get("tg_label") or "").strip(),
+                "phone_label": (cc.get("phone_label") or "").strip(),
             })
 
         if campaign.get("landing_id"):
@@ -2249,8 +2252,11 @@ async def public_landing(request: Request, slug: str,
             if landing:
                 chan_contacts = [
                     {"type": "telegram", "label": b["label"], "url": b["url"],
-                     "city": (b.get("city") or "").strip(),
-                     "phone": (b.get("phone") or "").strip()}
+                     "city":        (b.get("city") or "").strip(),
+                     "phone":       (b.get("phone") or "").strip(),
+                     "address":     (b.get("address") or "").strip(),
+                     "tg_label":    (b.get("tg_label") or "").strip(),
+                     "phone_label": (b.get("phone_label") or "").strip()}
                     for b in btns
                 ]
                 # Пиксель: приоритет — проект кампании → проект шаблона → глобальный

@@ -224,6 +224,9 @@ class Database:
                     "ALTER TABLE campaigns ALTER COLUMN invite_link DROP NOT NULL",
                     "ALTER TABLE campaign_channels ADD COLUMN IF NOT EXISTS city TEXT DEFAULT ''",
                     "ALTER TABLE campaign_channels ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT ''",
+                    "ALTER TABLE campaign_channels ADD COLUMN IF NOT EXISTS address TEXT DEFAULT ''",
+                    "ALTER TABLE campaign_channels ADD COLUMN IF NOT EXISTS tg_label TEXT DEFAULT ''",
+                    "ALTER TABLE campaign_channels ADD COLUMN IF NOT EXISTS phone_label TEXT DEFAULT ''",
                     "CREATE TABLE IF NOT EXISTS campaign_phones (id SERIAL PRIMARY KEY, campaign_id INTEGER NOT NULL, city TEXT DEFAULT '', phone TEXT DEFAULT '', position INTEGER DEFAULT 0)",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_source TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_campaign TEXT",
@@ -640,13 +643,17 @@ class Database:
     def set_campaign_channel_city(self, cc_id: int, city: str):
         self.set_campaign_channel_location(cc_id, city, "")
 
-    def set_campaign_channel_location(self, cc_id: int, city: str, phone: str):
-        """Сохранить город и телефон для канала кампании."""
+    def set_campaign_channel_location(self, cc_id: int, city: str, phone: str,
+                                       address: str = "", tg_label: str = "",
+                                       phone_label: str = ""):
+        """Сохранить город, телефон, адрес и заголовки для канала кампании."""
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "UPDATE campaign_channels SET city=%s, phone=%s WHERE id=%s",
-                    (city.strip(), phone.strip(), cc_id)
+                    "UPDATE campaign_channels SET city=%s, phone=%s, address=%s, "
+                    "tg_label=%s, phone_label=%s WHERE id=%s",
+                    (city.strip(), phone.strip(), address.strip(),
+                     tg_label.strip(), phone_label.strip(), cc_id)
                 )
             conn.commit()
 

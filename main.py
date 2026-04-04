@@ -1521,9 +1521,10 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
     contact_rows = ""
     for c in contacts:
         type_icon = "📱" if c["type"] == "telegram" else ("💚" if c["type"] == "whatsapp" else "🔗")
+        _city_badge = f'<span class="badge-gray" style="font-size:.68rem;margin-left:4px">{c.get("city","")}</span>' if c.get("city") else ""
         contact_rows += f"""<tr>
           <td>{type_icon} <span class="badge">{c['type']}</span></td>
-          <td>{c['label']}</td>
+          <td>{c['label']}{_city_badge}</td>
           <td><a href="{c['url']}" target="_blank" style="color:var(--blue);font-size:.8rem">{c['url'][:50]}{'...' if len(c['url'])>50 else ''}</a></td>
           <td><form method="post" action="/landings/contact/delete"><input type="hidden" name="contact_id" value="{c['id']}"/><input type="hidden" name="landing_id" value="{id}"/><button class="del-btn">✕</button></form></td></tr>"""
     contact_rows = contact_rows or '<tr><td colspan="4"><div class="empty">Нет контактов — добавь кнопки</div></td></tr>'
@@ -2006,14 +2007,17 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
     <div class="section"><div class="section-head"><h3>Добавить кнопку</h3><small style="color:var(--text3)">Кнопки появятся на лендинге</small></div>
     <div class="section-body"><form method="post" action="/landings/contact/add"><input type="hidden" name="landing_id" value="{id}"/>
     <div class="form-row">
-      <div class="field-group" style="max-width:160px"><div class="field-label">Тип</div>
+      <div class="field-group" style="max-width:140px"><div class="field-label">Тип</div>
       <select name="ctype"><option value="telegram">📱 Telegram</option><option value="whatsapp">💚 WhatsApp</option><option value="other">🔗 Другое</option></select></div>
-      <div class="field-group" style="max-width:200px"><div class="field-label">Текст кнопки</div><input type="text" name="label" placeholder="Написать в Telegram" required/></div>
+      <div class="field-group" style="max-width:180px"><div class="field-label">Текст кнопки</div><input type="text" name="label" placeholder="NYC — Telegram" required/></div>
       <div class="field-group"><div class="field-label">URL</div><input type="text" name="url" placeholder="https://t.me/username" required/></div>
+      <div class="field-group" style="max-width:160px"><div class="field-label">Город (для фильтра) <span style="color:var(--text3);font-size:.72rem">необязательно</span></div><input type="text" name="city" placeholder="New York"/></div>
       <div style="display:flex;align-items:flex-end"><button class="btn">Добавить</button></div>
     </div></form></div></div>
-    <div class="section"><div class="section-head"><h3>Кнопки контактов ({len(contacts)})</h3></div>
-    <table><thead><tr><th>Тип</th><th>Текст</th><th>URL</th><th></th></tr></thead>
+    <div class="section"><div class="section-head"><h3>Кнопки контактов ({len(contacts)})</h3>
+      <small style="color:var(--text3);font-size:.72rem">Укажи город — и на лендинге появится попап выбора города</small>
+    </div>
+    <table><thead><tr><th>Тип</th><th>Текст / Город</th><th>URL</th><th></th></tr></thead>
     <tbody>{contact_rows}</tbody></table></div></div>"""
     return HTMLResponse(base(content, landing["type"] + "_landing", request))
 
@@ -2120,10 +2124,11 @@ async def landings_save_texts(request: Request):
 
 @app.post("/landings/contact/add")
 async def landing_contact_add(request: Request, landing_id: int = Form(...),
-                               ctype: str = Form(...), label: str = Form(...), url: str = Form(...)):
+                               ctype: str = Form(...), label: str = Form(...), url: str = Form(...),
+                               city: str = Form("")):
     user, err = require_auth(request)
     if err: return err
-    db.add_landing_contact(landing_id, ctype, label.strip(), url.strip())
+    db.add_landing_contact(landing_id, ctype, label.strip(), url.strip(), city.strip())
     return RedirectResponse(f"/landings/edit?id={landing_id}&msg=Контакт+добавлен", 303)
 
 

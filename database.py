@@ -180,6 +180,11 @@ class Database:
                     url        TEXT NOT NULL,
                     position   INTEGER DEFAULT 0
                 );
+                -- Добавляем city если ещё нет (миграция)
+                DO $$ BEGIN
+                    ALTER TABLE landing_contacts ADD COLUMN IF NOT EXISTS city TEXT DEFAULT '';
+                EXCEPTION WHEN duplicate_column THEN NULL;
+                END $$;
                 CREATE TABLE IF NOT EXISTS wa_conversations (
                     id              SERIAL PRIMARY KEY,
                     wa_chat_id      TEXT NOT NULL UNIQUE,
@@ -1360,13 +1365,13 @@ class Database:
                 cur.execute("SELECT * FROM landing_contacts WHERE landing_id=%s ORDER BY position", (landing_id,))
                 return [dict(r) for r in cur.fetchall()]
 
-    def add_landing_contact(self, landing_id, ctype, label, url):
+    def add_landing_contact(self, landing_id, ctype, label, url, city=""):
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT COALESCE(MAX(position),0)+1 as p FROM landing_contacts WHERE landing_id=%s", (landing_id,))
                 pos = cur.fetchone()["p"]
-                cur.execute("INSERT INTO landing_contacts (landing_id,type,label,url,position) VALUES (%s,%s,%s,%s,%s)",
-                            (landing_id,ctype,label,url,pos))
+                cur.execute("INSERT INTO landing_contacts (landing_id,type,label,url,position,city) VALUES (%s,%s,%s,%s,%s,%s)",
+                            (landing_id,ctype,label,url,pos,city.strip()))
             conn.commit()
 
     def delete_landing_contact(self, contact_id):

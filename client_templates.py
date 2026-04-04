@@ -65,31 +65,167 @@ def _parse_list(texts: dict, key: str) -> list:
 
 
 def _build_contact_buttons(contacts: list) -> str:
-    """Строит кнопки-триггеры попапа контактов. Каждый клик = попап со ссылками."""
+    """
+    Строит:
+    1. Если у контактов есть city — попап выбора города, потом контакты города
+    2. Если city нет — обычный bottom-sheet со всеми контактами
+    FB/TT CAPI-событие Contact стреляет при открытии попапа контактов.
+    """
+    import json as _j
     TG_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>'
     WA_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5Z"/></svg>'
-    # Собираем элементы попапа
-    popup_items = ""
+
+    # Контакты с городом и без
+    has_cities = any(c.get("city","").strip() for c in contacts)
+
+    # Сериализуем контакты для JS
+    contacts_js = _j.dumps([
+        {"type": c.get("type",""), "label": c.get("label",""), "url": c.get("url",""), "city": (c.get("city","") or "").strip()}
+        for c in contacts
+    ])
+
+    # Уникальные города (сохраняем порядок)
+    cities = []
+    seen = set()
     for c in contacts:
-        ctype = c.get("type", "")
-        if ctype == "telegram":
-            popup_items += f'<a class="cl-cpop-item cl-btn-tg call-button" href="{c["url"]}" target="_blank" rel="noopener" onclick="closeContactPopup()">{TG_SVG}<span>{c["label"]}</span></a>'
-        elif ctype == "whatsapp":
-            popup_items += f'<a class="cl-cpop-item cl-btn-wa call-button" href="{c["url"]}" target="_blank" rel="noopener" onclick="closeContactPopup()">{WA_SVG}<span>{c["label"]}</span></a>'
-    if not popup_items:
-        popup_items = '<p style="color:rgba(255,255,255,.4);font-size:.85rem;text-align:center;padding:12px 0">Контакты не настроены</p>'
-    # Один попап + кнопка-триггер
-    return f"""<button class="cl-btn cl-btn-contact-trigger" onclick="openContactPopup()">
+        city = (c.get("city","") or "").strip()
+        if city and city not in seen:
+            cities.append(city)
+            seen.add(city)
+
+    if not contacts:
+        return '<p style="color:rgba(255,255,255,.3);font-size:.85rem;text-align:center;padding:8px 0">Контакты не настроены</p>'
+
+    return f"""
+<!-- Кнопка-триггер -->
+<button class="cl-btn cl-btn-tg cl-btn-contact-trigger" onclick="openCityOrContact()">
   {TG_SVG} <span>Contact on Telegram</span>
 </button>
-<div class="cl-cpop" id="cl-contact-popup">
+
+<!-- ПОПАП ВЫБОРА ГОРОДА (если есть города) -->
+<div class="cl-cpop" id="cl-city-popup" style="display:none">
+  <div class="cl-cpop-overlay" onclick="closeCityPopup()"></div>
+  <div class="cl-cpop-box">
+    <div class="cl-cpop-hdr"><span>📍 Выбери свой город</span><button onclick="closeCityPopup()" class="cl-cpop-x">✕</button></div>
+    <div id="cl-city-list"></div>
+    {"" if not cities else ""}
+  </div>
+</div>
+
+<!-- ПОПАП КОНТАКТОВ -->
+<div class="cl-cpop" id="cl-contact-popup" style="display:none">
   <div class="cl-cpop-overlay" onclick="closeContactPopup()"></div>
   <div class="cl-cpop-box">
-    <div class="cl-cpop-hdr"><span>Выбери мессенджер</span><button onclick="closeContactPopup()" class="cl-cpop-x">✕</button></div>
-    {popup_items}
+    <div class="cl-cpop-hdr">
+      <button id="cl-back-btn" onclick="backToCity()" class="cl-cpop-x" style="display:none">←</button>
+      <span id="cl-contact-title">Выбери мессенджер</span>
+      <button onclick="closeContactPopup()" class="cl-cpop-x">✕</button>
+    </div>
+    <div id="cl-contact-list"></div>
   </div>
-</div>"""
+</div>
 
+<script>
+var _CL_CONTACTS = {contacts_js};
+var _CL_CITIES = {_j.dumps(cities)};
+var _CL_HAS_CITIES = {"true" if cities else "false"};
+
+var TG_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>';
+var WA_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5Z"/></svg>';
+
+function openCityOrContact() {{
+  if(_CL_HAS_CITIES && _CL_CITIES.length > 0) {{
+    _showCityPopup();
+  }} else {{
+    _showContactPopup(_CL_CONTACTS);
+  }}
+}}
+
+function _showCityPopup() {{
+  var list = document.getElementById('cl-city-list');
+  list.innerHTML = '';
+  _CL_CITIES.forEach(function(city) {{
+    var btn = document.createElement('button');
+    btn.className = 'cl-city-btn';
+    btn.innerHTML = '📍 ' + city;
+    btn.onclick = function() {{ _selectCity(city); }};
+    list.appendChild(btn);
+  }});
+  // Кнопка "Все города"
+  var allBtn = document.createElement('button');
+  allBtn.className = 'cl-city-btn cl-city-all';
+  allBtn.innerHTML = '🌐 All cities';
+  allBtn.onclick = function() {{ _selectCity(null); }};
+  list.appendChild(allBtn);
+  document.getElementById('cl-city-popup').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}}
+
+function closeCityPopup() {{
+  document.getElementById('cl-city-popup').style.display = 'none';
+  document.body.style.overflow = '';
+}}
+
+function _selectCity(city) {{
+  closeCityPopup();
+  var filtered = city ? _CL_CONTACTS.filter(function(c) {{ return !c.city || c.city === city; }}) : _CL_CONTACTS;
+  _showContactPopup(filtered, city);
+}}
+
+function _showContactPopup(list, cityLabel) {{
+  var el = document.getElementById('cl-contact-list');
+  el.innerHTML = '';
+  var title = document.getElementById('cl-contact-title');
+  var backBtn = document.getElementById('cl-back-btn');
+  if(cityLabel) {{
+    title.textContent = '📍 ' + cityLabel;
+    backBtn.style.display = 'flex';
+  }} else {{
+    title.textContent = 'Выбери мессенджер';
+    backBtn.style.display = 'none';
+  }}
+  list.innerHTML = '';
+  if(!list.length && !el) return;
+  if(list.length === 0) {{
+    el.innerHTML = '<p style="color:rgba(255,255,255,.4);text-align:center;padding:16px;font-size:.85rem">Нет контактов для этого города</p>';
+  }} else {{
+    list.forEach(function(c) {{
+      var svg = c.type === 'telegram' ? TG_SVG : (c.type === 'whatsapp' ? WA_SVG : '');
+      var cls = c.type === 'telegram' ? 'cl-btn-tg' : (c.type === 'whatsapp' ? 'cl-btn-wa' : 'cl-btn-other');
+      var a = document.createElement('a');
+      a.className = 'cl-cpop-item ' + cls + ' call-button';
+      a.href = c.url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.innerHTML = svg + '<span>' + c.label + '</span>';
+      a.onclick = function() {{
+        closeContactPopup();
+        if(typeof fbq !== 'undefined') fbq('track', 'Contact');
+        if(typeof ttq !== 'undefined') ttq.track('Contact');
+      }};
+      el.appendChild(a);
+    }});
+  }}
+  document.getElementById('cl-contact-popup').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}}
+
+function closeContactPopup() {{
+  document.getElementById('cl-contact-popup').style.display = 'none';
+  document.body.style.overflow = '';
+}}
+
+function backToCity() {{
+  closeContactPopup();
+  _showCityPopup();
+}}
+</script>
+<style>
+.cl-city-btn{{width:100%;display:flex;align-items:center;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:.93rem;font-weight:600;cursor:pointer;margin-bottom:8px;transition:background .15s;text-align:left;font-family:inherit}}
+.cl-city-btn:hover{{background:rgba(255,255,255,.1)}}
+.cl-city-all{{background:rgba(255,255,255,.02);color:rgba(255,255,255,.5);font-weight:400;border-style:dashed}}
+.cl-city-all:hover{{background:rgba(255,255,255,.06)}}
+</style>"""
 
 def _phones_block(phones: list, num_color: str = "#a5f3fc") -> str:
     if not phones:
@@ -124,6 +260,10 @@ def _shared_popup_and_js(accent: str = "#6b21a8") -> str:
 .cl-btn-wa{{background:#25D366;color:#fff}}
 .cl-btn-contact-trigger{{background:#26A5E4;color:#fff;width:100%}}
 /* ── CONTACT POPUP ── */
+.cl-btn-other{{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);color:#fff}}
+.cl-cpop-item{{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;border-radius:12px;font-weight:700;font-size:.94rem;text-decoration:none;margin-bottom:10px;transition:opacity .15s;border:none;cursor:pointer;font-family:inherit}}
+.cl-cpop-item:hover{{opacity:.88}}
+.cl-cpop-item:last-child{{margin-bottom:0}}
 .cl-cpop{{display:none;position:fixed;inset:0;z-index:9500;align-items:flex-end;justify-content:center}}
 .cl-cpop.open{{display:flex}}
 .cl-cpop-overlay{{position:absolute;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)}}

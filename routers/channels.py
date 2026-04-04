@@ -1,9 +1,5 @@
 """
 routers/channels.py — Каналы и кампании
-
-Подключается в main.py:
-    channels_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, bot_manager)
-    app.include_router(channels_router)
 """
 
 from fastapi import APIRouter, Request, Form
@@ -11,7 +7,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 router = APIRouter()
 
-# ── Зависимости ───────────────────────────────────────────────────────────────
 db                       = None
 log                      = None
 require_auth             = None
@@ -110,12 +105,19 @@ async def channels_delete(request: Request, channel_id: str = Form(...)):
 # КАМПАНИИ
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _build_campaign_card(c: dict, cchans: list, cphones: list, templates: list,
+def _build_campaign_card(c: dict, cchans: list, templates: list,
                           channels: list, app_url: str) -> str:
-    """Строит HTML-карточку одной кампании."""
+    """
+    Карточка кампании.
+    Город и телефон — прямо в строке каждого канала (inline).
+    Отдельная секция телефонов убрана.
+    """
     slug_url = f"{app_url}/l/{c.get('slug', '')}"
+    camp_id   = c["id"]
+    camp_name = c["name"]
+    total_joins = c["total_joins"]
 
-    # ── Текущий шаблон ────────────────────────────────────────────────────────
+    # ── Шаблон лендинга ───────────────────────────────────────────────────────
     tpl = next((t for t in templates if t["id"] == c.get("landing_id")), None)
     tpl_badge = (
         f'<span class="badge-green" style="font-size:.71rem">🎨 {tpl["name"]}</span>' if tpl
@@ -125,39 +127,57 @@ def _build_campaign_card(c: dict, cchans: list, cphones: list, templates: list,
         f'<option value="{t["id"]}" {"selected" if t["id"] == c.get("landing_id") else ""}>{t["name"]}</option>'
         for t in templates
     )
-    tpl_switch = f"""<form method="post" action="/campaigns/set_template"
-        style="display:flex;gap:6px;align-items:center">
-      <input type="hidden" name="campaign_id" value="{c['id']}"/>
-      <select name="landing_id" style="font-size:.77rem;padding:4px 8px;border-radius:7px;width:auto">
-        {tpl_select_opts}
-      </select>
-      <button class="btn btn-sm" style="font-size:.74rem;padding:5px 10px">Сменить шаблон</button>
-    </form>"""
+    tpl_switch = (
+        f'<form method="post" action="/campaigns/set_template"'
+        f' style="display:flex;gap:6px;align-items:center">'
+        f'<input type="hidden" name="campaign_id" value="{camp_id}"/>'
+        f'<select name="landing_id" style="font-size:.77rem;padding:4px 8px;border-radius:7px;width:auto">'
+        f'{tpl_select_opts}</select>'
+        f'<button class="btn btn-sm" style="font-size:.74rem;padding:5px 10px">Сменить шаблон</button>'
+        f'</form>'
+    )
 
-    # ── Строки таблицы каналов ────────────────────────────────────────────────
+    # ── Строки каналов — город и телефон inline ───────────────────────────────
+    # Строим map phone_id по городу из cchans для быстрого доступа
     chan_rows = ""
     for cc in cchans:
-        city_val = cc.get("city") or ""
-        cc_id    = cc["id"]
-        camp_id  = c["id"]
-        city_form = (
-            f'<form method="post" action="/campaigns/channel/city"'
-            f' style="display:flex;gap:4px;align-items:center">'
+        cc_id     = cc["id"]
+        city_val  = cc.get("city") or ""
+        phone_val = cc.get("phone") or ""
+
+        # Форма сохранения города + телефона одновременно
+        inline_form = (
+            f'<form method="post" action="/campaigns/channel/location"'
+            f' style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
             f'<input type="hidden" name="cc_id" value="{cc_id}"/>'
             f'<input type="hidden" name="campaign_id" value="{camp_id}"/>'
             f'<input type="text" name="city" value="{city_val}" placeholder="New York"'
             f' style="width:110px;background:var(--bg);border:1px solid var(--border);'
             f'border-radius:5px;padding:3px 7px;color:var(--text);font-size:.75rem"/>'
-            f'<button class="btn-gray btn-sm" style="padding:3px 8px;font-size:.72rem"'
-            f' title="Сохранить город">✓</button>'
+            f'<input type="text" name="phone" value="{phone_val}" placeholder="+1 212 555-0100"'
+            f' style="width:140px;background:var(--bg);border:1px solid var(--border);'
+            f'border-radius:5px;padding:3px 7px;color:var(--text);font-size:.75rem;font-family:monospace"/>'
+            f'<button class="btn-gray btn-sm" style="padding:3px 10px;font-size:.72rem">✓</button>'
             f'</form>'
         )
+
+        # Бейдж города если заполнен
+        city_badge = ""
+        if city_val:
+            city_badge = (
+                f'<span style="background:rgba(59,130,246,.12);color:#93c5fd;border:1px solid rgba(59,130,246,.25);'
+                f'border-radius:4px;padding:1px 6px;font-size:.68rem;font-weight:600;margin-left:6px">'
+                f'📍 {city_val}</span>'
+            )
+
         chan_rows += (
             f'<tr>'
-            f'<td style="font-weight:600">{cc.get("channel_name") or cc["channel_id"]}</td>'
+            f'<td style="font-weight:600">'
+            f'{cc.get("channel_name") or cc["channel_id"]}{city_badge}'
+            f'</td>'
             f'<td><div class="link-box" style="font-size:.69rem;padding:5px 9px">'
-            f'{cc["invite_link"][:50]}...</div></td>'
-            f'<td>{city_form}</td>'
+            f'{cc["invite_link"][:48]}...</div></td>'
+            f'<td>{inline_form}</td>'
             f'<td style="color:var(--green);font-weight:700">{cc["joins"]}</td>'
             f'<td><form method="post" action="/campaigns/channel/delete" style="display:inline">'
             f'<input type="hidden" name="cc_id" value="{cc_id}"/>'
@@ -168,36 +188,11 @@ def _build_campaign_card(c: dict, cchans: list, cphones: list, templates: list,
     if not chan_rows:
         chan_rows = '<tr><td colspan="5"><div class="empty" style="padding:12px">Нет каналов — добавь ниже</div></td></tr>'
 
-    # ── Локации (телефоны) ────────────────────────────────────────────────────
-    phones_rows = ""
-    for ph in cphones:
-        ph_id   = ph["id"]
-        camp_id = c["id"]
-        phones_rows += (
-            f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;'
-            f'padding:7px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">'
-            f'<span style="min-width:130px;font-size:.83rem;color:var(--text2);font-weight:600">'
-            f'📍 {ph["city"]}</span>'
-            f'<span style="font-size:.85rem;font-family:monospace;color:#a5f3fc;flex:1">'
-            f'{ph["phone"]}</span>'
-            f'<form method="post" action="/campaigns/phone/delete" style="margin:0;flex-shrink:0">'
-            f'<input type="hidden" name="phone_id" value="{ph_id}"/>'
-            f'<input type="hidden" name="campaign_id" value="{camp_id}"/>'
-            f'<button class="del-btn btn-sm" style="padding:2px 7px">✕</button>'
-            f'</form></div>'
-        )
-    if not phones_rows:
-        phones_rows = '<div style="color:var(--text3);font-size:.8rem;padding:4px 0">Нет локаций — добавь ниже</div>'
-
-    # ── Опции для select добавления канала ────────────────────────────────────
+    # ── Select для добавления канала ──────────────────────────────────────────
     ch_opts = "".join(
         f'<option value="{ch["channel_id"]}">{ch["name"]}</option>'
         for ch in channels
     )
-
-    camp_id = c["id"]
-    camp_name = c["name"]
-    total_joins = c["total_joins"]
 
     return f"""
     <div class="section" style="border-left:3px solid var(--accent)">
@@ -226,18 +221,21 @@ def _build_campaign_card(c: dict, cchans: list, cphones: list, templates: list,
           <div style="margin-top:10px">{tpl_switch}</div>
         </div>
 
-        <!-- Таблица каналов с городами -->
+        <!-- Каналы с inline город + телефон -->
         <div style="font-size:.74rem;font-weight:700;text-transform:uppercase;
-                    letter-spacing:.05em;color:var(--text3);margin-bottom:8px">
+                    letter-spacing:.05em;color:var(--text3);margin-bottom:6px">
           📡 Каналы
-          <span style="font-size:.68rem;font-weight:400;margin-left:6px;color:var(--text3)">
-            Укажи город рядом с каждым каналом — пользователь выберет город и увидит нужный канал
+          <span style="font-size:.68rem;font-weight:400;margin-left:6px">
+            Укажи город и телефон — пользователь выберет город и увидит нужный канал
           </span>
         </div>
         <table style="margin-bottom:14px">
           <thead><tr>
-            <th>Канал</th><th>Invite Link</th>
-            <th>Город (попап)</th><th>Подписок</th><th></th>
+            <th>Канал</th>
+            <th>Invite Link</th>
+            <th>Город · Телефон</th>
+            <th>Подписок</th>
+            <th></th>
           </tr></thead>
           <tbody>{chan_rows}</tbody>
         </table>
@@ -256,37 +254,6 @@ def _build_campaign_card(c: dict, cchans: list, cphones: list, templates: list,
             </div>
           </div>
         </form>
-
-        <!-- Секция локаций (телефоны) -->
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
-          <div style="font-size:.74rem;font-weight:700;text-transform:uppercase;
-                      letter-spacing:.05em;color:var(--text3);margin-bottom:4px">
-            📞 Локации — телефоны
-          </div>
-          <div style="font-size:.73rem;color:var(--text3);margin-bottom:12px;line-height:1.5">
-            Пользователь выбирает город в попапе → видит телефон и каналы этого города.
-            Город в телефоне должен совпадать с городом у канала выше.
-          </div>
-          <div style="margin-bottom:12px">{phones_rows}</div>
-          <form method="post" action="/campaigns/phone/add">
-            <input type="hidden" name="campaign_id" value="{camp_id}"/>
-            <div class="form-row">
-              <div class="field-group" style="max-width:180px">
-                <div class="field-label">Город</div>
-                <input type="text" name="city" placeholder="New York" required
-                       style="font-size:.83rem"/>
-              </div>
-              <div class="field-group" style="max-width:220px">
-                <div class="field-label">Телефон</div>
-                <input type="text" name="phone" placeholder="+1 212 555-0100" required
-                       style="font-size:.83rem"/>
-              </div>
-              <div style="display:flex;align-items:flex-end">
-                <button class="btn btn-sm">+ Добавить локацию</button>
-              </div>
-            </div>
-          </form>
-        </div>
 
       </div>
     </div>"""
@@ -308,9 +275,8 @@ async def campaigns_page(request: Request, msg: str = "", err_msg: str = ""):
 
     campaign_cards = ""
     for c in campaigns:
-        cchans  = db.get_campaign_channels(c["id"])
-        cphones = db.get_campaign_phones(c["id"])
-        campaign_cards += _build_campaign_card(c, cchans, cphones, templates, channels, app_url)
+        cchans = db.get_campaign_channels(c["id"])
+        campaign_cards += _build_campaign_card(c, cchans, templates, channels, app_url)
 
     if not campaign_cards:
         campaign_cards = '<div class="empty" style="padding:40px">Кампаний нет — создай первую</div>'
@@ -428,33 +394,12 @@ async def campaigns_channel_delete(request: Request, cc_id: int = Form(...),
     return RedirectResponse("/campaigns", 303)
 
 
-@router.post("/campaigns/channel/city")
-async def campaigns_channel_city(request: Request, cc_id: int = Form(...),
-                                  campaign_id: int = Form(...), city: str = Form("")):
-    """Сохранить город для канала внутри кампании."""
+@router.post("/campaigns/channel/location")
+async def campaigns_channel_location(request: Request, cc_id: int = Form(...),
+                                      campaign_id: int = Form(...),
+                                      city: str = Form(""), phone: str = Form("")):
+    """Сохранить город и телефон для канала — одним запросом."""
     user, err = require_auth(request)
     if err: return err
-    db.set_campaign_channel_city(cc_id, city.strip())
-    return RedirectResponse("/campaigns?msg=Город+сохранён", 303)
-
-
-# ── Телефоны / локации кампании ───────────────────────────────────────────────
-
-@router.post("/campaigns/phone/add")
-async def campaigns_phone_add(request: Request, campaign_id: int = Form(...),
-                               city: str = Form(...), phone: str = Form(...)):
-    """Добавить локацию (город + телефон) к кампании."""
-    user, err = require_auth(request)
-    if err: return err
-    db.add_campaign_phone(campaign_id, city.strip(), phone.strip())
-    return RedirectResponse("/campaigns?msg=Локация+добавлена", 303)
-
-
-@router.post("/campaigns/phone/delete")
-async def campaigns_phone_delete(request: Request, phone_id: int = Form(...),
-                                  campaign_id: int = Form(...)):
-    """Удалить локацию из кампании."""
-    user, err = require_auth(request)
-    if err: return err
-    db.delete_campaign_phone(phone_id)
-    return RedirectResponse("/campaigns?msg=Локация+удалена", 303)
+    db.set_campaign_channel_location(cc_id, city.strip(), phone.strip())
+    return RedirectResponse("/campaigns?msg=Локация+сохранена", 303)

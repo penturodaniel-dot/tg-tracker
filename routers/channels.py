@@ -295,16 +295,20 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
         for ch in channels
     )
 
+    _acc_id = f"acc-camp-{camp_id}"
     return f"""
-    <div class="section" style="border-left:3px solid var(--accent)">
-      <div class="section-head">
+    <div class="section acc-section" style="border-left:3px solid var(--accent);margin-bottom:12px">
+      <div class="acc-head" onclick="accToggle('{_acc_id}')"
+           style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:10px 0;user-select:none">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <h3>🎯 {camp_name}</h3>
+          <span class="acc-arrow" id="arrow-{_acc_id}"
+                style="font-size:.8rem;color:var(--text3);transition:transform .2s;display:inline-block">▶</span>
+          <h3 style="margin:0">🎯 {camp_name}</h3>
           <span class="badge" style="font-size:.72rem">{total_joins} подписок</span>
           {tpl_badge}
           {_proj_badge}
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
           <a href="{slug_url}" target="_blank" class="btn-gray btn-sm">🌐 Лендинг</a>
           <form method="post" action="/campaigns/delete">
             <input type="hidden" name="campaign_id" value="{camp_id}"/>
@@ -312,6 +316,7 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
           </form>
         </div>
       </div>
+      <div class="acc-body" id="{_acc_id}" style="display:none">
       <div class="section-body">
 
         <!-- Ссылка в рекламу + UTM + смена шаблона -->
@@ -362,6 +367,7 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
           </div>
         </form>
 
+      </div>
       </div>
     </div>"""
 
@@ -504,6 +510,23 @@ function closeLocDetail() {
 </script>"""
 
     content = popup_html + cc_data_js + open_js + content
+    acc_js = """
+<style>
+.acc-section .section-head { display:none }
+.acc-head { border-radius:var(--radius-sm) }
+.acc-head:hover h3 { color:var(--orange) }
+</style>
+<script>
+function accToggle(id) {
+  var body  = document.getElementById(id);
+  var arrow = document.getElementById('arrow-' + id);
+  if (!body) return;
+  var open = body.style.display === 'none';
+  body.style.display    = open ? 'block' : 'none';
+  arrow.style.transform = open ? 'rotate(90deg)' : 'rotate(0deg)';
+}
+</script>"""
+    content = acc_js + content
     return HTMLResponse(base(content, "campaigns", request))
 
 

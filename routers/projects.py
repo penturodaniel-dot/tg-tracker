@@ -47,20 +47,27 @@ def _project_card(p: dict, msg: str = "", err: str = "") -> str:
     _tt_tok = p.get('tt_token') or ''
     _fb_tok_badge = ' <span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:4px;padding:1px 6px;font-size:.68rem;margin-left:4px">🔑 токен ✓</span>' if _fb_tok else ' <span style="background:#2d0a0a;color:#fca5a5;border:1px solid #7f1d1d;border-radius:4px;padding:1px 6px;font-size:.68rem;margin-left:4px">⚠️ токен не задан</span>'
     _tt_tok_badge = ' <span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:4px;padding:1px 6px;font-size:.68rem;margin-left:4px">🔑 токен ✓</span>' if _tt_tok else ' <span style="background:#2d0a0a;color:#fca5a5;border:1px solid #7f1d1d;border-radius:4px;padding:1px 6px;font-size:.68rem;margin-left:4px">⚠️ токен не задан</span>'
+    fb_status_short = "FB✓" if p.get("fb_pixel_id") else "FB✗"
+    tt_status_short = "TT✓" if p.get("tt_pixel_id") else ""
     fb_status  = (f'<span style="color:#34d399">● {_masked(p["fb_pixel_id"])}</span>' if p.get("fb_pixel_id") else '<span style="color:var(--red)">● не настроен</span>') + _fb_tok_badge
     tt_status  = (f'<span style="color:#34d399">● {_masked(p["tt_pixel_id"])}</span>' if p.get("tt_pixel_id") else '<span style="color:var(--red)">● не настроен</span>') + _tt_tok_badge
     utms = p.get("utm_campaigns") or ""
     utm_tags = "".join(f'<span class="badge" style="margin-right:4px">{u.strip()}</span>' for u in utms.split(",") if u.strip()) or '<span style="color:var(--text3);font-size:.78rem">не привязаны</span>'
 
     return f"""
-    <div class="section" id="project-{pid}" style="border-left:3px solid #6366f1;margin-bottom:16px">
-      <div class="section-head">
-        <h3>🎯 {p['name']}</h3>
-        <form method="post" action="/projects/delete" style="display:inline" onsubmit="return confirm('Удалить проект {p["name"]}?')">
+    <div class="section acc-section" id="project-{pid}" style="border-left:3px solid #6366f1;margin-bottom:12px">
+      <div class="acc-head" onclick="accToggle('acc-proj-{pid}')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:10px 0;user-select:none">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="acc-arrow" id="arrow-acc-proj-{pid}" style="font-size:.8rem;color:var(--text3);transition:transform .2s;display:inline-block">▶</span>
+          <h3 style="margin:0">🎯 {p['name']}</h3>
+          <span style="font-size:.72rem;color:var(--text3)">{fb_status_short} {tt_status_short}</span>
+        </div>
+        <form method="post" action="/projects/delete" style="display:inline" onsubmit="event.stopPropagation();return confirm('Удалить проект {p["name"]}?')">
           <input type="hidden" name="project_id" value="{pid}"/>
-          <button class="btn" style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3);font-size:.76rem;padding:3px 10px">✕ Удалить</button>
+          <button class="btn" onclick="event.stopPropagation()" style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3);font-size:.76rem;padding:3px 10px">✕ Удалить</button>
         </form>
       </div>
+      <div class="acc-body" id="acc-proj-{pid}" style="display:none;padding-top:4px">
       {alert}
       <div class="section-body">
         <form method="post" action="/projects/update">
@@ -139,6 +146,7 @@ def _project_card(p: dict, msg: str = "", err: str = "") -> str:
           </div>
         </form>
       </div>
+      </div>
     </div>"""
 
 
@@ -186,6 +194,21 @@ async def projects_page(request: Request, msg: str = "", err: str = ""):
     </div>
     </div>"""
 
+    acc_js = """
+<style>
+.acc-section .section-head { display:none }
+.acc-head:hover h3 { color:var(--orange) }
+</style>
+<script>
+function accToggle(id) {
+  var body  = document.getElementById(id);
+  var arrow = document.getElementById('arrow-' + id);
+  var open  = body.style.display === 'none';
+  body.style.display  = open ? 'block' : 'none';
+  arrow.style.transform = open ? 'rotate(90deg)' : 'rotate(0deg)';
+}
+</script>"""
+    content = acc_js + content
     return HTMLResponse(base(content, "projects", request))
 
 

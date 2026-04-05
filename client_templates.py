@@ -229,14 +229,17 @@ def _build_contact_section(contacts: list) -> str:
         if (!tgLabel && list[i].tg_label)  tgLabel = list[i].tg_label;
         if (!phoneLabel && list[i].phone_label) phoneLabel = list[i].phone_label;
       }}
-      // Адрес над кнопками
+      // Адреса над кнопками (каждая строка — отдельный адрес)
       if (address) {{
-        var addrEl = document.createElement('div');
-        addrEl.style.cssText = 'display:flex;align-items:flex-start;gap:8px;padding:10px 14px;'
-          + 'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);'
-          + 'border-radius:10px;margin-bottom:12px;font-size:.83rem;color:rgba(255,255,255,.65);line-height:1.5';
-        addrEl.innerHTML = '<span style="flex-shrink:0;font-size:1rem">📍</span><span>' + address + '</span>';
-        el.appendChild(addrEl);
+        var lines = address.split('\n').map(function(s){{return s.trim();}}).filter(Boolean);
+        lines.forEach(function(line) {{
+          var addrEl = document.createElement('div');
+          addrEl.style.cssText = 'display:flex;align-items:flex-start;gap:8px;padding:9px 14px;'
+            + 'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);'
+            + 'border-radius:10px;margin-bottom:8px;font-size:.83rem;color:rgba(255,255,255,.65);line-height:1.5';
+          addrEl.innerHTML = '<span style="flex-shrink:0;font-size:.95rem">📍</span><span>' + line + '</span>';
+          el.appendChild(addrEl);
+        }});
       }}
       // Заголовок перед TG кнопками
       if (tgLabel) {{

@@ -448,9 +448,10 @@ async def campaigns_page(request: Request, msg: str = "", err_msg: str = ""):
       <input type="hidden" name="phone" id="loc-phone"/>
       <div class="field-group" style="margin-bottom:12px">
         <div class="field-label">📍 Адрес локации</div>
-        <input type="text" name="address" id="loc-address" placeholder="123 Main St, New York, NY 10001"
-               style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:.85rem"/>
-        <div style="font-size:.72rem;color:var(--text3);margin-top:3px">Показывается над кнопкой Telegram в попапе</div>
+        <textarea name="address" id="loc-address" rows="3"
+                  placeholder="123 Main St, New York, NY 10001&#10;456 Broadway, New York, NY 10013"
+                  style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:.85rem;font-family:inherit;resize:vertical"></textarea>
+        <div style="font-size:.72rem;color:var(--text3);margin-top:3px">Каждый адрес с новой строки — все покажутся в попапе</div>
       </div>
       <div class="field-group" style="margin-bottom:12px">
         <div class="field-label">💬 Заголовок перед Telegram кнопкой</div>

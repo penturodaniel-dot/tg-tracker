@@ -275,7 +275,16 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
             f'<tr>'
             f'<td style="font-weight:600">'
             f'{cc.get("channel_name") or cc["channel_id"]}{city_badge}'
-            f'</td>'
+            + (
+                f' <form method="post" action="/campaigns/channel/refresh_name" style="display:inline">'
+                f'<input type="hidden" name="cc_id" value="{cc_id}"/>'
+                f'<input type="hidden" name="channel_id" value="{cc["channel_id"]}"/>'
+                f'<input type="hidden" name="campaign_id" value="{camp_id}"/>'
+                f'<button class="btn-gray btn-sm" style="padding:1px 5px;font-size:.7rem;margin-left:4px" title="Обновить название">🔄</button></form>'
+                if not cc.get('channel_name') or str(cc.get('channel_name','')).lstrip('-').isdigit()
+                else ''
+            )
+            + f'</td>'
             f'<td><div class="link-box" style="font-size:.69rem;padding:5px 9px">'
             f'{cc["invite_link"][:48]}...</div></td>'
             f'<td>{inline_form}</td>'
@@ -601,6 +610,28 @@ async def campaigns_channel_add(request: Request, campaign_id: int = Form(...),
         return RedirectResponse("/campaigns?msg=Канал+добавлен+в+кампанию", 303)
     except Exception as e:
         return RedirectResponse(f"/campaigns?err_msg={str(e)}", 303)
+
+
+@router.post("/campaigns/channel/refresh_name")
+async def campaigns_channel_refresh_name(request: Request, cc_id: int = Form(...),
+                                          channel_id: str = Form(...), campaign_id: int = Form(...)):
+    """Обновить название канала через бота."""
+    user, err = require_auth(request)
+    if err: return err
+    try:
+        b1 = bot_manager.get_tracker_bot()
+        if not b1:
+            return RedirectResponse("/campaigns?err_msg=Бот+не+запущен", 303)
+        chat    = await b1.get_chat(int(channel_id))
+        ch_name = chat.title or channel_id
+        with db._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE campaign_channels SET channel_name=%s WHERE id=%s",
+                            (ch_name, cc_id))
+            conn.commit()
+        return RedirectResponse(f"/campaigns?msg=Название+обновлено:+{ch_name}", 303)
+    except Exception as e:
+        return RedirectResponse(f"/campaigns?err_msg={str(e)[:80]}", 303)
 
 
 @router.post("/campaigns/channel/delete")

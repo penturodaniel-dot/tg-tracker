@@ -209,7 +209,10 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 else:
                     ch = (m["content"] or "").replace("<", "&lt;")
                 sl = f'<div style="font-size:.68rem;color:var(--orange);margin-bottom:2px;text-align:right;opacity:.8">{m["sender_name"]}</div>' if m.get("sender_name") and m["sender_type"] == "manager" else ""
-                messages_html += f'<div class="msg {m["sender_type"]}" data-id="{m["id"]}">{sl}<div class="msg-bubble">{ch}</div><div class="msg-time">{t}</div></div>'
+                _read_tick = ""
+                if m["sender_type"] == "manager":
+                    _read_tick = '<span class="msg-read-tick" style="font-size:.65rem;margin-left:3px;opacity:.7">' + ('✓✓' if m.get("is_read") else '✓') + '</span>'
+                messages_html += f'<div class="msg {m["sender_type"]}" data-id="{m["id"]}" data-read="{1 if m.get("is_read") else 0}">{sl}<div class="msg-bubble">{ch}</div><div class="msg-time">{t}{_read_tick}</div></div>'
 
             uname = f"@{active_conv['username']}" if active_conv.get("username") else active_conv.get("tg_user_id", "")
             # Задача 7: Карточка сотрудника для TG
@@ -345,6 +348,16 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 var res=await fetch('/api/tg_account_messages/'+TGA_CONV_ID+'?after='+lastTgAId);
                 if(!res.ok){{_tgaLoadingMsgs=false;return;}}var data=await res.json();
                 if(!data.messages||!data.messages.length){{_tgaLoadingMsgs=false;return;}}
+                // Обновляем галочки у существующих сообщений если пришёл read статус
+                if(data.read_max_id){{
+                  document.querySelectorAll('.msg.manager[data-id]').forEach(function(el){{
+                    if(parseInt(el.dataset.id) <= data.read_max_id && el.dataset.read === '0'){{
+                      var tick = el.querySelector('.msg-read-tick');
+                      if(tick){{ tick.textContent = '✓✓'; tick.style.color = '#60a5fa'; }}
+                      el.dataset.read = '1';
+                    }}
+                  }});
+                }}
                 data.messages.forEach(function(m){{
                   if(tgaMsgBox.querySelector('[data-id="'+m.id+'"]'))return;
                   var d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
@@ -1061,6 +1074,17 @@ async def tg_account_webhook(request: Request):
                         **_tg_kwargs)
                 except Exception as e:
                     log.warning(f"[TG webhook] notify error: {e}")
+
+        elif event == "read":
+            # Собеседник прочитал наши исходящие сообщения
+            tg_user_id = data.get("tg_user_id", "")
+            max_id     = data.get("max_id", 0)
+            if tg_user_id:
+                conv = db.get_tg_account_conv_by_user(tg_user_id)
+                if conv:
+                    db.mark_tga_messages_read(conv["id"], max_id)
+                    log.info(f"[TG webhook] READ conv={conv['id']} max_id={max_id}")
+
     except Exception as e:
         log.error(f"[TG webhook] error: {e}", exc_info=True)
     return JSONResponse({"ok": True})
@@ -1178,7 +1202,8 @@ async def api_tg_account_messages(request: Request, conv_id: int, after: int = 0
     user, err = require_auth(request)
     if err: return JSONResponse({"error": "unauthorized"}, 401)
     msgs = db.get_new_tg_account_messages(conv_id, after)
-    return JSONResponse({"messages": msgs})
+    read_max_id = db.get_tga_read_max_id(conv_id)
+    return JSONResponse({"messages": msgs, "read_max_id": read_max_id})
 
 
 @router.get("/api/tga_chat_panel", response_class=HTMLResponse)
@@ -1208,7 +1233,10 @@ async def api_tga_chat_panel(request: Request, conv_id: int = 0, status_filter: 
         else:
             ch = (m["content"] or "").replace("<", "&lt;")
         sl = f'<div style="font-size:.68rem;color:var(--orange);margin-bottom:2px;text-align:right;opacity:.8">{m["sender_name"]}</div>' if m.get("sender_name") and m["sender_type"] == "manager" else ""
-        messages_html += f'<div class="msg {m["sender_type"]}" data-id="{m["id"]}">{sl}<div class="msg-bubble">{ch}</div><div class="msg-time">{t}</div></div>'
+        _read_tick2 = ""
+        if m["sender_type"] == "manager":
+            _read_tick2 = '<span class="msg-read-tick" style="font-size:.65rem;margin-left:3px;opacity:.7">' + ('✓✓' if m.get("is_read") else '✓') + '</span>'
+        messages_html += f'<div class="msg {m["sender_type"]}" data-id="{m["id"]}" data-read="{1 if m.get("is_read") else 0}">{sl}<div class="msg-bubble">{ch}</div><div class="msg-time">{t}{_read_tick2}</div></div>'
     uname = f"@{active_conv['username']}" if active_conv.get("username") else active_conv.get("tg_user_id", "")
     tga_staff = db.get_staff_by_tg_account_conv(conv_id)
     if tga_staff:

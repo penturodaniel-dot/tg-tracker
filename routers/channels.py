@@ -4,6 +4,7 @@ routers/channels.py — Каналы и кампании
 
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
+from urllib.parse import quote_plus as _qp
 
 router = APIRouter()
 
@@ -572,7 +573,6 @@ async def campaigns_create(request: Request, name: str = Form(...),
     lid = int(landing_id) if landing_id.strip().isdigit() else None
     try:
         db.create_campaign(name.strip(), slug.strip(), landing_id=lid)
-        from urllib.parse import quote_plus as _qp
         return RedirectResponse(f"/campaigns?msg={_qp(f'Кампания {name} создана')}", 303)
     except Exception as e:
         return RedirectResponse(f"/campaigns?err_msg={_qp(str(e).splitlines()[0][:80])}", 303)
@@ -587,7 +587,6 @@ async def campaigns_set_project(request: Request, campaign_id: int = Form(...),
     pid = int(project_id) if project_id.strip().isdigit() else None
     db.set_campaign_project(campaign_id, pid)
     msg = "Проект привязан" if pid else "Проект отвязан"
-    from urllib.parse import quote_plus as _qp
     return RedirectResponse(f"/campaigns?msg={_qp(msg)}", 303)
 
 
@@ -650,7 +649,6 @@ async def campaigns_channel_refresh_name(request: Request, cc_id: int = Form(...
                 cur.execute("UPDATE campaign_channels SET channel_name=%s WHERE id=%s",
                             (ch_name, cc_id))
             conn.commit()
-        from urllib.parse import quote_plus as _qp
         return RedirectResponse(f"/campaigns?msg={_qp(f'Название обновлено: {ch_name}')}", 303)
     except Exception as e:
         return RedirectResponse(f"/campaigns?err_msg={_qp(str(e).splitlines()[0][:80])}", 303)

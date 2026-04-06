@@ -180,11 +180,6 @@ class Database:
                     url        TEXT NOT NULL,
                     position   INTEGER DEFAULT 0
                 );
-                -- Добавляем city если ещё нет (миграция)
-                DO $$ BEGIN
-                    ALTER TABLE landing_contacts ADD COLUMN IF NOT EXISTS city TEXT DEFAULT '';
-                EXCEPTION WHEN duplicate_column THEN NULL;
-                END $$;
                 CREATE TABLE IF NOT EXISTS wa_conversations (
                     id              SERIAL PRIMARY KEY,
                     wa_chat_id      TEXT NOT NULL UNIQUE,
@@ -219,15 +214,8 @@ class Database:
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS slug TEXT",
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''",
                     "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS landing_id INTEGER DEFAULT NULL",
-                    "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS project_id INTEGER DEFAULT NULL",
                     "ALTER TABLE campaigns ALTER COLUMN channel_id DROP NOT NULL",
                     "ALTER TABLE campaigns ALTER COLUMN invite_link DROP NOT NULL",
-                    "ALTER TABLE campaign_channels ADD COLUMN IF NOT EXISTS city TEXT DEFAULT ''",
-                    "ALTER TABLE campaign_channels ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT ''",
-                    "ALTER TABLE campaign_channels ADD COLUMN IF NOT EXISTS address TEXT DEFAULT ''",
-                    "ALTER TABLE campaign_channels ADD COLUMN IF NOT EXISTS tg_label TEXT DEFAULT ''",
-                    "ALTER TABLE campaign_channels ADD COLUMN IF NOT EXISTS phone_label TEXT DEFAULT ''",
-                    "CREATE TABLE IF NOT EXISTS campaign_phones (id SERIAL PRIMARY KEY, campaign_id INTEGER NOT NULL, city TEXT DEFAULT '', phone TEXT DEFAULT '', position INTEGER DEFAULT 0)",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_source TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS utm_campaign TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbclid TEXT",
@@ -288,7 +276,6 @@ class Database:
                     "ALTER TABLE projects ADD COLUMN IF NOT EXISTS traffic_source TEXT DEFAULT ''",
                     "ALTER TABLE landings ADD COLUMN IF NOT EXISTS traffic_source TEXT DEFAULT ''",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS ttp TEXT",
-                "ALTER TABLE landings ADD COLUMN IF NOT EXISTS fb_event TEXT DEFAULT ''",
                     "ALTER TABLE staff_clicks ADD COLUMN IF NOT EXISTS tg_user_id TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
                     "ALTER TABLE tg_account_conversations ADD COLUMN IF NOT EXISTS fbc TEXT",
@@ -554,25 +541,6 @@ class Database:
                 cur.execute("UPDATE campaigns SET landing_id=%s WHERE id=%s", (landing_id, campaign_id))
             conn.commit()
 
-    def set_campaign_project(self, campaign_id: int, project_id):
-        with self._conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("UPDATE campaigns SET project_id=%s WHERE id=%s",
-                            (project_id, campaign_id))
-            conn.commit()
-
-    def get_campaign_project(self, campaign_id: int):
-        """Возвращает проект привязанный к кампании или None."""
-        with self._conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT p.* FROM projects p "
-                    "JOIN campaigns c ON c.project_id = p.id "
-                    "WHERE c.id=%s", (campaign_id,)
-                )
-                r = cur.fetchone()
-                return dict(r) if r else None
-
     def get_campaigns(self, channel_id=None):
         with self._conn() as conn:
             with conn.cursor() as cur:
@@ -629,33 +597,6 @@ class Database:
                     WHERE cc.campaign_id=%s
                     GROUP BY cc.id ORDER BY cc.position""", (campaign_id,))
                 return [dict(r) for r in cur.fetchall()]
-
-    def get_campaign_phones(self, campaign_id: int) -> list:
-        """Для обратной совместимости — теперь телефоны хранятся в campaign_channels.phone"""
-        with self._conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT id, city, phone FROM campaign_channels WHERE campaign_id=%s AND phone!='' ORDER BY position",
-                    (campaign_id,)
-                )
-                return [dict(r) for r in cur.fetchall()]
-
-    def set_campaign_channel_city(self, cc_id: int, city: str):
-        self.set_campaign_channel_location(cc_id, city, "")
-
-    def set_campaign_channel_location(self, cc_id: int, city: str, phone: str,
-                                       address: str = "", tg_label: str = "",
-                                       phone_label: str = ""):
-        """Сохранить город, телефон, адрес и заголовки для канала кампании."""
-        with self._conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE campaign_channels SET city=%s, phone=%s, address=%s, "
-                    "tg_label=%s, phone_label=%s WHERE id=%s",
-                    (city.strip(), phone.strip(), address.strip(),
-                     tg_label.strip(), phone_label.strip(), cc_id)
-                )
-            conn.commit()
 
     def remove_campaign_channel(self, cc_id: int):
         with self._conn() as conn:
@@ -1419,13 +1360,13 @@ class Database:
                 cur.execute("SELECT * FROM landing_contacts WHERE landing_id=%s ORDER BY position", (landing_id,))
                 return [dict(r) for r in cur.fetchall()]
 
-    def add_landing_contact(self, landing_id, ctype, label, url, city=""):
+    def add_landing_contact(self, landing_id, ctype, label, url):
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT COALESCE(MAX(position),0)+1 as p FROM landing_contacts WHERE landing_id=%s", (landing_id,))
                 pos = cur.fetchone()["p"]
-                cur.execute("INSERT INTO landing_contacts (landing_id,type,label,url,position,city) VALUES (%s,%s,%s,%s,%s,%s)",
-                            (landing_id,ctype,label,url,pos,city.strip()))
+                cur.execute("INSERT INTO landing_contacts (landing_id,type,label,url,position) VALUES (%s,%s,%s,%s,%s)",
+                            (landing_id,ctype,label,url,pos))
             conn.commit()
 
     def delete_landing_contact(self, contact_id):
@@ -1658,6 +1599,58 @@ class Database:
                     FROM joins {where}
                     GROUP BY campaign_name ORDER BY joins DESC LIMIT 30""", params)
                 return [dict(r) for r in cur.fetchall()]
+
+    def get_campaign_funnel(self, date_from=None, date_to=None, days=30):
+        """Воронка по кампаниям: клики → подписки → конверсия + разбивка по городам"""
+        where_j, params_j = self._date_filter("j.joined_at", days, date_from, date_to)
+        where_c, params_c = self._date_filter("ct.created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                # Клики по utm_campaign
+                cur.execute(f"""SELECT COALESCE(utm_campaign,'(direct)') as campaign,
+                    COUNT(*) as clicks,
+                    SUM(CASE WHEN fbclid IS NOT NULL THEN 1 ELSE 0 END) as fb_clicks
+                    FROM click_tracking ct {where_c}
+                    GROUP BY utm_campaign""", params_c)
+                clicks_map = {r['campaign']: dict(r) for r in cur.fetchall()}
+
+                # Подписки по campaign_name + город из cc
+                cur.execute(f"""SELECT j.campaign_name,
+                    COUNT(*) as joins,
+                    SUM(CASE WHEN j.click_id IS NOT NULL THEN 1 ELSE 0 END) as tracked,
+                    SUM(CASE WHEN ct.fbclid IS NOT NULL THEN 1 ELSE 0 END) as fb_joins,
+                    MAX(j.joined_at) as last_join,
+                    COUNT(DISTINCT j.channel_id) as channels
+                    FROM joins j
+                    LEFT JOIN click_tracking ct ON ct.click_id = j.click_id
+                    {where_j}
+                    GROUP BY j.campaign_name ORDER BY joins DESC""", params_j)
+                rows = [dict(r) for r in cur.fetchall()]
+
+                # Подписки по городам (из campaign_channels.city)
+                cur.execute(f"""SELECT j.campaign_name,
+                    COALESCE(cc.city, '—') as city,
+                    COUNT(*) as joins
+                    FROM joins j
+                    LEFT JOIN campaign_channels cc ON cc.invite_link = j.invite_link
+                    {where_j}
+                    GROUP BY j.campaign_name, cc.city ORDER BY joins DESC""", params_j)
+                city_rows = cur.fetchall()
+                city_map = {}
+                for r in city_rows:
+                    city_map.setdefault(r['campaign_name'], []).append(
+                        {'city': r['city'], 'joins': r['joins']}
+                    )
+
+                # Объединяем
+                for row in rows:
+                    cname = row['campaign_name']
+                    cl = clicks_map.get(cname, {})
+                    row['clicks']    = cl.get('clicks', 0)
+                    row['fb_clicks'] = cl.get('fb_clicks', 0)
+                    row['cr'] = round(row['joins'] / row['clicks'] * 100, 1) if row.get('clicks') else 0
+                    row['cities'] = city_map.get(cname, [])
+                return rows
 
     def get_clicks_by_day(self, date_from=None, date_to=None, days=30):
         where, params = self._date_filter("created_at", days, date_from, date_to)

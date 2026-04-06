@@ -271,20 +271,23 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
                 f'📍 {city_val}</span>'
             )
 
-        chan_rows += (
-            f'<tr>'
-            f'<td style="font-weight:600">'
-            f'{cc.get("channel_name") or cc["channel_id"]}{city_badge}'
-            + (
-                f' <form method="post" action="/campaigns/channel/refresh_name" style="display:inline">'
+        _refresh_btn = ""
+        _ch_name_val = cc.get("channel_name") or ""
+        if not _ch_name_val or _ch_name_val.lstrip('-').isdigit():
+            _refresh_btn = (
+                f'<form method="post" action="/campaigns/channel/refresh_name" style="display:inline">'
                 f'<input type="hidden" name="cc_id" value="{cc_id}"/>'
                 f'<input type="hidden" name="channel_id" value="{cc["channel_id"]}"/>'
                 f'<input type="hidden" name="campaign_id" value="{camp_id}"/>'
-                f'<button class="btn-gray btn-sm" style="padding:1px 5px;font-size:.7rem;margin-left:4px" title="Обновить название">🔄</button></form>'
-                if not cc.get('channel_name') or str(cc.get('channel_name','')).lstrip('-').isdigit()
-                else ''
+                f'<button class="btn-gray btn-sm" style="padding:1px 5px;font-size:.7rem;margin-left:4px"'
+                f' title="Обновить название">🔄</button></form>'
             )
-            + f'</td>'
+
+        chan_rows += (
+            f'<tr>'
+            f'<td style="font-weight:600">'
+            f'{cc.get("channel_name") or cc["channel_id"]}{city_badge}{_refresh_btn}'
+            f'</td>'
             f'<td><div class="link-box" style="font-size:.69rem;padding:5px 9px">'
             f'{cc["invite_link"][:48]}...</div></td>'
             f'<td>{inline_form}</td>'

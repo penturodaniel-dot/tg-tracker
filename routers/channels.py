@@ -242,23 +242,15 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
         tg_label_val   = cc.get("tg_label") or ""
         phone_label_val= cc.get("phone_label") or ""
 
-        # Inline форма — город + телефон + кнопка деталей
+        # Inline форма — только город + телефон (адрес/заголовки только через попап ⚙)
         detail_filled = any([address_val, tg_label_val, phone_label_val])
         detail_badge  = '<span style="color:var(--green);font-size:.65rem;margin-left:2px">●</span>' if detail_filled else ""
-        # Экранируем значения для HTML атрибутов (особенно address с \n)
-        import html as _html
-        _addr_safe  = _html.escape(address_val, quote=True).replace('\n', '&#10;').replace('\r', '')
-        _tgl_safe   = _html.escape(tg_label_val, quote=True)
-        _phl_safe   = _html.escape(phone_label_val, quote=True)
 
         inline_form = (
             f'<form method="post" action="/campaigns/channel/location"'
             f' style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
             f'<input type="hidden" name="cc_id" value="{cc_id}"/>'
             f'<input type="hidden" name="campaign_id" value="{camp_id}"/>'
-            f'<input type="hidden" name="address" value="{_addr_safe}"/>'
-            f'<input type="hidden" name="tg_label" value="{_tgl_safe}"/>'
-            f'<input type="hidden" name="phone_label" value="{_phl_safe}"/>'
             f'<input type="text" name="city" value="{city_val}" placeholder="New York"'
             f' style="width:105px;background:var(--bg);border:1px solid var(--border);'
             f'border-radius:5px;padding:3px 7px;color:var(--text);font-size:.75rem"/>'
@@ -270,7 +262,6 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
             + ' class="btn-gray btn-sm" style="padding:3px 8px;font-size:.72rem;background:var(--bg3)"'
             + ' title="Адрес и заголовки">\u2699\ufe0f' + detail_badge + '</button>'
             + '</form>'
-            f'</form>'
         )
 
         # Бейдж города если заполнен
@@ -667,11 +658,21 @@ async def campaigns_channel_delete(request: Request, cc_id: int = Form(...),
 async def campaigns_channel_location(request: Request, cc_id: int = Form(...),
                                       campaign_id: int = Form(...),
                                       city: str = Form(""), phone: str = Form(""),
-                                      address: str = Form(""), tg_label: str = Form(""),
-                                      phone_label: str = Form("")):
-    """Сохранить город, телефон, адрес и заголовки для канала."""
+                                      address: str = Form(None), tg_label: str = Form(None),
+                                      phone_label: str = Form(None)):
+    """Сохранить город и телефон. Адрес/заголовки — только если пришли из попапа."""
     user, err = require_auth(request)
     if err: return err
+    # Если address/tg_label/phone_label не переданы (inline форма) — берём текущие из БД
+    if address is None or tg_label is None or phone_label is None:
+        from psycopg2.extras import RealDictCursor
+        with db._conn() as _conn:
+            with _conn.cursor(cursor_factory=RealDictCursor) as _cur:
+                _cur.execute("SELECT address,tg_label,phone_label FROM campaign_channels WHERE id=%s", (cc_id,))
+                _row = _cur.fetchone() or {}
+        address     = _row.get("address","") if address is None else address
+        tg_label    = _row.get("tg_label","") if tg_label is None else tg_label
+        phone_label = _row.get("phone_label","") if phone_label is None else phone_label
     db.set_campaign_channel_location(
         cc_id, city.strip(), phone.strip(),
         address.strip(), tg_label.strip(), phone_label.strip()

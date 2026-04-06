@@ -384,7 +384,8 @@ def _tpl_dark_luxury(texts, contacts, pixel_js):
     T  = _get_texts(texts)
     bt = _build_contact_section(contacts)
     sh = _shared_popup_and_js(accent="#b8862d")
-    return f"""<!DOCTYPE html><html lang="en"><head>
+    return (
+    f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{T["hero_title"]}</title>{pixel_js}
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -447,9 +448,10 @@ h1{{font-family:'Playfair Display',serif;font-size:clamp(2rem,5.5vw,3rem);font-w
   <div class="book">{T["book_msg"]}</div>
   <div class="contact" id="ca">
     <div class="contact-t">{T["sec_contact"]}</div>
-    <div class="btns">{bt}</div>
+    <div class="btns">__CL_BT__</div>
   </div>
 </div>{sh}</body></html>"""
+    ).replace("__CL_BT__", bt)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -460,7 +462,8 @@ def _tpl_rose_elegant(texts, contacts, pixel_js):
     T  = _get_texts(texts)
     bt = _build_contact_section(contacts)
     sh = _shared_popup_and_js(accent="#c2185b")
-    return f"""<!DOCTYPE html><html lang="en"><head>
+    return (
+    f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{T["hero_title"]}</title>{pixel_js}
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -525,9 +528,10 @@ h1{{font-family:'Cormorant Garamond',serif;font-size:clamp(2.2rem,6vw,3.4rem);fo
   <div class="book">{T["book_msg"]}</div>
   <div class="contact" id="ca">
     <div class="contact-t">{T["sec_contact"]}</div>
-    <div class="btns">{bt}</div>
+    <div class="btns">__CL_BT__</div>
   </div>
 </div>{sh}</body></html>"""
+    ).replace("__CL_BT__", bt)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -538,7 +542,8 @@ def _tpl_neon_modern(texts, contacts, pixel_js):
     T  = _get_texts(texts)
     bt = _build_contact_section(contacts)
     sh = _shared_popup_and_js(accent="#d946ef")
-    return f"""<!DOCTYPE html><html lang="en"><head>
+    return (
+    f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{T["hero_title"]}</title>{pixel_js}
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -603,9 +608,10 @@ h1{{font-size:clamp(2rem,5.5vw,2.9rem);font-weight:800;line-height:1.1;margin-bo
   <div class="book">{T["book_msg"]}</div>
   <div class="contact" id="ca">
     <div class="contact-t">{T["sec_contact"]}</div>
-    <div class="btns">{bt}</div>
+    <div class="btns">__CL_BT__</div>
   </div>
 </div>{sh}</body></html>"""
+    ).replace("__CL_BT__", bt)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -616,7 +622,8 @@ def _tpl_midnight_blue(texts, contacts, pixel_js):
     T  = _get_texts(texts)
     bt = _build_contact_section(contacts)
     sh = _shared_popup_and_js(accent="#3b82f6")
-    return f"""<!DOCTYPE html><html lang="en"><head>
+    return (
+    f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{T["hero_title"]}</title>{pixel_js}
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
@@ -679,6 +686,7 @@ h1{{font-family:'DM Serif Display',serif;font-size:clamp(2rem,5.5vw,3rem);font-w
   <div class="book">{T["book_msg"]}</div>
   <div class="contact" id="ca">
     <div class="contact-t">{T["sec_contact"]}</div>
-    <div class="btns">{bt}</div>
+    <div class="btns">__CL_BT__</div>
   </div>
 </div>{sh}</body></html>"""
+    ).replace("__CL_BT__", bt)

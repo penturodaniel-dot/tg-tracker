@@ -91,17 +91,36 @@ async def analytics_clients(request: Request,
         </tr>"""
     ch_rows = ch_rows or '<tr><td colspan="4"><div class="empty">Нет данных</div></td></tr>'
 
-    # Таблица кампаний
+    # Воронка по кампаниям
     camp_rows = ""
-    for c in by_campaign:
+    for c in funnel:
+        _cr_color = "#34d399" if c["cr"] >= 10 else ("#f97316" if c["cr"] >= 3 else "#f87171")
+        _cr_str   = f'{c["cr"]}%' if c["clicks"] else "—"
+        _fb_str   = f'{c["fb_joins"]} / {c["fb_clicks"]}' if c["clicks"] else "—"
+        _cities   = c.get("cities", [])
+        _city_badges = " ".join(
+            f'<span style="background:rgba(99,102,241,.12);color:#a5b4fc;border-radius:4px;'
+            f'padding:1px 5px;font-size:.65rem;font-weight:600">{ci["city"]} {ci["joins"]}</span>'
+            for ci in _cities[:5] if ci["city"] and ci["city"] != "—"
+        ) or '<span style="color:var(--text3);font-size:.72rem">нет данных</span>'
+        _cr_bar = (
+            f'<div style="display:flex;align-items:center;gap:6px">'
+            f'<div style="flex:1;background:var(--bg3);border-radius:3px;height:5px;max-width:60px">'
+            f'<div style="width:{min(c["cr"],100)}%;background:{_cr_color};border-radius:3px;height:5px"></div>'
+            f'</div>'
+            f'<span style="font-weight:700;color:{_cr_color};font-size:.82rem">{_cr_str}</span>'
+            f'</div>'
+        )
         camp_rows += f"""<tr>
-            <td><span class="badge">{c['campaign_name']}</span></td>
-            <td style="font-weight:700;color:var(--accent)">{c['joins']}</td>
-            <td style="color:var(--text3)">{c['tracked']}</td>
-            <td style="color:var(--text3);font-size:.8rem">{c['first_join'][:10] if c.get('first_join') else '—'}</td>
-            <td style="color:var(--text3);font-size:.8rem">{c['last_join'][:10] if c.get('last_join') else '—'}</td>
+            <td><span class="badge">{c['campaign_name']}</span>
+                <div style="margin-top:4px">{_city_badges}</div></td>
+            <td style="font-weight:700;color:var(--accent)">{c['clicks']}</td>
+            <td style="font-weight:700;color:#34d399">{c['joins']}</td>
+            <td>{_cr_bar}</td>
+            <td style="color:#60a5fa;font-size:.8rem">{_fb_str}</td>
+            <td style="color:var(--text3);font-size:.78rem">{str(c['last_join'])[:10] if c.get('last_join') else '—'}</td>
         </tr>"""
-    camp_rows = camp_rows or '<tr><td colspan="5"><div class="empty">Нет данных</div></td></tr>'
+    camp_rows = camp_rows or '<tr><td colspan="6"><div class="empty">Нет данных за период</div></td></tr>'
 
     # UTM источники
     utm_rows = ""
@@ -183,9 +202,21 @@ async def analytics_clients(request: Request,
     </div>
 
     <div class="section">
-      <div class="section-head"><h3>🎯 По кампаниям</h3></div>
-      <table><thead><tr><th>Кампания</th><th>Подписок</th><th>Трекинг</th><th>Первая</th><th>Последняя</th></tr></thead>
-      <tbody>{camp_rows}</tbody></table>
+      <div class="section-head">
+        <h3>🎯 Воронка по кампаниям</h3>
+        <span style="font-size:.75rem;color:var(--text3)">клики → подписки → конверсия</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Кампания / Города</th>
+          <th title="Кликов на лендинг через /go">👆 Клики</th>
+          <th title="Подписок на каналы">✅ Подписки</th>
+          <th title="Конверсия клик→подписка">📊 CR</th>
+          <th title="FB подписки / FB клики">📘 FB</th>
+          <th>Последняя</th>
+        </tr></thead>
+        <tbody>{camp_rows}</tbody>
+      </table>
     </div>
 
     <div class="section">

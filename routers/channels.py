@@ -288,9 +288,20 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
 
         chan_rows += (
             f'<tr>'
-            f'<td style="font-weight:600">'
-            f'{cc.get("channel_name") or cc["channel_id"]}{city_badge}{_refresh_btn}'
-            f'</td>'
+            f'<td>'
+            f'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+            f'<span style="font-weight:600">'
+            f'{cc.get("channel_name") if (cc.get("channel_name") and not str(cc.get("channel_name","")).lstrip("-").isdigit()) else ""}</span>'
+            f'{city_badge}'
+            f'<form method="post" action="/campaigns/channel/rename" style="display:flex;gap:4px">'
+            f'<input type="hidden" name="cc_id" value="{cc_id}"/>'
+            f'<input type="hidden" name="campaign_id" value="{camp_id}"/>'
+            f'<input type="text" name="channel_name" placeholder="Введи название" '
+            f'value="{cc.get("channel_name") if (cc.get("channel_name") and not str(cc.get("channel_name","")).lstrip("-").isdigit()) else ""}" '
+            f'style="width:130px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:2px 7px;color:var(--text);font-size:.75rem"/>'
+            f'<button class="btn-gray btn-sm" style="padding:2px 7px;font-size:.72rem">✓</button></form>'
+            f'{_refresh_btn}'
+            f'</div></td>'
             f'<td><div class="link-box" style="font-size:.69rem;padding:5px 9px">'
             f'{cc["invite_link"][:48]}...</div></td>'
             f'<td>{inline_form}</td>'
@@ -622,6 +633,22 @@ async def campaigns_channel_add(request: Request, campaign_id: int = Form(...),
         return RedirectResponse("/campaigns?msg=%D0%9A%D0%B0%D0%BD%D0%B0%D0%BB+%D0%B4%D0%BE%D0%B1%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD+%D0%B2+%D0%BA%D0%B0%D0%BC%D0%BF%D0%B0%D0%BD%D0%B8%D1%8E", 303)
     except Exception as e:
         return RedirectResponse(f"/campaigns?err_msg={_qp(str(e).splitlines()[0][:80])}", 303)
+
+
+@router.post("/campaigns/channel/rename")
+async def campaigns_channel_rename(request: Request, cc_id: int = Form(...),
+                                    campaign_id: int = Form(...),
+                                    channel_name: str = Form(...)):
+    user, err = require_auth(request)
+    if err: return err
+    if not channel_name.strip():
+        return RedirectResponse("/campaigns", 303)
+    with db._conn() as _conn:
+        with _conn.cursor() as _cur:
+            _cur.execute("UPDATE campaign_channels SET channel_name=%s WHERE id=%s",
+                         (channel_name.strip(), cc_id))
+        _conn.commit()
+    return RedirectResponse(f"/campaigns?msg={_qp('Название сохранено')}", 303)
 
 
 @router.post("/campaigns/channel/refresh_name")

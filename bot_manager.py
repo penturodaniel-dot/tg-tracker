@@ -100,7 +100,12 @@ def _build_tracker_dp() -> Dispatcher:
         _utm_source   = click_data.get("utm_source")  if click_data else None
         _utm_campaign = click_data.get("utm_campaign") if click_data else None
 
-        test_event_code = _db.get_setting("test_event_code") or None
+        # test_event_code: из проекта кампании → глобальный
+        test_event_code = None
+        if _project:
+            test_event_code = _project.get("test_event_code") or None
+        if not test_event_code:
+            test_event_code = _db.get_setting("test_event_code") or None
 
         # ── Лог с качеством matching ──────────────────────────────────────────
         _score = sum([bool(_fbclid), bool(_fbp), bool(_fbc)])

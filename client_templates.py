@@ -66,15 +66,14 @@ def _parse_list(texts: dict, key: str) -> list:
 
 def _build_contact_section(contacts: list) -> str:
     """
-    Одна кнопка "Contact me" → попап городов → каналы города + телефон.
-    contacts: [{type, label, url, city, phone}]
-    Все данные (город, телефон) берутся из campaign_channels.
+    Одна кнопка Contact me → попап городов → каналы + телефон + адрес.
+    JS НЕ использует f-string чтобы избежать конфликта с {{}} в шаблонах.
     """
     import json as _j
 
     TG_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>'
 
-    # Уникальные города (в порядке добавления)
+    # Уникальные города
     cities, seen = [], set()
     for c in contacts:
         city = (c.get("city") or "").strip()
@@ -82,8 +81,7 @@ def _build_contact_section(contacts: list) -> str:
             cities.append(city)
             seen.add(city)
 
-    # Данные для JS
-    contacts_js = _j.dumps([
+    contacts_json = _j.dumps([
         {
             "type":        c.get("type", "telegram"),
             "label":       c.get("label", ""),
@@ -96,197 +94,189 @@ def _build_contact_section(contacts: list) -> str:
         }
         for c in contacts
     ])
-    cities_js = _j.dumps(cities)
+    cities_json = _j.dumps(cities)
 
     if not contacts:
         return '<p style="color:rgba(255,255,255,.3);font-size:.85rem;text-align:center;padding:8px 0">Контакты не настроены</p>'
 
-    return f"""
-<!-- ОДНА КНОПКА -->
-<button class="cl-btn cl-btn-contact-trigger" onclick="clOpenMain()">
-  {TG_SVG} <span>Contact me</span>
-</button>
+    # HTML — попапы
+    html = (
+        '<button class="cl-btn cl-btn-contact-trigger" onclick="clOpenMain()">'
+        + TG_SVG + ' <span>Contact me</span>'
+        '</button>'
 
-<!-- ПОПАП ГОРОДОВ -->
-<div class="cl-cpop" id="cl-city-popup">
-  <div class="cl-cpop-overlay" onclick="clClose()"></div>
-  <div class="cl-cpop-box">
-    <div class="cl-cpop-hdr">
-      <span>📍 Choose your city</span>
-      <button class="cl-cpop-x" onclick="clClose()">✕</button>
-    </div>
-    <div id="cl-city-list"></div>
-  </div>
-</div>
+        '<div class="cl-cpop" id="cl-city-popup">'
+        '<div class="cl-cpop-overlay" onclick="clClose()"></div>'
+        '<div class="cl-cpop-box">'
+        '<div class="cl-cpop-hdr">'
+        '<span>\U0001f4cd Choose your city</span>'
+        '<button class="cl-cpop-x" onclick="clClose()">\u2715</button>'
+        '</div>'
+        '<div id="cl-city-list"></div>'
+        '</div></div>'
 
-<!-- ПОПАП КАНАЛОВ ГОРОДА -->
-<div class="cl-cpop" id="cl-contact-popup">
-  <div class="cl-cpop-overlay" onclick="clClose()"></div>
-  <div class="cl-cpop-box">
-    <div class="cl-cpop-hdr">
-      <button class="cl-cpop-x cl-back-btn" id="cl-back-btn" onclick="clBack()">←</button>
-      <span id="cl-contact-title">Contact</span>
-      <button class="cl-cpop-x" onclick="clClose()">✕</button>
-    </div>
-    <div id="cl-contact-list"></div>
-  </div>
-</div>
+        '<div class="cl-cpop" id="cl-contact-popup">'
+        '<div class="cl-cpop-overlay" onclick="clClose()"></div>'
+        '<div class="cl-cpop-box">'
+        '<div class="cl-cpop-hdr">'
+        '<button class="cl-cpop-x cl-back-btn" id="cl-back-btn" onclick="clBack()">\u2190</button>'
+        '<span id="cl-contact-title">Contact</span>'
+        '<button class="cl-cpop-x" onclick="clClose()">\u2715</button>'
+        '</div>'
+        '<div id="cl-contact-list"></div>'
+        '</div></div>'
+    )
 
-<style>
-.cl-btn-contact-trigger{{width:100%;border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:.94rem;transition:opacity .15s,transform .15s;letter-spacing:.02em}}.cl-btn-contact-trigger:hover{{opacity:.88;transform:translateY(-1px)}}
-.cl-cpop{{display:none;position:fixed;inset:0;z-index:9500;align-items:flex-end;justify-content:center}}
-.cl-cpop.open{{display:flex}}
-.cl-cpop-overlay{{position:absolute;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px)}}
-.cl-cpop-box{{position:relative;z-index:1;width:100%;max-width:560px;background:#13131f;border-radius:20px 20px 0 0;padding:0 16px 32px;box-shadow:0 -8px 40px rgba(0,0,0,.5);animation:clSlide .25s ease;max-height:80vh;overflow-y:auto}}
-@keyframes clSlide{{from{{transform:translateY(60px);opacity:0}}to{{transform:translateY(0);opacity:1}}}}
-.cl-cpop-box::before{{content:'';display:block;width:40px;height:4px;background:rgba(255,255,255,.18);border-radius:2px;margin:12px auto 0}}
-.cl-cpop-hdr{{display:flex;align-items:center;justify-content:space-between;padding:14px 4px 10px;color:rgba(255,255,255,.7);font-size:.85rem;font-weight:600}}
-.cl-cpop-x{{background:rgba(255,255,255,.1);border:none;color:#fff;width:30px;height:30px;border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s}}
-.cl-cpop-x:hover{{background:rgba(255,255,255,.2)}}
-.cl-back-btn{{display:none}}
-.cl-city-btn{{width:100%;display:flex;align-items:center;padding:13px 16px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;font-size:.92rem;font-weight:600;cursor:pointer;margin-bottom:8px;transition:background .15s;text-align:left;font-family:inherit}}
-.cl-city-btn:hover{{background:rgba(255,255,255,.1)}}
-.cl-city-all{{background:rgba(255,255,255,.02);color:rgba(255,255,255,.45);font-weight:400;border-style:dashed}}
-.cl-city-all:hover{{background:rgba(255,255,255,.06)}}
-.cl-contact-item{{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;border-radius:12px;font-weight:700;font-size:.93rem;text-decoration:none;margin-bottom:10px;background:#26A5E4;color:#fff;border:none;cursor:pointer;font-family:inherit;transition:opacity .15s}}
-.cl-contact-item:hover{{opacity:.88}}
-.cl-contact-item.wa{{background:#25D366}}
-.cl-phone-item{{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);margin-bottom:8px}}
-.cl-phone-city{{font-size:.82rem;color:rgba(255,255,255,.5);font-weight:500}}
-.cl-phone-num{{font-size:.9rem;font-weight:700;color:#a5f3fc;text-decoration:none;letter-spacing:.02em}}
-.cl-phone-num:hover{{color:#67e8f9}}
-</style>
+    # CSS
+    css = (
+        '<style>'
+        '.cl-btn-contact-trigger{background:#26A5E4;color:#fff;border:none;border-radius:inherit;'
+        'cursor:pointer;font-family:inherit;font-weight:700;font-size:.94rem;'
+        'transition:opacity .15s,transform .15s;letter-spacing:.02em}'
+        '.cl-btn-contact-trigger:hover{opacity:.88;transform:translateY(-1px)}'
+        '.cl-cpop{display:none;position:fixed;inset:0;z-index:9500;align-items:flex-end;justify-content:center}'
+        '.cl-cpop.open{display:flex}'
+        '.cl-cpop-overlay{position:absolute;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px)}'
+        '.cl-cpop-box{position:relative;z-index:1;width:100%;max-width:560px;background:#13131f;'
+        'border-radius:20px 20px 0 0;padding:0 16px 32px;box-shadow:0 -8px 40px rgba(0,0,0,.5);'
+        'animation:clSlide .25s ease;max-height:80vh;overflow-y:auto}'
+        '@keyframes clSlide{from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}'
+        '.cl-cpop-box::before{content:"";display:block;width:40px;height:4px;'
+        'background:rgba(255,255,255,.18);border-radius:2px;margin:12px auto 0}'
+        '.cl-cpop-hdr{display:flex;align-items:center;justify-content:space-between;'
+        'padding:14px 4px 10px;color:rgba(255,255,255,.7);font-size:.85rem;font-weight:600}'
+        '.cl-cpop-x{background:rgba(255,255,255,.1);border:none;color:#fff;width:30px;height:30px;'
+        'border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;'
+        'justify-content:center;flex-shrink:0;transition:background .15s}'
+        '.cl-cpop-x:hover{background:rgba(255,255,255,.2)}'
+        '.cl-back-btn{display:none}'
+        '.cl-city-btn{width:100%;display:flex;align-items:center;padding:13px 16px;border-radius:12px;'
+        'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;'
+        'font-size:.92rem;font-weight:600;cursor:pointer;margin-bottom:8px;'
+        'transition:background .15s;text-align:left;font-family:inherit}'
+        '.cl-city-btn:hover{background:rgba(255,255,255,.1)}'
+        '.cl-contact-item{display:flex;align-items:center;justify-content:center;gap:10px;'
+        'width:100%;padding:14px;border-radius:12px;font-weight:700;font-size:.93rem;'
+        'text-decoration:none;margin-bottom:10px;background:#26A5E4;color:#fff;'
+        'border:none;cursor:pointer;font-family:inherit;transition:opacity .15s}'
+        '.cl-contact-item:hover{opacity:.88}'
+        '.cl-contact-item.wa{background:#25D366}'
+        '.cl-phone-item{display:flex;align-items:center;justify-content:space-between;'
+        'padding:12px 16px;border-radius:10px;background:rgba(255,255,255,.04);'
+        'border:1px solid rgba(255,255,255,.08);margin-bottom:8px}'
+        '.cl-phone-city{font-size:.82rem;color:rgba(255,255,255,.5);font-weight:500}'
+        '.cl-phone-num{font-size:.9rem;font-weight:700;color:#a5f3fc;text-decoration:none;letter-spacing:.02em}'
+        '.cl-phone-num:hover{color:#67e8f9}'
+        '</style>'
+    )
 
-<script>
-(function(){{
-  var _contacts = {contacts_js};
-  var _cities   = {cities_js};
-  var _hasCities = _cities.length > 0;
-  var TG = '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>';
-  var WA = '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5Z"/></svg>';
+    # JS — обычная строка, не f-string, без {{}}
+    js = (
+        '<script>'
+        'var _CL_CONTACTS=' + contacts_json + ';'
+        'var _CL_CITIES=' + cities_json + ';'
+        'var _CL_HAS_CITIES=_CL_CITIES.length>0;'
+        'var _TG=\'<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M9.036 15.28 8.87 18.64c.34 0 .49-.15.67-.33l1.6-1.54 3.31 2.43c.61.34 1.05.16 1.22-.56l2.2-10.3c.2-.9-.32-1.25-.92-1.03L3.9 10.01c-.88.34-.86.83-.15 1.05l3.29 1.02 7.64-4.82c.36-.23.69-.1.42.14z"/></svg>\';'
+        'var _WA=\'<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M20 3.5A10 10 0 0 0 4.2 17.3L3 21l3.8-1.2A10 10 0 1 0 20 3.5Z"/></svg>\';'
+        'function clClose(){'
+          'document.getElementById("cl-city-popup").classList.remove("open");'
+          'document.getElementById("cl-contact-popup").classList.remove("open");'
+          'document.body.style.overflow="";'
+        '}'
+        'function clBack(){'
+          'document.getElementById("cl-contact-popup").classList.remove("open");'
+          'document.getElementById("cl-city-popup").classList.add("open");'
+        '}'
+        'function clOpenMain(){'
+          'if(_CL_HAS_CITIES){_showCities();}else{_showContacts(_CL_CONTACTS,null);}'
+        '}'
+        'function _showCities(){'
+          'var list=document.getElementById("cl-city-list");'
+          'list.innerHTML="";'
+          '_CL_CITIES.forEach(function(city){'
+            'var btn=document.createElement("button");'
+            'btn.className="cl-city-btn";'
+            'btn.innerHTML="\U0001f4cd "+city;'
+            'btn.onclick=function(){'
+              'document.getElementById("cl-city-popup").classList.remove("open");'
+              'var filtered=_CL_CONTACTS.filter(function(c){return !c.city||c.city===city;});'
+              '_showContacts(filtered,city);'
+            '};'
+            'list.appendChild(btn);'
+          '});'
+          'document.getElementById("cl-city-popup").classList.add("open");'
+          'document.body.style.overflow="hidden";'
+        '}'
+        'function _showContacts(list,cityLabel){'
+          'var el=document.getElementById("cl-contact-list");'
+          'var title=document.getElementById("cl-contact-title");'
+          'var backBtn=document.getElementById("cl-back-btn");'
+          'el.innerHTML="";'
+          'if(cityLabel){title.textContent="\U0001f4cd "+cityLabel;backBtn.style.display="flex";}'
+          'else{title.textContent="Contact";backBtn.style.display="none";}'
+          'var phone="",address="",tgLabel="",phoneLabel="";'
+          'for(var i=0;i<list.length;i++){'
+            'if(!phone&&list[i].phone)phone=list[i].phone;'
+            'if(!address&&list[i].address)address=list[i].address;'
+            'if(!tgLabel&&list[i].tg_label)tgLabel=list[i].tg_label;'
+            'if(!phoneLabel&&list[i].phone_label)phoneLabel=list[i].phone_label;'
+          '}'
+          'if(address){'
+            'var lines=address.split("\\n").map(function(s){return s.trim();}).filter(Boolean);'
+            'lines.forEach(function(line){'
+              'var addrEl=document.createElement("div");'
+              'addrEl.style.cssText="display:flex;align-items:flex-start;gap:8px;padding:9px 14px;'
+                'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);'
+                'border-radius:10px;margin-bottom:8px;font-size:.83rem;color:rgba(255,255,255,.65);line-height:1.5";'
+              'addrEl.innerHTML="\U0001f4cd <span>"+line+"</span>";'
+              'el.appendChild(addrEl);'
+            '});'
+          '}'
+          'if(tgLabel){'
+            'var tgH=document.createElement("div");'
+            'tgH.style.cssText="font-size:.76rem;font-weight:600;color:rgba(255,255,255,.45);'
+              'text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;margin-top:4px";'
+            'tgH.textContent=tgLabel;'
+            'el.appendChild(tgH);'
+          '}'
+          'list.forEach(function(c){'
+            'var svg=c.type==="whatsapp"?_WA:_TG;'
+            'var cls=c.type==="whatsapp"?"cl-contact-item wa call-button":"cl-contact-item call-button";'
+            'var a=document.createElement("a");'
+            'a.className=cls;a.href=c.url;a.target="_blank";a.rel="noopener";'
+            'a.innerHTML=svg+"<span>"+c.label+"</span>";'
+            'a.addEventListener("click",function(){'
+              'clClose();'
+              'if(typeof fbq!=="undefined")fbq("track","Contact");'
+              'if(typeof ttq!=="undefined")ttq.track("Contact");'
+            '});'
+            'el.appendChild(a);'
+          '});'
+          'if(phone){'
+            'if(phoneLabel){'
+              'var phH=document.createElement("div");'
+              'phH.style.cssText="font-size:.76rem;font-weight:600;color:rgba(255,255,255,.45);'
+                'text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;margin-top:10px";'
+              'phH.textContent=phoneLabel;'
+              'el.appendChild(phH);'
+            '}'
+            'var ph=document.createElement("div");'
+            'ph.className="cl-phone-item";'
+            'ph.innerHTML="<span class=\\"cl-phone-city\\">\U0001f4de "+(cityLabel||"Phone")+"</span>"'
+              '+"<a href=\\"tel:"+phone.replace(/ /g,"")+"\" class=\\"cl-phone-num\\">"+phone+"</a>";'
+            'el.appendChild(ph);'
+          '}'
+          'if(!list.length){'
+            'el.innerHTML="<p style=\\"color:rgba(255,255,255,.4);text-align:center;padding:16px;font-size:.85rem\\">No contacts for this city</p>";'
+          '}'
+          'document.getElementById("cl-contact-popup").classList.add("open");'
+          'document.body.style.overflow="hidden";'
+        '}'
+        '</script>'
+    )
 
-  function _lock()  {{ document.body.style.overflow = 'hidden'; }}
-  function _unlock(){{ document.body.style.overflow = ''; }}
+    return html + css + js
 
-  window.clClose = function() {{
-    document.getElementById('cl-city-popup').classList.remove('open');
-    document.getElementById('cl-contact-popup').classList.remove('open');
-    _unlock();
-  }};
-
-  window.clBack = function() {{
-    document.getElementById('cl-contact-popup').classList.remove('open');
-    document.getElementById('cl-city-popup').classList.add('open');
-  }};
-
-  window.clOpenMain = function() {{
-    if (_hasCities) {{
-      _showCities();
-    }} else {{
-      _showContacts(_contacts, null);
-    }}
-  }};
-
-  function _showCities() {{
-    var list = document.getElementById('cl-city-list');
-    list.innerHTML = '';
-    _cities.forEach(function(city) {{
-      var btn = document.createElement('button');
-      btn.className = 'cl-city-btn';
-      btn.innerHTML = '📍 ' + city;
-      btn.onclick = function() {{
-        document.getElementById('cl-city-popup').classList.remove('open');
-        var filtered = _contacts.filter(function(c) {{ return !c.city || c.city === city; }});
-        _showContacts(filtered, city);
-      }};
-      list.appendChild(btn);
-    }});
-
-    document.getElementById('cl-city-popup').classList.add('open');
-    _lock();
-  }}
-
-  function _showContacts(list, cityLabel) {{
-    var el = document.getElementById('cl-contact-list');
-    var title = document.getElementById('cl-contact-title');
-    var backBtn = document.getElementById('cl-back-btn');
-    el.innerHTML = '';
-    if (cityLabel) {{
-      title.textContent = '📍 ' + cityLabel;
-      backBtn.style.display = 'flex';
-    }} else {{
-      title.textContent = 'Contact';
-      backBtn.style.display = 'none';
-    }}
-    if (!list.length) {{
-      el.innerHTML = '<p style="color:rgba(255,255,255,.4);text-align:center;padding:16px;font-size:.85rem">Нет контактов для этого города</p>';
-    }} else {{
-      // Берём общие данные из первого контакта (address, tg_label, phone_label, phone)
-      var phone = '', address = '', tgLabel = '', phoneLabel = '';
-      for (var i = 0; i < list.length; i++) {{
-        if (!phone && list[i].phone)       phone = list[i].phone;
-        if (!address && list[i].address)   address = list[i].address;
-        if (!tgLabel && list[i].tg_label)  tgLabel = list[i].tg_label;
-        if (!phoneLabel && list[i].phone_label) phoneLabel = list[i].phone_label;
-      }}
-      // Адреса над кнопками (каждая строка — отдельный адрес)
-      if (address) {{
-        var lines = address.split('\n').map(function(s){{return s.trim();}}).filter(Boolean);
-        lines.forEach(function(line) {{
-          var addrEl = document.createElement('div');
-          addrEl.style.cssText = 'display:flex;align-items:flex-start;gap:8px;padding:9px 14px;'
-            + 'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);'
-            + 'border-radius:10px;margin-bottom:8px;font-size:.83rem;color:rgba(255,255,255,.65);line-height:1.5';
-          addrEl.innerHTML = '<span style="flex-shrink:0;font-size:.95rem">📍</span><span>' + line + '</span>';
-          el.appendChild(addrEl);
-        }});
-      }}
-      // Заголовок перед TG кнопками
-      if (tgLabel) {{
-        var tgH = document.createElement('div');
-        tgH.style.cssText = 'font-size:.76rem;font-weight:600;color:rgba(255,255,255,.45);'
-          + 'text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;margin-top:4px';
-        tgH.textContent = tgLabel;
-        el.appendChild(tgH);
-      }}
-      // Кнопки каналов
-      list.forEach(function(c) {{
-        var svg = c.type === 'whatsapp' ? WA : TG;
-        var cls = c.type === 'whatsapp' ? 'cl-contact-item wa call-button' : 'cl-contact-item call-button';
-        var a = document.createElement('a');
-        a.className = cls;
-        a.href = c.url;
-        a.target = '_blank';
-        a.rel = 'noopener';
-        a.innerHTML = svg + '<span>' + c.label + '</span>';
-        a.addEventListener('click', function() {{
-          window.clClose();
-          if (typeof fbq !== 'undefined') fbq('track', 'Contact');
-          if (typeof ttq !== 'undefined') ttq.track('Contact');
-        }});
-        el.appendChild(a);
-      }});
-      // Заголовок перед телефоном
-      if (phone) {{
-        if (phoneLabel) {{
-          var phH = document.createElement('div');
-          phH.style.cssText = 'font-size:.76rem;font-weight:600;color:rgba(255,255,255,.45);'
-            + 'text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;margin-top:10px';
-          phH.textContent = phoneLabel;
-          el.appendChild(phH);
-        }}
-        var ph = document.createElement('div');
-        ph.className = 'cl-phone-item';
-        ph.innerHTML = '<span class="cl-phone-city">📞 ' + (cityLabel || 'Phone') + '</span>'
-          + '<a href="tel:' + phone.replace(/ /g,'') + '" class="cl-phone-num">' + phone + '</a>';
-        el.appendChild(ph);
-      }}
-    }}
-    document.getElementById('cl-contact-popup').classList.add('open');
-    _lock();
-  }}
-}})();
-</script>"""
 
 
 def _shared_popup_and_js(accent: str = "#6b21a8") -> str:

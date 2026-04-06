@@ -75,9 +75,12 @@ def _build_tracker_dp() -> Dispatcher:
                 _landing = _db.get_landing(int(campaign["landing_id"]))
                 if _landing and _landing.get("project_id"):
                     _project = _db.get_project(int(_landing["project_id"]))
-            # Приоритет 3: проект по utm_campaign
+            # Приоритет 3: проект по utm_campaign из click_data
             if not _project and click_data and click_data.get("utm_campaign"):
                 _project = _db.get_project_by_utm(click_data["utm_campaign"])
+            # Приоритет 4: проект по имени кампании (когда нет click_data)
+            if not _project:
+                _project = _db.get_project_by_utm(campaign_name)
 
         if _project:
             pixel_id   = _project.get("fb_pixel_id") or ""

@@ -244,14 +244,20 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
         # Inline форма — город + телефон + кнопка деталей
         detail_filled = any([address_val, tg_label_val, phone_label_val])
         detail_badge  = '<span style="color:var(--green);font-size:.65rem;margin-left:2px">●</span>' if detail_filled else ""
+        # Экранируем значения для HTML атрибутов (особенно address с \n)
+        import html as _html
+        _addr_safe  = _html.escape(address_val, quote=True).replace('\n', '&#10;').replace('\r', '')
+        _tgl_safe   = _html.escape(tg_label_val, quote=True)
+        _phl_safe   = _html.escape(phone_label_val, quote=True)
+
         inline_form = (
             f'<form method="post" action="/campaigns/channel/location"'
             f' style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
             f'<input type="hidden" name="cc_id" value="{cc_id}"/>'
             f'<input type="hidden" name="campaign_id" value="{camp_id}"/>'
-            f'<input type="hidden" name="address" value="{address_val}"/>'
-            f'<input type="hidden" name="tg_label" value="{tg_label_val}"/>'
-            f'<input type="hidden" name="phone_label" value="{phone_label_val}"/>'
+            f'<input type="hidden" name="address" value="{_addr_safe}"/>'
+            f'<input type="hidden" name="tg_label" value="{_tgl_safe}"/>'
+            f'<input type="hidden" name="phone_label" value="{_phl_safe}"/>'
             f'<input type="text" name="city" value="{city_val}" placeholder="New York"'
             f' style="width:105px;background:var(--bg);border:1px solid var(--border);'
             f'border-radius:5px;padding:3px 7px;color:var(--text);font-size:.75rem"/>'
@@ -569,7 +575,7 @@ async def campaigns_create(request: Request, name: str = Form(...),
         from urllib.parse import quote_plus as _qp
         return RedirectResponse(f"/campaigns?msg={_qp(f'Кампания {name} создана')}", 303)
     except Exception as e:
-        return RedirectResponse(f"/campaigns?err_msg={str(e)[:60].encode('ascii','replace').decode()}", 303)
+        return RedirectResponse(f"/campaigns?err_msg={_qp(str(e).splitlines()[0][:80])}", 303)
 
 
 @router.post("/campaigns/set_project")
@@ -624,7 +630,7 @@ async def campaigns_channel_add(request: Request, campaign_id: int = Form(...),
         db.add_campaign_channel(campaign_id, channel_id, ch_name, link_obj.invite_link)
         return RedirectResponse("/campaigns?msg=%D0%9A%D0%B0%D0%BD%D0%B0%D0%BB+%D0%B4%D0%BE%D0%B1%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD+%D0%B2+%D0%BA%D0%B0%D0%BC%D0%BF%D0%B0%D0%BD%D0%B8%D1%8E", 303)
     except Exception as e:
-        return RedirectResponse(f"/campaigns?err_msg={str(e)[:60].encode('ascii','replace').decode()}", 303)
+        return RedirectResponse(f"/campaigns?err_msg={_qp(str(e).splitlines()[0][:80])}", 303)
 
 
 @router.post("/campaigns/channel/refresh_name")
@@ -647,7 +653,7 @@ async def campaigns_channel_refresh_name(request: Request, cc_id: int = Form(...
         from urllib.parse import quote_plus as _qp
         return RedirectResponse(f"/campaigns?msg={_qp(f'Название обновлено: {ch_name}')}", 303)
     except Exception as e:
-        return RedirectResponse(f"/campaigns?err_msg={str(e)[:80]}", 303)
+        return RedirectResponse(f"/campaigns?err_msg={_qp(str(e).splitlines()[0][:80])}", 303)
 
 
 @router.post("/campaigns/channel/delete")

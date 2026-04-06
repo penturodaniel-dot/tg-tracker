@@ -33,6 +33,10 @@ def setup(_db, _log, _require_auth, _base, _nav_html, _render_conv_tags_picker_f
 
 @router.get("/channels", response_class=HTMLResponse)
 async def channels_page(request: Request, msg: str = "", err_msg: str = ""):
+    msg     = request.query_params.get("msg", msg) or ""
+    err_msg = request.query_params.get("err_msg", err_msg) or ""
+    err_msg = err_msg.split("\n")[0][:120]
+    msg     = msg.split("\n")[0][:120]
     user, err = require_auth(request)
     if err: return err
     channels = db.get_channels()
@@ -386,6 +390,12 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
 
 @router.get("/campaigns", response_class=HTMLResponse)
 async def campaigns_page(request: Request, msg: str = "", err_msg: str = ""):
+    # Берём напрямую из query_params чтобы избежать Pydantic валидации спецсимволов
+    msg     = request.query_params.get("msg", msg) or ""
+    err_msg = request.query_params.get("err_msg", err_msg) or ""
+    # Обрезаем до первой строки если есть перенос
+    err_msg = err_msg.split("\n")[0].split("%0A")[0][:120]
+    msg     = msg.split("\n")[0][:120]
     user, err = require_auth(request)
     if err: return err
 

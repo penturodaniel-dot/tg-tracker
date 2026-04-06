@@ -49,6 +49,7 @@ async def analytics_clients(request: Request,
     cl_summary  = db.get_clicks_summary(days=days, date_from=df, date_to=dt)
     by_channel  = db.get_joins_by_channel(days=days, date_from=df, date_to=dt)
     by_campaign = db.get_joins_by_campaign(days=days, date_from=df, date_to=dt)
+    funnel      = db.get_campaign_funnel(days=days, date_from=df, date_to=dt)
     utm_src     = db.get_utm_sources(days=days, date_from=df, date_to=dt)
     recent      = db.get_recent_joins_detailed(50, days=days, date_from=df, date_to=dt)
 

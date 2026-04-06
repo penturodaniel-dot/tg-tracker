@@ -5,6 +5,7 @@ routers/channels.py — Каналы и кампании
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from urllib.parse import quote_plus as _qp
+from typing import Optional
 
 router = APIRouter()
 
@@ -658,8 +659,8 @@ async def campaigns_channel_delete(request: Request, cc_id: int = Form(...),
 async def campaigns_channel_location(request: Request, cc_id: int = Form(...),
                                       campaign_id: int = Form(...),
                                       city: str = Form(""), phone: str = Form(""),
-                                      address: str = Form(None), tg_label: str = Form(None),
-                                      phone_label: str = Form(None)):
+                                      address: Optional[str] = Form(None), tg_label: Optional[str] = Form(None),
+                                      phone_label: Optional[str] = Form(None)):
     """Сохранить город и телефон. Адрес/заголовки — только если пришли из попапа."""
     user, err = require_auth(request)
     if err: return err

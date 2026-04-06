@@ -90,7 +90,7 @@ async def channels_add(request: Request, name: str = Form(...), channel_id: str 
     user, err = require_auth(request)
     if err: return err
     db.add_channel(name.strip(), channel_id.strip())
-    return RedirectResponse("/channels?msg=Канал+добавлен", 303)
+    return RedirectResponse("/channels?msg=%D0%9A%D0%B0%D0%BD%D0%B0%D0%BB+%D0%B4%D0%BE%D0%B1%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD", 303)
 
 
 @router.post("/channels/delete")
@@ -98,7 +98,7 @@ async def channels_delete(request: Request, channel_id: str = Form(...)):
     user, err = require_auth(request)
     if err: return err
     db.delete_channel(channel_id)
-    return RedirectResponse("/channels?msg=Удалён", 303)
+    return RedirectResponse("/channels?msg=%D0%A3%D0%B4%D0%B0%D0%BB%D1%91%D0%BD", 303)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -556,9 +556,10 @@ async def campaigns_create(request: Request, name: str = Form(...),
     lid = int(landing_id) if landing_id.strip().isdigit() else None
     try:
         db.create_campaign(name.strip(), slug.strip(), landing_id=lid)
-        return RedirectResponse(f"/campaigns?msg=Кампания+{name}+создана", 303)
+        from urllib.parse import quote_plus as _qp
+        return RedirectResponse(f"/campaigns?msg={_qp(f'Кампания {name} создана')}", 303)
     except Exception as e:
-        return RedirectResponse(f"/campaigns?err_msg={str(e)}", 303)
+        return RedirectResponse(f"/campaigns?err_msg={str(e)[:60].encode('ascii','replace').decode()}", 303)
 
 
 @router.post("/campaigns/set_project")
@@ -570,7 +571,8 @@ async def campaigns_set_project(request: Request, campaign_id: int = Form(...),
     pid = int(project_id) if project_id.strip().isdigit() else None
     db.set_campaign_project(campaign_id, pid)
     msg = "Проект привязан" if pid else "Проект отвязан"
-    return RedirectResponse(f"/campaigns?msg={msg}", 303)
+    from urllib.parse import quote_plus as _qp
+    return RedirectResponse(f"/campaigns?msg={_qp(msg)}", 303)
 
 
 @router.post("/campaigns/set_template")
@@ -580,7 +582,7 @@ async def campaigns_set_template(request: Request, campaign_id: int = Form(...),
     if err: return err
     lid = int(landing_id) if landing_id.strip().isdigit() else None
     db.update_campaign_landing(campaign_id, lid)
-    return RedirectResponse("/campaigns?msg=Шаблон+обновлён", 303)
+    return RedirectResponse("/campaigns?msg=%D0%A8%D0%B0%D0%B1%D0%BB%D0%BE%D0%BD+%D0%BE%D0%B1%D0%BD%D0%BE%D0%B2%D0%BB%D1%91%D0%BD", 303)
 
 
 @router.post("/campaigns/delete")
@@ -601,7 +603,7 @@ async def campaigns_channel_add(request: Request, campaign_id: int = Form(...),
     try:
         b1 = bot_manager.get_tracker_bot()
         if not b1:
-            return RedirectResponse("/campaigns?err_msg=Бот+1+не+запущен", 303)
+            return RedirectResponse("/campaigns?err_msg=%D0%91%D0%BE%D1%82+1+%D0%BD%D0%B5+%D0%B7%D0%B0%D0%BF%D1%83%D1%89%D0%B5%D0%BD", 303)
         link_name = f"{campaign_name[:20]}_{channel_id[-6:]}"
         link_obj  = await b1.create_chat_invite_link(chat_id=int(channel_id), name=link_name[:32])
         try:
@@ -610,9 +612,9 @@ async def campaigns_channel_add(request: Request, campaign_id: int = Form(...),
         except Exception:
             ch_name = channel_id
         db.add_campaign_channel(campaign_id, channel_id, ch_name, link_obj.invite_link)
-        return RedirectResponse("/campaigns?msg=Канал+добавлен+в+кампанию", 303)
+        return RedirectResponse("/campaigns?msg=%D0%9A%D0%B0%D0%BD%D0%B0%D0%BB+%D0%B4%D0%BE%D0%B1%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD+%D0%B2+%D0%BA%D0%B0%D0%BC%D0%BF%D0%B0%D0%BD%D0%B8%D1%8E", 303)
     except Exception as e:
-        return RedirectResponse(f"/campaigns?err_msg={str(e)}", 303)
+        return RedirectResponse(f"/campaigns?err_msg={str(e)[:60].encode('ascii','replace').decode()}", 303)
 
 
 @router.post("/campaigns/channel/refresh_name")
@@ -624,7 +626,7 @@ async def campaigns_channel_refresh_name(request: Request, cc_id: int = Form(...
     try:
         b1 = bot_manager.get_tracker_bot()
         if not b1:
-            return RedirectResponse("/campaigns?err_msg=Бот+не+запущен", 303)
+            return RedirectResponse("/campaigns?err_msg=%D0%91%D0%BE%D1%82+%D0%BD%D0%B5+%D0%B7%D0%B0%D0%BF%D1%83%D1%89%D0%B5%D0%BD", 303)
         chat    = await b1.get_chat(int(channel_id))
         ch_name = chat.title or channel_id
         with db._conn() as conn:
@@ -632,7 +634,8 @@ async def campaigns_channel_refresh_name(request: Request, cc_id: int = Form(...
                 cur.execute("UPDATE campaign_channels SET channel_name=%s WHERE id=%s",
                             (ch_name, cc_id))
             conn.commit()
-        return RedirectResponse(f"/campaigns?msg=Название+обновлено:+{ch_name}", 303)
+        from urllib.parse import quote_plus as _qp
+        return RedirectResponse(f"/campaigns?msg={_qp(f'Название обновлено: {ch_name}')}", 303)
     except Exception as e:
         return RedirectResponse(f"/campaigns?err_msg={str(e)[:80]}", 303)
 
@@ -659,4 +662,4 @@ async def campaigns_channel_location(request: Request, cc_id: int = Form(...),
         cc_id, city.strip(), phone.strip(),
         address.strip(), tg_label.strip(), phone_label.strip()
     )
-    return RedirectResponse("/campaigns?msg=Локация+сохранена", 303)
+    return RedirectResponse("/campaigns?msg=%D0%9B%D0%BE%D0%BA%D0%B0%D1%86%D0%B8%D1%8F+%D1%81%D0%BE%D1%85%D1%80%D0%B0%D0%BD%D0%B5%D0%BD%D0%B0", 303)

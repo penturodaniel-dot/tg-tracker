@@ -316,6 +316,8 @@ class Database:
                     "CREATE INDEX IF NOT EXISTS idx_tga_conv_user ON tg_account_conversations (tg_user_id)",
                     "CREATE INDEX IF NOT EXISTS idx_tga_conv_utm ON tg_account_conversations (utm_campaign)",
                     "CREATE INDEX IF NOT EXISTS idx_tga_msg_conv ON tg_account_messages (conversation_id, created_at ASC)",
+                    "ALTER TABLE tg_account_messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE",
+                    "ALTER TABLE tg_account_messages ADD COLUMN IF NOT EXISTS tg_msg_id BIGINT DEFAULT NULL",
                     "CREATE INDEX IF NOT EXISTS idx_wa_conv_status ON wa_conversations (status, last_message_at DESC NULLS LAST)",
                     "CREATE INDEX IF NOT EXISTS idx_wa_conv_chat ON wa_conversations (wa_chat_id)",
                     "CREATE INDEX IF NOT EXISTS idx_wa_conv_utm ON wa_conversations (utm_campaign)",
@@ -1634,7 +1636,13 @@ class Database:
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(f"""SELECT
-                    COALESCE(ch.name, j.channel_id, 'Неизвестно') as channel_name,
+                    COALESCE(
+                        NULLIF(cc.channel_name, ''),
+                        NULLIF(cc.channel_name, j.channel_id),
+                        ch.name,
+                        j.channel_id,
+                        'Неизвестно'
+                    ) as channel_name,
                     j.channel_id,
                     COUNT(*) as joins,
                     SUM(CASE WHEN j.campaign_name!='organic' THEN 1 ELSE 0 END) as from_ads,
@@ -1642,7 +1650,11 @@ class Database:
                     MAX(j.joined_at) as last_join
                     FROM joins j
                     LEFT JOIN channels ch ON ch.channel_id = j.channel_id
-                    {where} GROUP BY j.channel_id, ch.name ORDER BY joins DESC""", params)
+                    LEFT JOIN campaign_channels cc ON cc.invite_link = j.invite_link
+                        AND cc.channel_name IS NOT NULL
+                        AND cc.channel_name != ''
+                        AND cc.channel_name != j.channel_id
+                    {where} GROUP BY j.channel_id, ch.name, cc.channel_name ORDER BY joins DESC""", params)
                 return [dict(r) for r in cur.fetchall()]
 
     def get_joins_by_campaign(self, date_from=None, date_to=None, days=30):
@@ -1749,12 +1761,21 @@ class Database:
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(f"""SELECT j.*,
-                    COALESCE(ch.name, j.channel_id) as channel_name,
+                    COALESCE(
+                        NULLIF(cc.channel_name, ''),
+                        NULLIF(cc.channel_name, j.channel_id),
+                        ch.name,
+                        j.channel_id
+                    ) as channel_name,
                     ct.utm_source, ct.utm_medium, ct.utm_campaign as utm_campaign_tag,
                     ct.fbclid, ct.fbp
                     FROM joins j
                     LEFT JOIN channels ch ON ch.channel_id = j.channel_id
                     LEFT JOIN click_tracking ct ON ct.click_id = j.click_id
+                    LEFT JOIN campaign_channels cc ON cc.invite_link = j.invite_link
+                        AND cc.channel_name IS NOT NULL
+                        AND cc.channel_name != ''
+                        AND cc.channel_name != j.channel_id
                     {where} ORDER BY j.joined_at DESC LIMIT %s""", params + [limit])
                 return [dict(r) for r in cur.fetchall()]
 
@@ -2016,6 +2037,38 @@ class Database:
                 else:
                     cur.execute("SELECT COUNT(*) as c FROM tg_account_conversations")
                 return cur.fetchone()["c"]
+
+    def get_tg_account_conv_by_user(self, tg_user_id: str):
+        """Найти диалог по tg_user_id."""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM tg_account_conversations WHERE tg_user_id=%s", (tg_user_id,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def mark_tga_messages_read(self, conv_id: int, max_id: int):
+        """Пометить исходящие сообщения как прочитанные до max_id включительно."""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""UPDATE tg_account_messages
+                    SET is_read = TRUE
+                    WHERE conversation_id = %s
+                    AND sender_type = 'manager'
+                    AND is_read = FALSE
+                    AND (tg_msg_id IS NULL OR tg_msg_id <= %s)""",
+                    (conv_id, max_id))
+            conn.commit()
+
+    def get_tga_read_max_id(self, conv_id: int) -> int:
+        """Получить max tg_msg_id прочитанных исходящих сообщений."""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT COALESCE(MAX(tg_msg_id), 0) as max_id
+                    FROM tg_account_messages
+                    WHERE conversation_id=%s AND sender_type='manager' AND is_read=TRUE""",
+                    (conv_id,))
+                r = cur.fetchone()
+                return r["max_id"] if r else 0
 
     def save_tg_account_message(self, conv_id, tg_user_id, sender_type, content,
                                  media_url=None, media_type=None, sender_name=None):

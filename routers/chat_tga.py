@@ -279,9 +279,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                     + '</div>')
             else:
                 _tga_avatar = '<div class="avatar">T</div>'
-                _tga_avatar = '<div class="avatar">T</div>'
-            chat_area = f"""
-            # Вычисляем статус онлайн как строку
+            # Вычисляем статус онлайн как строку — ДО f-string
             _status_map = {"recently": "был недавно", "last_week": "был на неделе", "last_month": "был в этом месяце"}
             if _user_status.get("online"):
                 _online_html = '<span style="color:#34d399;font-weight:600">● онлайн</span>'
@@ -289,6 +287,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 _online_html = '<span style="color:var(--text3)">был ' + (_user_status.get("last_seen") or "")[:16].replace("T"," ") + '</span>'
             else:
                 _online_html = '<span style="color:var(--text3)">' + _status_map.get(_user_status.get("status",""), "не в сети") + '</span>'
+            chat_area = f"""
             <div class="chat-header" data-tg-uid="{active_conv['tg_user_id']}">
               <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
                 {_tga_avatar}

@@ -323,53 +323,96 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
               errDiv.style.display='flex';
               setTimeout(function(){{errDiv.style.display='none';}}, 6000);
             }}
+            // ── Добавить сообщение в UI мгновенно ─────────────────────────
+            function _appendMsgToUI(text, senderType, senderName, tmpId){{
+              var d=document.createElement('div');
+              d.className='msg '+senderType;
+              if(tmpId) d.dataset.tmpId=tmpId;
+              var now=new Date();
+              var t=(now.getHours()<10?'0':'')+now.getHours()+':'+(now.getMinutes()<10?'0':'')+now.getMinutes();
+              var sl=senderName&&senderType==='manager'?'<div style="font-size:.68rem;color:var(--orange);margin-bottom:2px;text-align:right;opacity:.8">'+escTga(senderName)+'</div>':'';
+              var tick=senderType==='manager'?'<span class="msg-read-tick" style="font-size:.65rem;margin-left:3px;opacity:.5">✓</span>':'';
+              d.innerHTML=sl+'<div class="msg-bubble">'+escTga(text)+'</div><div class="msg-time">'+t+tick+'</div>';
+              tgaMsgBox.appendChild(d);
+              tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
+              return d;
+            }}
+
             async function sendTgAccMsg(){{
               var inp=document.getElementById('tga-inp');
-              var text=inp.value.trim();if(!text)return;inp.value='';
+              var text=inp.value.trim();if(!text)return;
+              inp.value='';
+              // Мгновенно показываем сообщение в UI
+              var tmpId='tmp_'+Date.now();
+              var tmpEl=_appendMsgToUI(text,'manager','',tmpId);
               try{{
                 var r=await fetch('/tg_account/send',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body:'conv_id='+TGA_CONV_ID+'&text='+encodeURIComponent(text)}});
-                var d=await r.json();if(!d.ok)showTgaError(d.error||'');else loadNewTgAccMsgs();
-              }}catch(e){{showTgaError(e.message);}}
+                var d=await r.json();
+                if(!d.ok){{
+                  showTgaError(d.error||'');
+                  if(tmpEl)tmpEl.remove(); // убираем если ошибка
+                }} else {{
+                  // Убираем временное сообщение — придёт из polling с реальным id
+                  setTimeout(function(){{if(tmpEl&&tmpEl.parentNode)tmpEl.remove();}},1500);
+                  loadNewTgAccMsgs();
+                }}
+              }}catch(e){{showTgaError(e.message);if(tmpEl)tmpEl.remove();}}
             }}
+
             async function sendTgAccFile(input){{
               if(!input.files[0])return;
               var fd=new FormData();fd.append('conv_id',TGA_CONV_ID);fd.append('file',input.files[0]);
+              var tmpEl=_appendMsgToUI('[файл отправляется...]','manager','','');
               try{{
                 var r=await fetch('/tg_account/send_media',{{method:'POST',body:fd}});
-                var d=await r.json();if(!d.ok)showTgaError(d.error||'');else loadNewTgAccMsgs();
-              }}catch(e){{showTgaError(e.message);}}
+                var d=await r.json();
+                if(!d.ok){{showTgaError(d.error||'');if(tmpEl)tmpEl.remove();}}
+                else{{if(tmpEl)tmpEl.remove();loadNewTgAccMsgs();}}
+              }}catch(e){{showTgaError(e.message);if(tmpEl)tmpEl.remove();}}
               input.value='';
             }}
+
             var _tgaLoadingMsgs=false;
+            var _tgaConsecErrors=0;
             async function loadNewTgAccMsgs(){{
               if(_tgaLoadingMsgs)return;
               _tgaLoadingMsgs=true;
               try{{
                 var res=await fetch('/api/tg_account_messages/'+TGA_CONV_ID+'?after='+lastTgAId);
-                if(!res.ok){{_tgaLoadingMsgs=false;return;}}var data=await res.json();
-                if(!data.messages||!data.messages.length){{_tgaLoadingMsgs=false;return;}}
-                // Обновляем галочки у существующих сообщений если пришёл read статус
+                if(!res.ok){{_tgaConsecErrors++;_tgaLoadingMsgs=false;return;}}
+                var data=await res.json();
+                _tgaConsecErrors=0;
+                // Обновляем галочки прочтения
                 if(data.read_max_id){{
                   document.querySelectorAll('.msg.manager[data-id]').forEach(function(el){{
-                    if(parseInt(el.dataset.id) <= data.read_max_id && el.dataset.read === '0'){{
-                      var tick = el.querySelector('.msg-read-tick');
-                      if(tick){{ tick.textContent = '✓✓'; tick.style.color = '#60a5fa'; }}
-                      el.dataset.read = '1';
+                    if(parseInt(el.dataset.id)<=data.read_max_id&&el.dataset.read==='0'){{
+                      var tick=el.querySelector('.msg-read-tick');
+                      if(tick){{tick.textContent='✓✓';tick.style.color='#60a5fa';tick.style.opacity='1';}}
+                      el.dataset.read='1';
                     }}
                   }});
                 }}
+                if(!data.messages||!data.messages.length){{_tgaLoadingMsgs=false;return;}}
+                var wasAtBottom=tgaMsgBox.scrollHeight-tgaMsgBox.scrollTop-tgaMsgBox.clientHeight<60;
                 data.messages.forEach(function(m){{
                   if(tgaMsgBox.querySelector('[data-id="'+m.id+'"]'))return;
-                  var d=document.createElement('div');d.className='msg '+m.sender_type;d.dataset.id=m.id;
+                  var el=document.createElement('div');
+                  el.className='msg '+m.sender_type;
+                  el.dataset.id=m.id;
+                  el.dataset.read=m.is_read?'1':'0';
                   var inner=m.media_url&&m.media_type&&m.media_type.startsWith('image/')
                     ?'<img src="'+m.media_url+'" style="max-width:220px;border-radius:8px;display:block;cursor:pointer" onclick="window.open(this.src)"/>'
-                    :m.media_url?'<a href="'+m.media_url+'" target="_blank" style="color:#60a5fa">Открыть файл</a>':escTga(m.content||'');
+                    :m.media_url?'<a href="'+m.media_url+'" target="_blank" style="color:#60a5fa">📎 Открыть файл</a>'
+                    :escTga(m.content||'');
                   var sl=m.sender_name&&m.sender_type==='manager'?'<div style="font-size:.68rem;color:var(--orange);margin-bottom:2px;text-align:right;opacity:.8">'+escTga(m.sender_name)+'</div>':'';
-                  d.innerHTML=sl+'<div class="msg-bubble">'+inner+'</div><div class="msg-time">'+m.created_at.substring(11,16)+'</div>';
-                  tgaMsgBox.appendChild(d);lastTgAId=m.id;
+                  var tick=m.sender_type==='manager'?'<span class="msg-read-tick" style="font-size:.65rem;margin-left:3px;opacity:.7">'+(m.is_read?'✓✓':'✓')+'</span>':'';
+                  var t=m.created_at?m.created_at.substring(11,16):'';
+                  el.innerHTML=sl+'<div class="msg-bubble">'+inner+'</div><div class="msg-time">'+t+tick+'</div>';
+                  tgaMsgBox.appendChild(el);
+                  lastTgAId=m.id;
                 }});
-                tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
-              }}catch(e){{}}finally{{_tgaLoadingMsgs=false;}}
+                if(wasAtBottom) tgaMsgBox.scrollTop=tgaMsgBox.scrollHeight;
+              }}catch(e){{_tgaConsecErrors++;}}finally{{_tgaLoadingMsgs=false;}}
             }}
             async function deleteTgAccConv(id){{
               var btn=document.querySelector('[onclick*="deleteTgAccConv"]');
@@ -381,7 +424,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 else{{alert('Ошибка: '+(d.error||r.status));if(btn){{btn.textContent='Удалить';btn.disabled=false;}}}}
               }}catch(e){{showTgaError(e.message);if(btn){{btn.textContent='Удалить';btn.disabled=false;}}}}
             }}
-            setInterval(loadNewTgAccMsgs,3000);
+            setInterval(loadNewTgAccMsgs,1500);
             // При возврате на вкладку — сразу опрашиваем, не ждём следующего интервала
             document.addEventListener('visibilitychange', function(){{
               if(document.visibilityState === 'visible') loadNewTgAccMsgs();
@@ -1324,7 +1367,7 @@ async def api_tga_chat_panel(request: Request, conv_id: int = 0, status_filter: 
     if(window._tgaMsgsInterval) clearInterval(window._tgaMsgsInterval);
     window._tgaMsgsInterval = setInterval(function(){{
       if(typeof loadNewTgAccMsgs === 'function') loadNewTgAccMsgs();
-    }}, 3000);
+    }}, 1500);
     </script>""")
 
 

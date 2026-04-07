@@ -619,28 +619,30 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 var _searchInput=document.querySelector('#tg-conv-items')?.closest('.conv-list-wrap')?.querySelector('input[oninput]');
                 var _isSearching=_searchInput&&_searchInput.value.trim()!=='';
                 if(hasNew && !_isSearching){{
+                  // Только добавляем новые диалоги сверху — не перерисовываем весь список
                   _knownTgIds=newIds;
-                  list.innerHTML=data.convs.map(function(c){{
-                    var active=c.id===ACTIVE_TGA_CONV_ID?' active':'';
-                    var dot=c.status==='open'?'🟢':'⚫';
+                  data.convs.forEach(function(c){{
+                    if(list.querySelector('[data-conv-id="'+c.id+'"]')) return; // уже есть
+                    var isFb=!!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));
+                    var isTt=!!(c.utm_source&&(c.utm_source==='tiktok'||c.utm_source==='tt'));
+                    var src=isFb?'<span class="source-badge source-fb">🔵 FB</span>':isTt?'<span class="source-badge" style="background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a">🎵 TT</span>':'<span class="source-badge source-organic">organic</span>';
+                    var uname=c.username?'@'+escTga(c.username):'';
                     var bdg=c.unread_count>0?'<span class="unread-num unread-badge">'+c.unread_count+'</span>':'';
                     var inBase=c.in_staff?'<span style="background:#052e16;color:#86efac;border:1px solid #166534;border-radius:5px;font-size:.65rem;padding:1px 6px;margin-left:4px;white-space:nowrap">✅ в базе</span>':'';
-                    var isFb=!!(c.fbclid||(c.utm_source&&(c.utm_source==='facebook'||c.utm_source==='fb')));
-                    var isTt=!!(c.utm_source&&(c.utm_source==='tiktok'||c.utm_source==='tt'));var src=isFb?'<span class="source-badge source-fb">🔵 FB</span>':isTt?'<span class="source-badge" style="background:#1a1a2a;color:#69c9d0;border:1px solid #2a2a4a">🎵 TT</span>':'<span class="source-badge source-organic">organic</span>';
-                    var uname=c.username?'@'+escTga(c.username):'';
                     var utm='';
-                    if(isFb){{
-                      if(c.utm_campaign)utm+='<span class="utm-tag" title="Кампания">🎯 '+escTga(c.utm_campaign.substring(0,25))+'</span>';
-                      if(c.utm_content)utm+='<span class="utm-tag" style="color:#86efac;border-color:#166534" title="Объявление">📌 '+escTga(c.utm_content.substring(0,20))+'</span>';
-                      if(c.utm_term)utm+='<span class="utm-tag" style="color:#a5b4fc;border-color:#3730a3" title="Адсет">📂 '+escTga(c.utm_term.substring(0,20))+'</span>';
+                    if(isFb||isTt){{
+                      if(c.utm_campaign)utm+='<span class="utm-tag">🎯 '+escTga(c.utm_campaign.substring(0,25))+'</span>';
                     }}
                     var utmLine=utm?'<div class="conv-meta" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">'+utm+'</div>':'';
-                    return '<a href="/tg_account/chat?conv_id='+c.id+'"><div class="conv-item'+active+'" data-conv-id="'+c.id+'">'
-                      +'<div class="conv-name"><span>'+dot+' '+escTga(c.visitor_name)+'</span>'+bdg+inBase+'</div>'
+                    var newItem=document.createElement('div');
+                    newItem.style.cssText='animation:fadeIn .3s ease';
+                    newItem.innerHTML='<a href="/tg_account/chat?conv_id='+c.id+'"><div class="conv-item" data-conv-id="'+c.id+'">'
+                      +'<div class="conv-name"><span>🟢 '+escTga(c.visitor_name)+'</span>'+bdg+inBase+'</div>'
                       +'<div class="conv-preview">'+escTga((c.last_message||'Нет сообщений').substring(0,50))+'</div>'
-                      +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 '+uname+' · '+(c.last_message_at?c.last_message_at.substring(5,10).replace(/-/g,'.')+' ':'')+c.last_message_at.substring(11,16)+' '+src+'</div>'
-                      +'</div></a>';
-                  }}).join('')||'<div style="padding:20px;text-align:center;color:var(--text3)">Нет диалогов</div>';
+                      +'<div class="conv-time" style="display:flex;align-items:center;justify-content:space-between">📱 '+uname+' · '+src+'</div>'
+                      +utmLine+'</div></a>';
+                    list.insertBefore(newItem, list.firstChild);
+                  }});
                   if(ACTIVE_TGA_CONV_ID===0&&data.convs.length>0){{
                     window.location.href='/tg_account/chat?conv_id='+data.convs[0].id;
                   }}

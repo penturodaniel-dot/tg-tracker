@@ -281,12 +281,12 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 _tga_avatar = '<div class="avatar">T</div>'
                 _tga_avatar = '<div class="avatar">T</div>'
             chat_area = f"""
-            <div class="chat-header">
+            <div class="chat-header" data-tg-uid="{active_conv['tg_user_id']}">
               <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
                 {_tga_avatar}
                 <div style="flex:1">
                   <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.72rem">●</span></div>
-                  <div style="font-size:.78rem;color:var(--text3)">{uname} · {tga_card_link} · {'<span style="color:#34d399;font-weight:600">● онлайн</span>' if _user_status.get("online") else ('<span style="color:var(--text3)">был ' + (_user_status.get("last_seen") or "")[:16].replace("T"," ") + '</span>' if _user_status.get("last_seen") else '<span style="color:var(--text3)">'+{"recently":"был недавно","last_week":"был на неделе","last_month":"был в этом месяце"}.get(_user_status.get("status",""),"не в сети")+'</span>')}</div>
+                  <div style="font-size:.78rem;color:var(--text3)">{uname} · {tga_card_link} · <span class="tga-online-status">{{<span style='color:#34d399;font-weight:600'>● онлайн</span> if _user_status.get('online') else ('<span style="color:var(--text3)">был ' + (_user_status.get('last_seen') or '')[:16].replace('T',' ') + '</span>' if _user_status.get('last_seen') else '<span style="color:var(--text3)">' + {"recently":"был недавно","last_week":"был на неделе","last_month":"был в этом месяце"}.get(_user_status.get('status',''),'не в сети') + '</span>')}}</span></div>
                   <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">
                     {lead_btn}
                     <a href="{call_url}" target="_blank" class="btn-gray btn-sm" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;font-size:.74rem;border:1px solid var(--border);text-decoration:none">📞 Открыть в TG</a>
@@ -497,6 +497,27 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 ACTIVE_TGA_CONV_ID = convId;
                 // Перезагружаем скрипты в панели для нового чата
                 if(typeof loadTgaScripts === 'function') loadTgaScripts(_tgaScriptsProjectId);
+                // Загружаем статус онлайн для нового чата
+                try {{
+                  var tgUid = chatWin ? chatWin.querySelector('[data-tg-uid]') : null;
+                  if(tgUid) {{
+                    var stRes = await fetch('/api/tg_user_status/' + tgUid.dataset.tgUid);
+                    if(stRes.ok) {{
+                      var stData = await stRes.json();
+                      var statusEl = chatWin.querySelector('.tga-online-status');
+                      if(statusEl) {{
+                        if(stData.online) {{
+                          statusEl.innerHTML = '<span style="color:#34d399;font-weight:600">● онлайн</span>';
+                        }} else if(stData.last_seen) {{
+                          statusEl.innerHTML = '<span style="color:var(--text3)">был ' + stData.last_seen.substring(0,16).replace("T"," ") + '</span>';
+                        }} else {{
+                          var statusText = {{"recently":"был недавно","last_week":"был на неделе","last_month":"был в этом месяце"}}[stData.status] || "не в сети";
+                          statusEl.innerHTML = '<span style="color:var(--text3)">' + statusText + '</span>';
+                        }}
+                      }}
+                    }}
+                  }}
+                }} catch(e) {{}}
               }} catch(e) {{ if(chatWin) chatWin.style.opacity = '1'; }}
               _tgaChatLoading = false;
             }}
@@ -1390,6 +1411,18 @@ async def api_tga_chat_panel(request: Request, conv_id: int = 0, status_filter: 
       if(typeof loadNewTgAccMsgs === 'function') loadNewTgAccMsgs();
     }}, 1500);
     </script>""")
+
+
+@router.get("/api/tg_user_status/{user_id}")
+async def api_tg_user_status(request: Request, user_id: str):
+    """Получить статус онлайн пользователя через TG Sender."""
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    try:
+        result = await tg_api("get", f"/user_status/{user_id}")
+        return JSONResponse(result if result else {"ok": False, "status": "unknown"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
 
 
 @router.get("/api/tg_account_convs")

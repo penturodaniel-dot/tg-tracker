@@ -281,12 +281,20 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 _tga_avatar = '<div class="avatar">T</div>'
                 _tga_avatar = '<div class="avatar">T</div>'
             chat_area = f"""
+            # Вычисляем статус онлайн как строку
+            _status_map = {"recently": "был недавно", "last_week": "был на неделе", "last_month": "был в этом месяце"}
+            if _user_status.get("online"):
+                _online_html = '<span style="color:#34d399;font-weight:600">● онлайн</span>'
+            elif _user_status.get("last_seen"):
+                _online_html = '<span style="color:var(--text3)">был ' + (_user_status.get("last_seen") or "")[:16].replace("T"," ") + '</span>'
+            else:
+                _online_html = '<span style="color:var(--text3)">' + _status_map.get(_user_status.get("status",""), "не в сети") + '</span>'
             <div class="chat-header" data-tg-uid="{active_conv['tg_user_id']}">
               <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
                 {_tga_avatar}
                 <div style="flex:1">
                   <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.72rem">●</span></div>
-                  <div style="font-size:.78rem;color:var(--text3)">{uname} · {tga_card_link} · <span class="tga-online-status">{{<span style='color:#34d399;font-weight:600'>● онлайн</span> if _user_status.get('online') else ('<span style="color:var(--text3)">был ' + (_user_status.get('last_seen') or '')[:16].replace('T',' ') + '</span>' if _user_status.get('last_seen') else '<span style="color:var(--text3)">' + {"recently":"был недавно","last_week":"был на неделе","last_month":"был в этом месяце"}.get(_user_status.get('status',''),'не в сети') + '</span>')}}</span></div>
+                  <div style="font-size:.78rem;color:var(--text3)">{uname} · {tga_card_link} · <span class="tga-online-status">{_online_html}</span></div>
                   <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">
                     {lead_btn}
                     <a href="{call_url}" target="_blank" class="btn-gray btn-sm" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;font-size:.74rem;border:1px solid var(--border);text-decoration:none">📞 Открыть в TG</a>

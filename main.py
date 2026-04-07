@@ -2237,7 +2237,7 @@ async def public_landing(request: Request, slug: str,
         # Строим /go ссылки для каждого канала
         btns = []
         for cc in channels:
-            go_url = f"{app_url}/go?to={cc['invite_link']}&utm_campaign={_utm_campaign_val}&utm_source={_utm_source_val}&utm_medium={utm_medium or 'paid'}"
+            go_url = f"{app_url}/go?to={cc['invite_link'].strip()}&utm_campaign={_utm_campaign_val}&utm_source={_utm_source_val}&utm_medium={utm_medium or 'paid'}"
             if fbclid:      go_url += f"&fbclid={fbclid}"
             if utm_content: go_url += f"&utm_content={utm_content}"
             btns.append({

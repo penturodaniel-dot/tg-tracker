@@ -195,6 +195,25 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
         active_conv = db.get_tg_account_conversation(conv_id)
         if active_conv:
             db.mark_tg_account_conv_read(conv_id)
+            # Отмечаем прочитанным в реальном TG аккаунте
+            _tg_uid_open = active_conv.get("tg_user_id")
+            if _tg_uid_open:
+                import asyncio as _aio
+                async def _do_mark_read():
+                    try:
+                        await tg_api("post", "/mark_read", json={"user_id": _tg_uid_open})
+                    except Exception:
+                        pass
+                _aio.create_task(_do_mark_read())
+            # Статус онлайн
+            _user_status = {"online": False, "status": "unknown", "last_seen": None}
+            if _tg_uid_open:
+                try:
+                    _st = await tg_api("get", f"/user_status/{_tg_uid_open}")
+                    if _st and _st.get("ok"):
+                        _user_status = _st
+                except Exception:
+                    pass
             msgs = db.get_tg_account_messages(conv_id)
             messages_html = ""
             for m in msgs:
@@ -267,7 +286,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
                 {_tga_avatar}
                 <div style="flex:1">
                   <div style="font-weight:700;color:var(--text)">{active_conv['visitor_name']} <span style="color:{status_color};font-size:.72rem">●</span></div>
-                  <div style="font-size:.78rem;color:var(--text3)">{uname} · {tga_card_link}</div>
+                  <div style="font-size:.78rem;color:var(--text3)">{uname} · {tga_card_link} · {'<span style="color:#34d399;font-weight:600">● онлайн</span>' if _user_status.get("online") else ('<span style="color:var(--text3)">был ' + (_user_status.get("last_seen") or "")[:16].replace("T"," ") + '</span>' if _user_status.get("last_seen") else '<span style="color:var(--text3)">'+{"recently":"был недавно","last_week":"был на неделе","last_month":"был в этом месяце"}.get(_user_status.get("status",""),"не в сети")+'</span>')}</div>
                   <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">
                     {lead_btn}
                     <a href="{call_url}" target="_blank" class="btn-gray btn-sm" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;font-size:.74rem;border:1px solid var(--border);text-decoration:none">📞 Открыть в TG</a>

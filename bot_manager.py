@@ -126,6 +126,8 @@ def _build_tracker_dp() -> Dispatcher:
         if not test_event_code:
             test_event_code = _db.get_setting("test_event_code") or None
 
+        log.info(f"[BOT1] test_event_code={test_event_code or '—'} project={_project.get('name') if _project else '—'}")
+
         # ── Лог с качеством matching ──────────────────────────────────────────
         _score = sum([bool(_fbclid), bool(_fbp), bool(_fbc)])
         _matching = ["❌ нет данных", "⚠️ слабый", "✅ хороший", "✅✅ отличный"][_score]

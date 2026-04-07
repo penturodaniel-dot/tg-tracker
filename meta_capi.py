@@ -65,14 +65,21 @@ async def send_event(
     if utm_campaign: custom_data["utm_campaign"] = utm_campaign
     if campaign:     custom_data["campaign"]     = campaign
 
-    # Lead: если есть test_event_code — используем "website" чтобы событие
-    # было видно в Test Events. В продакшне без test_event_code — "system_generated".
+    # action_source зависит от типа события:
+    # - website: события инициированные на сайте (Lead, Contact, PageView)
+    # - system_generated: события из бота/сервера (Subscribe из Telegram)
+    _website_events = {"Lead", "Contact", "PageView", "ViewContent", "Search",
+                       "CompleteRegistration", "Purchase"}
     if event_name == "Lead":
         _action_source = "website" if test_event_code else "system_generated"
         _source_url = {"event_source_url": event_source_url or "https://t.me/"} if test_event_code else {}
-    else:
+    elif event_name in _website_events:
         _action_source = "website"
         _source_url = {"event_source_url": event_source_url or "https://t.me/"}
+    else:
+        # Subscribe и другие события из бота — system_generated
+        _action_source = "system_generated"
+        _source_url = {"event_source_url": event_source_url} if event_source_url else {}
 
     payload = {
         "data": [{

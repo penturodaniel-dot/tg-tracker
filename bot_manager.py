@@ -48,13 +48,24 @@ def _build_tracker_dp() -> Dispatcher:
         campaign_name = campaign["name"] if campaign else "organic"
 
         # ── click_data (fbclid, fbp, utm...) ─────────────────────────────────
-        # click_id в кампании не хранится — ищем последний клик по utm_campaign
         click_id   = None
         click_data = {}
         if campaign:
-            _utm = campaign.get("name") or campaign_name
-            click_data = _db.get_latest_click_by_utm(_utm, minutes=120) or {}
+            # Ищем по utm_campaign из проекта кампании, потом по имени кампании
+            _utm_vals = []
+            if campaign.get("project_id"):
+                _proj = _db.get_project(int(campaign["project_id"]))
+                if _proj and _proj.get("utm_campaigns"):
+                    _utm_vals = [u.strip() for u in _proj["utm_campaigns"].split(",") if u.strip()]
+            if not _utm_vals:
+                _utm_vals = [campaign.get("name") or campaign_name]
+
+            for _utm in _utm_vals:
+                click_data = _db.get_latest_click_by_utm(_utm, minutes=120) or {}
+                if click_data:
+                    break
             click_id = click_data.get("click_id") if click_data else None
+            log.info(f"[BOT1] click lookup utm_vals={_utm_vals} found={'✓' if click_data else '❌'}")
 
         join_id = _db.log_join(
             user_id=user.id,

@@ -725,14 +725,16 @@ class Database:
     def save_click(self, fbclid=None, fbp=None, utm_source=None, utm_medium=None,
                    utm_campaign=None, utm_content=None, utm_term=None,
                    referrer=None, target_type="channel", target_id=None,
-                   user_agent=None, ip_address=None):
-        click_id = secrets.token_urlsafe(12)
+                   user_agent=None, ip_address=None, click_id=None):
+        if not click_id:
+            click_id = secrets.token_urlsafe(12)
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""INSERT INTO click_tracking
                     (click_id,fbclid,fbp,utm_source,utm_medium,utm_campaign,utm_content,utm_term,
                      referrer,target_type,target_id,user_agent,ip_address,created_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (click_id) DO NOTHING""",
                     (click_id,fbclid,fbp,utm_source,utm_medium,utm_campaign,utm_content,
                      utm_term,referrer,target_type,target_id,user_agent,ip_address,
                      datetime.utcnow().isoformat()))

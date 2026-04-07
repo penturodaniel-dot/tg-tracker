@@ -1051,51 +1051,56 @@ async def go_redirect(
     utm_content: str = None,
     utm_term: str = None,
 ):
-    """
-    Страница редиректа с трекингом.
-    Использование: /go?to=https://t.me/+xxx&utm_source=fb&utm_campaign=march&fbclid=xxx
-    ⚡ fbp берётся из cookie _fbp (устанавливается Meta Pixel на лендинге)
-    ⚡ fbc = fb.1.{timestamp}.{fbclid} — для matching в Ads Manager
-    """
     if not to:
         return HTMLResponse("<h2>Ссылка не указана</h2>", 400)
 
-    # fbp из cookie — именно там он правильный (Meta Pixel ставит его сам)
+    to = to.strip()
     cookie_fbp = request.cookies.get("_fbp") or fbp
 
-    # Сохраняем клик со ВСЕМИ данными для FB CAPI
-    click_id = db.save_click(
-        fbclid    = fbclid,
-        fbp       = cookie_fbp,
-        utm_source   = utm_source,
-        utm_medium   = utm_medium,
-        utm_campaign = utm_campaign,
-        utm_content  = utm_content,
-        utm_term     = utm_term,
-        referrer  = request.headers.get("referer"),
-        target_type  = "channel",
-        target_id    = to,
-        user_agent   = request.headers.get("user-agent", "")[:255],
-        ip_address   = request.client.host if request.client else None,
-    )
-    log.info(f"[/go] click_id={click_id} fbclid={'✓' if fbclid else '—'} fbp={'✓' if cookie_fbp else '—'} utm={utm_campaign} → {to[:60]}")
+    # Генерируем click_id сразу — без ожидания БД
+    import secrets as _sec
+    click_id = _sec.token_urlsafe(12)
 
-    # Добавляем ref_ параметр в Telegram ссылку для связи с ботом
+    # Строим destination мгновенно
     destination = to
     if "t.me" in to:
         sep = "&" if "?" in to else "?"
         destination = f"{to}{sep}start=ref_{click_id}"
 
-    # Промежуточная страница — здесь fbp ТОЧНО уже есть в cookie (с лендинга)
+    # Сохраняем клик в фоне — не блокируем редирект
+    async def _save():
+        try:
+            real_id = db.save_click(
+                fbclid       = fbclid,
+                fbp          = cookie_fbp,
+                utm_source   = utm_source,
+                utm_medium   = utm_medium,
+                utm_campaign = utm_campaign,
+                utm_content  = utm_content,
+                utm_term     = utm_term,
+                referrer     = request.headers.get("referer"),
+                target_type  = "channel",
+                target_id    = to,
+                user_agent   = request.headers.get("user-agent", "")[:255],
+                ip_address   = request.client.host if request.client else None,
+                click_id     = click_id,
+            )
+            log.info(f"[/go] click_id={real_id} fbclid={'✓' if fbclid else '—'} fbp={'✓' if cookie_fbp else '—'} utm={utm_campaign} → {to[:60]}")
+        except Exception as e:
+            log.error(f"[/go] save_click error: {e}")
+
+    import asyncio
+    asyncio.create_task(_save())
+
+    # Мгновенный редирект — не ждём БД
     return HTMLResponse(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
     <meta http-equiv="refresh" content="0;url={destination}">
     <script>
-      // Убеждаемся что fbp есть — нужен для FB CAPI Subscribe
       if (!document.cookie.includes('_fbp')) {{
         var fbp = 'fb.1.' + Date.now() + '.' + Math.random().toString(36).substr(2,9);
         document.cookie = '_fbp=' + fbp + ';max-age=7776000;path=/;SameSite=Lax';
       }}
-      setTimeout(function(){{ window.location.href = '{destination}'; }}, 80);
+      window.location.href = '{destination}';
     </script>
     </head><body style="background:#060a0f;color:#e8f0f8;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui">
     <div style="text-align:center"><div style="font-size:2rem;margin-bottom:12px">📡</div>

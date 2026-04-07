@@ -77,9 +77,15 @@ async def send_event(
         _action_source = "website"
         _source_url = {"event_source_url": event_source_url or "https://t.me/"}
     else:
-        # Subscribe и другие события из бота — system_generated
-        _action_source = "system_generated"
-        _source_url = {"event_source_url": event_source_url} if event_source_url else {}
+        # Subscribe и др. из бота:
+        # - в тестовом режиме используем "website" чтобы событие было видно в Test Events
+        # - в продакшне используем "system_generated" (правильный тип для бот-событий)
+        if test_event_code:
+            _action_source = "website"
+            _source_url = {"event_source_url": event_source_url or "https://t.me/"}
+        else:
+            _action_source = "system_generated"
+            _source_url = {"event_source_url": event_source_url} if event_source_url else {}
 
     payload = {
         "data": [{

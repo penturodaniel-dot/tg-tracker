@@ -129,7 +129,7 @@ def _build_utm_block(slug_url: str, camp_name: str, app_url: str, db_ref,
              "&utm_content=__CID__&utm_term=__AID__&ttclid=__CLICKID__")
     _fb_u = (slug_url + "?utm_source=facebook&utm_medium=paid"
              "&utm_campaign=" + _utm_val +
-             "&utm_content={ad.name}&utm_term={adset.name}&fbclid={fbclid}")
+             "&utm_content={{ad.name}}&utm_term={{adset.name}}&fbclid={{fbclid}}")
 
     def _row(icon_color, icon, url, btn_color, btn_border):
         uid = "utm_" + str(abs(hash(url)) % 99999)

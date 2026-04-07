@@ -48,8 +48,13 @@ def _build_tracker_dp() -> Dispatcher:
         campaign_name = campaign["name"] if campaign else "organic"
 
         # ── click_data (fbclid, fbp, utm...) ─────────────────────────────────
-        click_id   = campaign.get("click_id") if campaign else None
-        click_data = _db.get_click(click_id) if click_id else {}
+        # click_id в кампании не хранится — ищем последний клик по utm_campaign
+        click_id   = None
+        click_data = {}
+        if campaign:
+            _utm = campaign.get("name") or campaign_name
+            click_data = _db.get_latest_click_by_utm(_utm, minutes=120) or {}
+            click_id = click_data.get("click_id") if click_data else None
 
         join_id = _db.log_join(
             user_id=user.id,

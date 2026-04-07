@@ -738,6 +738,19 @@ class Database:
                 cur.execute("SELECT * FROM click_tracking WHERE click_id=%s", (click_id,))
                 r = cur.fetchone(); return dict(r) if r else None
 
+    def get_latest_click_by_utm(self, utm_campaign: str, minutes: int = 60):
+        """Найти последний клик по utm_campaign за последние N минут."""
+        from datetime import timedelta
+        cutoff = (datetime.utcnow() - timedelta(minutes=minutes)).isoformat()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT * FROM click_tracking
+                    WHERE utm_campaign=%s AND created_at > %s
+                    ORDER BY created_at DESC LIMIT 1""",
+                    (utm_campaign, cutoff))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
     # ── Staff Clicks (HR landing UTM tracking) ────────────────────────────────
     def save_staff_click(self, ref_id, target_url, target_type="wa", landing_slug="",
                          fbclid=None, fbp=None, fbc=None, utm_source=None, utm_medium=None,

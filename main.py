@@ -2195,24 +2195,29 @@ async def public_landing(request: Request, slug: str,
                           utm_medium: str = None, utm_campaign: str = None,
                           utm_content: str = None, utm_term: str = None,
                           ttclid: str = None, tt_test_id: str = None):
-    # Глобальные пиксели (fallback)
-    pixel_clients = db.get_setting("pixel_id_clients") or db.get_setting("pixel_id", "")
-    pixel_staff   = db.get_setting("pixel_id_staff", "")
-    app_url       = db.get_setting("app_url", "").rstrip("/")
+    # Все настройки одним запросом
+    settings = db.get_settings_bulk([
+        "pixel_id_clients", "pixel_id", "pixel_id_staff",
+        "app_url", "tiktok_pixel_id"
+    ])
+    pixel_clients = settings.get("pixel_id_clients") or settings.get("pixel_id", "")
+    tt_pixel_global = settings.get("tiktok_pixel_id", "") or ""
+    app_url = settings.get("app_url", "").rstrip("/")
 
     # fbp из cookie
     cookie_fbp = request.cookies.get("_fbp", "")
 
-    def _get_landing_pixels(landing: dict) -> tuple:
-        """Возвращает (fb_pixel, tt_pixel) для лендинга — из проекта или глобальные."""
+    def _get_landing_pixels(landing: dict, camp_proj=None) -> tuple:
+        if camp_proj:
+            return (camp_proj.get("fb_pixel_id") or pixel_clients,
+                    camp_proj.get("tt_pixel_id") or tt_pixel_global)
         pid = landing.get("project_id")
         if pid:
             project = db.get_project(int(pid))
             if project:
-                fb = project.get("fb_pixel_id") or pixel_clients
-                tt = project.get("tt_pixel_id") or db.get_setting("tiktok_pixel_id", "") or ""
-                return fb, tt
-        return pixel_clients, db.get_setting("tiktok_pixel_id", "") or ""
+                return (project.get("fb_pixel_id") or pixel_clients,
+                        project.get("tt_pixel_id") or tt_pixel_global)
+        return pixel_clients, tt_pixel_global
 
     # Ищем как Campaign slug
     campaign = db.get_campaign_by_slug(slug)
@@ -2220,9 +2225,7 @@ async def public_landing(request: Request, slug: str,
         channels = db.get_campaign_channels(campaign["id"])
 
         # UTM campaign: приоритет — первый utm из проекта кампании, fallback — имя кампании
-        _camp_proj_for_utm = None
-        if campaign.get("project_id"):
-            _camp_proj_for_utm = db.get_project(int(campaign["project_id"]))
+        _camp_proj_for_utm = db.get_project(int(campaign["project_id"])) if campaign.get("project_id") else None
         if _camp_proj_for_utm:
             _utms_list = [u.strip() for u in (_camp_proj_for_utm.get("utm_campaigns") or "").split(",") if u.strip()]
             _utm_campaign_val = _utms_list[0] if _utms_list else campaign["name"]
@@ -2261,15 +2264,8 @@ async def public_landing(request: Request, slug: str,
                 ]
                 # Пиксель: приоритет — проект кампании → проект шаблона → глобальный
                 _camp_proj_id = campaign.get("project_id")
-                if _camp_proj_id:
-                    _camp_proj = db.get_project(int(_camp_proj_id))
-                    if _camp_proj:
-                        fb_pixel = _camp_proj.get("fb_pixel_id") or pixel_clients
-                        tt_pixel = _camp_proj.get("tt_pixel_id") or db.get_setting("tiktok_pixel_id", "") or ""
-                    else:
-                        fb_pixel, tt_pixel = _get_landing_pixels(landing)
-                else:
-                    fb_pixel, tt_pixel = _get_landing_pixels(landing)
+                _camp_proj = db.get_project(int(_camp_proj_id)) if _camp_proj_id else None
+                fb_pixel, tt_pixel = _get_landing_pixels(landing, _camp_proj)
                 return HTMLResponse(_render_client_landing(
                     landing, chan_contacts,
                     pixel_id=fb_pixel, tt_pixel=tt_pixel, db=db,

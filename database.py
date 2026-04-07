@@ -432,6 +432,14 @@ class Database:
             log.error(f"Admin init error: {e}")
 
     # ── Settings ──────────────────────────────────────────────────────────────
+    def get_settings_bulk(self, keys: list) -> dict:
+        """Получить несколько настроек одним запросом."""
+        if not keys: return {}
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT key, value FROM settings WHERE key = ANY(%s)", (keys,))
+                return {r["key"]: r["value"] for r in cur.fetchall()}
+
     def get_setting(self, key, default=""):
         with self._conn() as conn:
             with conn.cursor() as cur:

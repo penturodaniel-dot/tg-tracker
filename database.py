@@ -433,14 +433,28 @@ class Database:
 
     # ── Settings ──────────────────────────────────────────────────────────────
     def get_settings_bulk(self, keys: list) -> dict:
-        """Получить несколько настроек одним запросом."""
-        if not keys: return {}
-        with self._conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT key, value FROM settings WHERE key = ANY(%s)", (keys,))
-                return {r["key"]: r["value"] for r in cur.fetchall()}
+        """Получить несколько настроек одним запросом с кэшированием 60 сек."""
+        import time as _time
+        now = _time.time()
+        # Инициализируем кэш если нет
+        if not hasattr(self, '_settings_cache'):
+            self._settings_cache = {}
+            self._settings_cache_ts = 0
+        # Обновляем кэш раз в 60 секунд
+        if now - self._settings_cache_ts > 60:
+            with self._conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT key, value FROM settings")
+                    self._settings_cache = {r["key"]: r["value"] for r in cur.fetchall()}
+                    self._settings_cache_ts = now
+        # Возвращаем нужные ключи из кэша
+        return {k: self._settings_cache.get(k, "") for k in keys}
 
     def get_setting(self, key, default=""):
+        """Получить настройку с кэшированием."""
+        result = self.get_settings_bulk([key])
+        val = result.get(key, "")
+        return val if val != "" else default
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT value FROM settings WHERE key=%s", (key,))
@@ -747,6 +761,19 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM click_tracking WHERE click_id=%s", (click_id,))
                 r = cur.fetchone(); return dict(r) if r else None
+
+    def get_latest_click_by_link(self, invite_link: str, minutes: int = 120):
+        """Найти последний клик по invite_link канала — самый точный matching."""
+        from datetime import timedelta
+        cutoff = (datetime.utcnow() - timedelta(minutes=minutes)).isoformat()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT * FROM click_tracking
+                    WHERE target_id = %s AND created_at > %s
+                    ORDER BY created_at DESC LIMIT 1""",
+                    (invite_link, cutoff))
+                r = cur.fetchone()
+                return dict(r) if r else None
 
     def get_latest_click_by_utm(self, utm_campaign: str, minutes: int = 60):
         """Найти последний клик по utm_campaign за последние N минут."""

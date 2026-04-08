@@ -318,6 +318,8 @@ class Database:
                     "CREATE INDEX IF NOT EXISTS idx_tga_msg_conv ON tg_account_messages (conversation_id, created_at ASC)",
                     "ALTER TABLE tg_account_messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE",
                     "ALTER TABLE click_tracking ADD COLUMN IF NOT EXISTS tg_user_id TEXT DEFAULT NULL",
+                    "UPDATE campaign_channels SET invite_link = TRIM(invite_link) WHERE invite_link != TRIM(invite_link)",
+                    "UPDATE channels SET invite_link = TRIM(invite_link) WHERE invite_link IS NOT NULL AND invite_link != TRIM(invite_link)",
                     "ALTER TABLE tg_account_messages ADD COLUMN IF NOT EXISTS tg_msg_id BIGINT DEFAULT NULL",
                     "CREATE INDEX IF NOT EXISTS idx_wa_conv_status ON wa_conversations (status, last_message_at DESC NULLS LAST)",
                     "CREATE INDEX IF NOT EXISTS idx_wa_conv_chat ON wa_conversations (wa_chat_id)",

@@ -335,8 +335,12 @@ class Database:
                     "CREATE INDEX IF NOT EXISTS idx_campaigns_slug ON campaigns (slug)",
                 ]
                 for _idx in _indexes:
-                    try: cur.execute(_idx)
-                    except Exception: pass
+                    try:
+                        cur.execute(_idx)
+                        conn.commit()
+                    except Exception as e:
+                        conn.rollback()
+                        log.debug(f"Index/migration skipped: {e}")
                 # Таблица галереи фото сотрудников
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS staff_gallery (

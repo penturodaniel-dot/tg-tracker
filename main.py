@@ -2231,6 +2231,7 @@ async def public_landing(request: Request, slug: str,
         "app_url", "tiktok_pixel_id"
     ])
     pixel_clients = settings.get("pixel_id_clients") or settings.get("pixel_id", "")
+    pixel_staff   = settings.get("pixel_id_staff", "") or pixel_clients
     tt_pixel_global = settings.get("tiktok_pixel_id", "") or ""
     app_url = settings.get("app_url", "").rstrip("/")
 

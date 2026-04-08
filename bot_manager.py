@@ -7,6 +7,7 @@ import asyncio
 import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import ChatMemberUpdatedFilter, JOIN_TRANSITION, Command
+from aiogram.filters import CommandStart
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +36,24 @@ def init(db, meta_module):
 def _build_tracker_dp() -> Dispatcher:
     dp = Dispatcher()
 
+    @dp.message(CommandStart())
+    async def on_start(message: types.Message):
+        """Обрабатываем /start ref_{click_id} — привязываем click_id к user_id."""
+        try:
+            args = message.text.split(maxsplit=1)
+            if len(args) < 2:
+                return
+            param = args[1].strip()
+            if not param.startswith("ref_"):
+                return
+            click_id = param[4:]  # убираем "ref_"
+            user_id  = str(message.from_user.id)
+            # Сохраняем связь user_id → click_id
+            _db.bind_click_to_user(click_id, user_id)
+            log.info(f"[BOT1] bound click_id={click_id} to user={user_id}")
+        except Exception as e:
+            log.warning(f"[BOT1] on_start error: {e}")
+
     @dp.chat_member(ChatMemberUpdatedFilter(JOIN_TRANSITION))
     async def on_join(event: types.ChatMemberUpdated):
         channel_ids = _db.get_channel_ids()
@@ -51,8 +70,13 @@ def _build_tracker_dp() -> Dispatcher:
         click_id   = None
         click_data = {}
         if campaign:
-            # Приоритет 1: точный поиск по invite_link канала
-            if raw_link:
+            user_id_str = str(user.id)
+
+            # Приоритет 0: точный поиск по user_id (через /start ref_)
+            click_data = _db.get_click_by_user(user_id_str, minutes=120) or {}
+
+            # Приоритет 1: поиск по invite_link канала
+            if not click_data and raw_link:
                 click_data = _db.get_latest_click_by_link(raw_link, minutes=120) or {}
 
             # Приоритет 2: поиск по utm_campaign из проекта
@@ -70,7 +94,8 @@ def _build_tracker_dp() -> Dispatcher:
                         break
 
             click_id = click_data.get("click_id") if click_data else None
-            log.info(f"[BOT1] click lookup invite_link={'✓' if raw_link and click_data else '—'} utm_vals={_utm_vals if not (raw_link and click_data) else '—'} found={'✓' if click_data else '❌'}")
+            _src = "user_id" if _db.get_click_by_user(user_id_str, minutes=120) else ("invite_link" if raw_link and click_data else "utm")
+            log.info(f"[BOT1] click lookup src={_src} found={'✓' if click_data else '❌'}")
 
         join_id = _db.log_join(
             user_id=user.id,

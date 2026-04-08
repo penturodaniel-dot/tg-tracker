@@ -317,6 +317,7 @@ class Database:
                     "CREATE INDEX IF NOT EXISTS idx_tga_conv_utm ON tg_account_conversations (utm_campaign)",
                     "CREATE INDEX IF NOT EXISTS idx_tga_msg_conv ON tg_account_messages (conversation_id, created_at ASC)",
                     "ALTER TABLE tg_account_messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE",
+                    "ALTER TABLE click_tracking ADD COLUMN IF NOT EXISTS tg_user_id TEXT DEFAULT NULL",
                     "ALTER TABLE tg_account_messages ADD COLUMN IF NOT EXISTS tg_msg_id BIGINT DEFAULT NULL",
                     "CREATE INDEX IF NOT EXISTS idx_wa_conv_status ON wa_conversations (status, last_message_at DESC NULLS LAST)",
                     "CREATE INDEX IF NOT EXISTS idx_wa_conv_chat ON wa_conversations (wa_chat_id)",
@@ -761,6 +762,27 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM click_tracking WHERE click_id=%s", (click_id,))
                 r = cur.fetchone(); return dict(r) if r else None
+
+    def bind_click_to_user(self, click_id: str, user_id: str):
+        """Привязать click_id к user_id когда пользователь нажал /start ref_."""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""UPDATE click_tracking SET tg_user_id=%s
+                    WHERE click_id=%s""", (user_id, click_id))
+            conn.commit()
+
+    def get_click_by_user(self, user_id: str, minutes: int = 120):
+        """Найти клик привязанный к user_id через /start ref_."""
+        from datetime import timedelta
+        cutoff = (datetime.utcnow() - timedelta(minutes=minutes)).isoformat()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT * FROM click_tracking
+                    WHERE tg_user_id=%s AND created_at > %s
+                    ORDER BY created_at DESC LIMIT 1""",
+                    (user_id, cutoff))
+                r = cur.fetchone()
+                return dict(r) if r else None
 
     def get_latest_click_by_link(self, invite_link: str, minutes: int = 120):
         """Найти последний клик по invite_link канала — самый точный matching."""

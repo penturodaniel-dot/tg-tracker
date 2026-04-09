@@ -945,6 +945,12 @@ tga_setup(
 )
 app.include_router(tga_router)
 
+# ── React TG-чат: статические assets ─────────────────────────────────────────
+from fastapi.staticfiles import StaticFiles as _StaticFiles
+_tg_chat_assets = os.path.join(os.path.dirname(__file__), "frontend", "dist", "assets")
+if os.path.exists(_tg_chat_assets):
+    app.mount("/tg-chat-assets/assets", _StaticFiles(directory=_tg_chat_assets), name="tg_chat_assets")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # AUTH PAGES

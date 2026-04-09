@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.venv/
+venv/
+
+# Frontend build artifacts — node_modules не коммитим, dist коммитим для Railway
+frontend/node_modules/
+
+# Не коммитим dist — Railway сам соберёт через nixpacks
+frontend/dist/

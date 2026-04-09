@@ -116,10 +116,17 @@ def _resolve_pixels(conv: dict) -> dict:
 
 
 
-@router.get("/tg_account/chat", response_class=HTMLResponse)
+@router.get("/tg_account/chat")
 async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter: str = "open"):
     user, err = require_auth(request)
     if err: return err
+
+    # Если React-сборка существует — отдаём SPA
+    import os as _os
+    from fastapi.responses import FileResponse as _FR
+    _react = _os.path.join(_os.path.dirname(__file__), '..', 'frontend', 'dist', 'index.html')
+    if _os.path.exists(_react):
+        return _FR(_react, media_type="text/html")
 
     convs = db.get_tg_account_conversations(status=status_filter if status_filter != "all" else None)
 
@@ -1262,23 +1269,23 @@ async def tg_account_send_lead(request: Request, conv_id: int = Form(...)):
             event_source_url="https://t.me/",
             test_event_code=px["tt_test_event_code"],
         )
-    return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
+    return JSONResponse({"ok": True, "sent": bool(sent)})
 
 
 @router.post("/tg_account/close")
 async def tg_account_close(request: Request, conv_id: int = Form(...)):
     user, err = require_auth(request)
-    if err: return err
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
     db.close_tg_account_conv(conv_id)
-    return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
+    return JSONResponse({"ok": True})
 
 
 @router.post("/tg_account/reopen")
 async def tg_account_reopen(request: Request, conv_id: int = Form(...)):
     user, err = require_auth(request)
-    if err: return err
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
     db.reopen_tg_account_conv(conv_id)
-    return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
+    return JSONResponse({"ok": True})
 
 
 @router.post("/tg_account/delete")
@@ -1443,17 +1450,74 @@ async def api_tg_account_convs(request: Request, status: str = "open", offset: i
     return JSONResponse({"convs": [
         {
             "id": c["id"],
-            "visitor_name": c.get("visitor_name") or c.get("username") or str(c.get("tg_user_id", "")),
-            "username": c.get("username") or "",
-            "last_message": c.get("last_message") or "",
+            "tg_user_id":    c.get("tg_user_id") or "",
+            "visitor_name":  c.get("visitor_name") or c.get("username") or str(c.get("tg_user_id", "")),
+            "username":      c.get("username") or "",
+            "photo_url":     c.get("photo_url") or None,
+            "last_message":  c.get("last_message") or "",
             "last_message_at": (c.get("last_message_at") or c["created_at"])[:16].replace("T", " "),
-            "unread_count": c.get("unread_count", 0),
-            "status": c.get("status", "open"),
-            "utm_campaign": c.get("utm_campaign") or "",
-            "utm_content":  c.get("utm_content") or "",
-            "utm_term":     c.get("utm_term") or "",
-            "utm_source":   c.get("utm_source") or "",
-            "fbclid":       bool(c.get("fbclid")),
-            "in_staff":     bool(tga_in_staff.get(c["id"])),
+            "unread_count":  c.get("unread_count", 0),
+            "status":        c.get("status", "open"),
+            "utm_campaign":  c.get("utm_campaign") or "",
+            "utm_content":   c.get("utm_content") or "",
+            "utm_term":      c.get("utm_term") or "",
+            "utm_source":    c.get("utm_source") or "",
+            "fbclid":        bool(c.get("fbclid")),
+            "fb_event_sent": c.get("fb_event_sent") or None,
+            "in_staff":      bool(tga_in_staff.get(c["id"])),
         } for c in convs
     ], "has_more": len(convs) == 30, "offset": offset})
+
+
+@router.get("/api/tg_account/conv/{conv_id}")
+async def api_tg_account_conv(request: Request, conv_id: int):
+    """Детали одного диалога для React панели."""
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    conv = db.get_tg_account_conversation(conv_id)
+    if not conv: return JSONResponse({"error": "not found"}, 404)
+    tags = db.get_conv_tags("tga", conv_id)
+    return JSONResponse({
+        "id":            conv["id"],
+        "tg_user_id":    conv.get("tg_user_id") or "",
+        "visitor_name":  conv.get("visitor_name") or conv.get("username") or "",
+        "username":      conv.get("username") or "",
+        "phone":         conv.get("phone") or "",
+        "photo_url":     conv.get("photo_url") or None,
+        "status":        conv.get("status", "open"),
+        "unread_count":  conv.get("unread_count", 0),
+        "last_message":  conv.get("last_message") or "",
+        "last_message_at": (conv.get("last_message_at") or conv.get("created_at", ""))[:16].replace("T"," "),
+        "fb_event_sent": conv.get("fb_event_sent") or None,
+        "fbclid":        conv.get("fbclid") or None,
+        "fbp":           conv.get("fbp") or None,
+        "utm_campaign":  conv.get("utm_campaign") or "",
+        "utm_source":    conv.get("utm_source") or "",
+        "utm_medium":    conv.get("utm_medium") or "",
+        "created_at":    (conv.get("created_at") or "")[:16].replace("T"," "),
+        "tags": [{"id": t["id"], "name": t["name"], "color": t.get("color","#888")} for t in (tags or [])],
+    })
+
+
+@router.get("/api/tg_account/scripts")
+async def api_tg_account_scripts(request: Request, conv_id: int = 0):
+    """Скрипты для React панели — по проекту диалога или все."""
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    project_id = None
+    if conv_id:
+        conv = db.get_tg_account_conversation(conv_id)
+        if conv and conv.get("utm_campaign"):
+            proj = db.get_project_by_utm(conv["utm_campaign"])
+            if proj: project_id = proj["id"]
+    # Берём скрипты проекта или первого доступного проекта
+    if not project_id:
+        projects = db.get_projects()
+        if projects: project_id = projects[0]["id"]
+    scripts = db.get_scripts(project_id) if project_id else []
+    # Группируем по категории
+    groups: dict = {}
+    for s in scripts:
+        cat = s.get("category") or "Общие"
+        groups.setdefault(cat, []).append({"id": s["id"], "name": s.get("title",""), "content": s.get("body","")})
+    return JSONResponse({"groups": [{"name": k, "scripts": v} for k, v in groups.items()]})

@@ -186,7 +186,7 @@ export default function ChatHeader({ conv, onUpdate, onDeleted }) {
                 {conv.utm_campaign}{conv.utm_source ? ` · ${conv.utm_source}` : ''}
               </span>
             )}
-            {conv.staff_id && (
+            {conv.staff_id ? (
               <a
                 href={`/staff?edit=${conv.staff_id}`}
                 target="_blank"
@@ -199,6 +199,20 @@ export default function ChatHeader({ conv, onUpdate, onDeleted }) {
                 }}
               >
                 ✅ В базе · {conv.staff_name || 'Карточка'} →
+              </a>
+            ) : (
+              <a
+                href={`/staff/create_from_tga?conv_id=${conv.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  background: 'var(--bg3)', color: 'var(--text3)',
+                  border: '1px solid var(--border)', borderRadius: 6,
+                  padding: '2px 8px', fontSize: 11, textDecoration: 'none',
+                }}
+              >
+                + Создать карточку
               </a>
             )}
           </div>

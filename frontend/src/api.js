@@ -94,6 +94,12 @@ export function fetchUserStatus(tgUserId) {
   return get(`/api/tg_user_status/${tgUserId}`)
 }
 
+// ── TG Account Status ────────────────────────────────────────────────────────
+
+export function fetchTgAccountStatus() {
+  return get('/api/tg_account/status')
+}
+
 // ── Tags ─────────────────────────────────────────────────────────────────────
 
 export function fetchAllTags() {

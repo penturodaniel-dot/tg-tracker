@@ -20,6 +20,7 @@ export function useMessages(convId) {
   const convIdRef   = useRef(convId)
   const readMaxRef  = useRef(0)
   const pendingMap  = useRef(new Map()) // tempId → content (for dedup)
+  const pollCountRef = useRef(0)        // every 10 polls do a full re-fetch for is_read updates
 
   useEffect(() => { convIdRef.current = convId }, [convId])
 
@@ -67,8 +68,11 @@ export function useMessages(convId) {
   const poll = useCallback(async () => {
     const id = convIdRef.current
     if (!id || document.hidden) return
+    pollCountRef.current += 1
+    // Every 10 polls (~15s): full re-fetch to pick up is_read changes
+    const isFullRefresh = pollCountRef.current % 10 === 0
     try {
-      const data = await fetchMessages(id, lastIdRef.current)
+      const data = await fetchMessages(id, isFullRefresh ? 0 : lastIdRef.current)
       const incoming = data.messages || []
 
       // Always update readMaxId
@@ -82,25 +86,34 @@ export function useMessages(convId) {
       const hasNewUserMsgs = incoming.some(m => m.sender_type !== 'manager')
       if (hasNewUserMsgs) markRead(id).catch(() => {})
 
-      setMessages(prev => {
-        const existingIds = new Set(prev.filter(m => typeof m.id === 'number' && m.id > 0).map(m => m.id))
-        const newReal = incoming.filter(m => !existingIds.has(m.id))
-        if (newReal.length === 0) return prev
+      if (isFullRefresh) {
+        // Replace all real messages with fresh data (picks up is_read changes),
+        // keep pending optimistic messages
+        setMessages(prev => {
+          const pending = prev.filter(m => m._pending)
+          return [...incoming, ...pending]
+        })
+      } else {
+        setMessages(prev => {
+          const existingIds = new Set(prev.filter(m => typeof m.id === 'number' && m.id > 0).map(m => m.id))
+          const newReal = incoming.filter(m => !existingIds.has(m.id))
+          if (newReal.length === 0) return prev
 
-        // Dedup: for each real manager message, remove exactly ONE matching pending
-        let result = [...prev]
-        for (const realMsg of newReal) {
-          if (realMsg.sender_type !== 'manager') continue
-          const idx = result.findIndex(
-            m => m._pending && m.content === realMsg.content
-          )
-          if (idx !== -1) {
-            result = [...result.slice(0, idx), ...result.slice(idx + 1)]
+          // Dedup: for each real manager message, remove exactly ONE matching pending
+          let result = [...prev]
+          for (const realMsg of newReal) {
+            if (realMsg.sender_type !== 'manager') continue
+            const idx = result.findIndex(
+              m => m._pending && m.content === realMsg.content
+            )
+            if (idx !== -1) {
+              result = [...result.slice(0, idx), ...result.slice(idx + 1)]
+            }
           }
-        }
 
-        return [...result, ...newReal]
-      })
+          return [...result, ...newReal]
+        })
+      }
 
       const maxIncoming = Math.max(...incoming.map(m => m.id))
       if (maxIncoming > lastIdRef.current) lastIdRef.current = maxIncoming

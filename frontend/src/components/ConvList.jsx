@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react'
 import ConvItem from './ConvItem.jsx'
-import { fetchAllTags } from '../api.js'
+import { fetchAllTags, fetchTgAccountStatus } from '../api.js'
 
 const TABS = [
   { value: 'open',   label: 'Открытые' },
@@ -24,11 +24,19 @@ export default function ConvList({
 }) {
   const scrollRef = useRef(null)
   const [tags, setTags] = useState([])
+  const [tgStatus, setTgStatus] = useState(null)
 
   useEffect(() => {
     fetchAllTags()
       .then(data => setTags(data.tags || []))
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const load = () => fetchTgAccountStatus().then(setTgStatus).catch(() => {})
+    load()
+    const id = setInterval(load, 30000)
+    return () => clearInterval(id)
   }, [])
 
   // Infinite scroll: detect near-bottom
@@ -43,6 +51,16 @@ export default function ConvList({
 
   return (
     <div className="conv-list-panel">
+      {tgStatus && (
+        <div className={`tg-status-bar ${tgStatus.status === 'connected' ? 'tg-status-ok' : 'tg-status-err'}`}>
+          <span className="tg-status-dot" />
+          {tgStatus.status === 'connected'
+            ? `Подключён · ${tgStatus.phone || ''}`
+            : tgStatus.status === 'banned'
+              ? 'Аккаунт заблокирован'
+              : 'Не подключён · отправка недоступна'}
+        </div>
+      )}
       <div className="conv-list-header">
         <div className="conv-list-title">Диалоги</div>
         <div className="status-tabs">

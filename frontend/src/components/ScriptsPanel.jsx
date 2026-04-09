@@ -103,7 +103,12 @@ export default function ScriptsPanel({ onSelectScript, visible, onToggleVisible 
                 title={script.content}
                 onClick={() => onSelectScript(script.content)}
               >
-                {script.name}
+                <div className="script-btn-name">{script.name}</div>
+                {script.content && (
+                  <div className="script-btn-preview">
+                    {script.content.slice(0, 90)}{script.content.length > 90 ? '…' : ''}
+                  </div>
+                )}
               </button>
             ))}
           </div>

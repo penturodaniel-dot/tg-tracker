@@ -71,15 +71,23 @@ export default function ConvItem({ conv, selected, onClick }) {
         </div>
 
         {/* Mini badges */}
-        {(conv.utm_campaign || conv.fbclid || conv.fb_event_sent) && (
+        {(conv.utm_campaign || conv.fbclid || conv.fb_event_sent || conv.in_staff) && (
           <div className="conv-item-badges">
             {conv.utm_campaign && (
               <span className="badge-utm" title={`Кампания: ${conv.utm_campaign}`}>
                 {conv.utm_campaign}
               </span>
             )}
-            {conv.fbclid && (
-              <span className="badge-fb">fb ✓</span>
+            {/* Traffic source: TT / FB / org */}
+            {(conv.utm_source || '').toLowerCase().match(/tiktok|^tt$/) ? (
+              <span className="badge-src badge-src-tt">TT</span>
+            ) : conv.fbclid || (conv.utm_source || '').toLowerCase().match(/facebook|^fb$/) ? (
+              <span className="badge-src badge-src-fb">fb ✓</span>
+            ) : conv.utm_campaign ? (
+              <span className="badge-src badge-src-org">org</span>
+            ) : null}
+            {conv.in_staff && (
+              <span className="badge-instaff">в базе</span>
             )}
             {conv.fb_event_sent && (
               <span className="badge-lead">Lead ✓</span>

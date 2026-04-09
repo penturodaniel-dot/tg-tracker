@@ -111,6 +111,10 @@ export function useConvs() {
       })
     : convs
 
+  const removeConv = useCallback((id) => {
+    setConvs(prev => prev.filter(c => c.id !== id))
+  }, [])
+
   return {
     convs: filtered,
     status,
@@ -123,5 +127,6 @@ export function useConvs() {
     error,
     hasMore: hasMore && !search.trim(),
     loadMore,
+    removeConv,
   }
 }

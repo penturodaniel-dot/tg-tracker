@@ -21,22 +21,22 @@ export default function App() {
     loading,
     hasMore,
     loadMore,
+    removeConv,
   } = useConvs()
 
   const handleSelect = useCallback((id) => {
     setSelectedId(id)
   }, [])
 
-  // Called after conv mutation (close/reopen/lead) so ConvList reflects change
   const handleConvUpdate = useCallback(() => {
-    // convs will be refreshed on next poll automatically (5s)
-    // nothing extra needed unless we want instant refresh
+    // convs refresh automatically on next 5s poll
   }, [])
 
-  // Called after delete: deselect if current conv was deleted
+  // Remove from list immediately + deselect
   const handleConvDeleted = useCallback((deletedId) => {
+    removeConv(deletedId)
     if (selectedId === deletedId) setSelectedId(null)
-  }, [selectedId])
+  }, [selectedId, removeConv])
 
   const handleScriptSelect = useCallback((content) => {
     setPendingScript(content)

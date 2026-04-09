@@ -1445,6 +1445,16 @@ async def api_tga_chat_panel(request: Request, conv_id: int = 0, status_filter: 
     </script>""")
 
 
+@router.get("/api/tg_account/status")
+async def api_tg_account_status(request: Request):
+    """Статус подключения TG аккаунта для React SPA."""
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    status = db.get_setting("tg_account_status", "disconnected")
+    phone  = db.get_setting("tg_account_phone", "")
+    return JSONResponse({"status": status, "phone": phone})
+
+
 @router.get("/api/tg_user_status/{user_id}")
 async def api_tg_user_status(request: Request, user_id: str):
     """Получить статус онлайн пользователя через TG Sender."""

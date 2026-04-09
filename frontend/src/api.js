@@ -51,6 +51,10 @@ export function fetchMessages(convId, afterId = 0) {
   return get(`/api/tg_account_messages/${convId}?after=${afterId}`)
 }
 
+export function markRead(convId) {
+  return postForm('/api/tg_account/mark_read', { conv_id: convId })
+}
+
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 export function sendMessage(convId, text) {

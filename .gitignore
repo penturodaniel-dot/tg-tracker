@@ -8,5 +8,5 @@ venv/
 # Frontend build artifacts — node_modules не коммитим, dist коммитим для Railway
 frontend/node_modules/
 
-# Не коммитим dist — Railway сам соберёт через nixpacks
-frontend/dist/
+# dist коммитим напрямую — Railway не нужно собирать
+# frontend/dist/

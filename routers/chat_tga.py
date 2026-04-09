@@ -1517,6 +1517,18 @@ async def api_tg_account_conv(request: Request, conv_id: int):
     })
 
 
+@router.post("/api/tg_account/mark_read")
+async def api_tg_account_mark_read(request: Request, conv_id: int = Form(...)):
+    """Отметить диалог как прочитанный (React SPA)."""
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    try:
+        db.mark_tg_account_conv_read(conv_id)
+    except Exception:
+        pass
+    return JSONResponse({"ok": True})
+
+
 @router.get("/api/tg_account/scripts")
 async def api_tg_account_scripts(request: Request, conv_id: int = 0):
     """Скрипты для React панели — по проекту диалога или все."""

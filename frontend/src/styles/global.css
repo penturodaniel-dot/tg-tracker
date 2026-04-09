@@ -811,3 +811,54 @@ body {
   justify-content: center;
   color: var(--text3);
 }
+
+/* Chat Header Avatar */
+.chat-header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-avatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border2);
+  flex-shrink: 0;
+}
+
+.chat-avatar-placeholder {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text2);
+  flex-shrink: 0;
+}
+
+/* Button sizes */
+.btn-sm {
+  padding: 4px 9px;
+  font-size: 11px;
+}
+
+.btn-green {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--green);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.btn-green:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.25);
+}

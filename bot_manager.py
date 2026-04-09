@@ -72,12 +72,17 @@ def _build_tracker_dp() -> Dispatcher:
         if campaign:
             user_id_str = str(user.id)
 
+            # Окно поиска click_data: 7 дней (10080 мин).
+            # Пользователи часто кликают на рекламу и подписываются на канал
+            # спустя часы или дни — окно 120 мин теряло большинство атрибуций.
+            _CLICK_WINDOW = 10080  # 7 дней в минутах
+
             # Приоритет 0: точный поиск по user_id (через /start ref_)
-            click_data = _db.get_click_by_user(user_id_str, minutes=120) or {}
+            click_data = _db.get_click_by_user(user_id_str, minutes=_CLICK_WINDOW) or {}
 
             # Приоритет 1: поиск по invite_link канала
             if not click_data and raw_link:
-                click_data = _db.get_latest_click_by_link(raw_link, minutes=120) or {}
+                click_data = _db.get_latest_click_by_link(raw_link, minutes=_CLICK_WINDOW) or {}
 
             # Приоритет 2: поиск по utm_campaign из проекта
             if not click_data:
@@ -89,12 +94,12 @@ def _build_tracker_dp() -> Dispatcher:
                 if not _utm_vals:
                     _utm_vals = [campaign.get("name") or campaign_name]
                 for _utm in _utm_vals:
-                    click_data = _db.get_latest_click_by_utm(_utm, minutes=120) or {}
+                    click_data = _db.get_latest_click_by_utm(_utm, minutes=_CLICK_WINDOW) or {}
                     if click_data:
                         break
 
             click_id = click_data.get("click_id") if click_data else None
-            _src = "user_id" if _db.get_click_by_user(user_id_str, minutes=120) else ("invite_link" if raw_link and click_data else "utm")
+            _src = "user_id" if _db.get_click_by_user(user_id_str, minutes=_CLICK_WINDOW) else ("invite_link" if raw_link and click_data else "utm")
             log.info(f"[BOT1] click lookup src={_src} found={'✓' if click_data else '❌'}")
 
         join_id = _db.log_join(

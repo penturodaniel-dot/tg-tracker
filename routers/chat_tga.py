@@ -1101,15 +1101,16 @@ async def tg_account_webhook(request: Request):
             db.save_tg_account_message(conv["id"], tg_user_id, "visitor", text, media_url=media_url, media_type=media_type)
             db.update_tg_account_last_message(tg_user_id, text, increment_unread=True)
 
-            # ── Авто-отправка Lead при первом сообщении (только FB/TikTok трафик) ──
-            _is_paid_traffic = bool(
-                conv.get("fbclid") or
-                (conv.get("utm_source") or "").lower() in ("facebook", "fb", "tiktok", "tt")
-            )
-            _is_fb_traffic = _is_paid_traffic  # оставляем имя для совместимости
+            # ── Авто-отправка Lead при первом сообщении (только платный трафик) ────
             _fresh_conv = db.get_tg_account_conversation(conv["id"]) or conv
-            _is_first_msg = (_fresh_conv.get("unread_count") or 0) == 1
-            if _is_fb_traffic and _is_first_msg and not _fresh_conv.get("fb_event_sent"):
+            _is_paid_traffic = bool(
+                _fresh_conv.get("fbclid") or
+                ((_fresh_conv.get("utm_source") or "").lower() in ("facebook", "fb", "tiktok", "tt"))
+            )
+            # Срабатывает на первое сообщение ИЛИ если UTM только что применился
+            # (unread_count >=1, Lead ещё не отправлен, трафик платный)
+            _is_first_msg = (_fresh_conv.get("unread_count") or 0) >= 1
+            if _is_paid_traffic and _is_first_msg and not _fresh_conv.get("fb_event_sent"):
                 try:
                     px = _resolve_pixels(_fresh_conv)
                     _campaign = _fresh_conv.get("utm_campaign") or "telegram_account"
@@ -1135,12 +1136,10 @@ async def tg_account_webhook(request: Request):
                         event_source_url="https://t.me/",
                         event_time=_event_time,
                     )
-                    if _fb_sent:
-                        db.set_tg_account_fb_event(conv["id"], "Lead")
-                        log.info(f"[AutoLead/TGA] ✅ Lead sent conv={conv['id']}")
-                    # TikTok
+                    _tt_sent = False
+                    # TikTok Lead
                     if px["tt_pixel"] and px["tt_token"] and tiktok_capi:
-                        await tiktok_capi.send_lead_event(
+                        _tt_sent = await tiktok_capi.send_lead_event(
                             px["tt_pixel"], px["tt_token"],
                             user_id=str(tg_user_id),
                             utm_source=_utm_src, utm_campaign=_campaign,
@@ -1149,6 +1148,12 @@ async def tg_account_webhook(request: Request):
                             event_source_url="https://t.me/",
                             test_event_code=px["tt_test_event_code"],
                         )
+                    # Сохраняем статус если хотя бы одна платформа ответила ок
+                    if _fb_sent or _tt_sent:
+                        db.set_tg_account_fb_event(conv["id"], "Lead")
+                        log.info(f"[AutoLead/TGA] ✅ Lead sent conv={conv['id']} fb={'✓' if _fb_sent else '—'} tt={'✓' if _tt_sent else '—'}")
+                    else:
+                        log.warning(f"[AutoLead/TGA] ❌ Lead not sent conv={conv['id']} — pixel not configured? fb_pixel={px['fb_pixel'] or 'NONE'} tt_pixel={px.get('tt_pixel') or 'NONE'}")
                 except Exception as _e:
                     log.error(f"[AutoLead/TGA] error: {_e}")
 
@@ -1256,11 +1261,10 @@ async def tg_account_send_lead(request: Request, conv_id: int = Form(...)):
         event_source_url="https://t.me/",
         event_time=_event_time,
     )
-    if sent:
-        db.set_tg_account_fb_event(conv_id, "Lead")
     # TikTok Lead
+    tt_sent = False
     if px["tt_pixel"] and px["tt_token"] and tiktok_capi:
-        await tiktok_capi.send_lead_event(
+        tt_sent = await tiktok_capi.send_lead_event(
             px["tt_pixel"], px["tt_token"],
             user_id=str(conv.get("tg_user_id", "")),
             ip=request.client.host if request.client else None,
@@ -1269,6 +1273,8 @@ async def tg_account_send_lead(request: Request, conv_id: int = Form(...)):
             event_source_url="https://t.me/",
             test_event_code=px["tt_test_event_code"],
         )
+    if sent or tt_sent:
+        db.set_tg_account_fb_event(conv_id, "Lead")
     if _is_fetch(request):
         return JSONResponse({"ok": True, "sent": bool(sent)})
     return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)

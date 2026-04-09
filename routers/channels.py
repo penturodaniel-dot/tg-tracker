@@ -286,6 +286,11 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
                 f' title="Обновить название">🔄</button></form>'
             )
 
+        # Признак join_request ссылки
+        _inv_link = cc["invite_link"] or ""
+        _is_join_req = False  # нет способа узнать без API, покажем иконку только по наличию /+
+        _link_preview = (_inv_link[:44] + "...") if len(_inv_link) > 44 else _inv_link
+
         chan_rows += (
             f'<tr>'
             f'<td>'
@@ -302,8 +307,21 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
             f'<button class="btn-gray btn-sm" style="padding:2px 7px;font-size:.72rem">✓</button></form>'
             f'{_refresh_btn}'
             f'</div></td>'
-            f'<td><div class="link-box" style="font-size:.69rem;padding:5px 9px">'
-            f'{cc["invite_link"][:48]}...</div></td>'
+            f'<td>'
+            f'<div style="font-size:.68rem;color:var(--text3);font-family:monospace;padding:2px 0">{_link_preview}</div>'
+            f'<div id="edit-link-row-{cc_id}" style="display:none;margin-top:4px">'
+            f'<form method="post" action="/campaigns/channel/set_link" style="display:flex;gap:4px;align-items:center">'
+            f'<input type="hidden" name="cc_id" value="{cc_id}"/>'
+            f'<input type="hidden" name="campaign_id" value="{camp_id}"/>'
+            f'<input type="text" name="invite_link" placeholder="https://t.me/+..." '
+            f'style="width:180px;background:var(--bg);border:1px solid var(--accent);border-radius:5px;padding:2px 7px;color:var(--text);font-size:.72rem"/>'
+            f'<button class="btn btn-sm" style="padding:2px 8px;font-size:.72rem">✓</button>'
+            f'<button type="button" onclick="document.getElementById(\'edit-link-row-{cc_id}\').style.display=\'none\'" '
+            f'class="btn-gray btn-sm" style="padding:2px 8px;font-size:.72rem">✕</button>'
+            f'</form></div>'
+            f'<button type="button" onclick="document.getElementById(\'edit-link-row-{cc_id}\').style.display=\'block\';this.style.display=\'none\'" '
+            f'class="btn-gray btn-sm" style="padding:1px 7px;font-size:.68rem;margin-top:3px">✏️ заменить ссылку</button>'
+            f'</td>'
             f'<td>{inline_form}</td>'
             f'<td style="color:var(--green);font-weight:700">{cc["joins"]}</td>'
             f'<td><form method="post" action="/campaigns/channel/delete" style="display:inline">'
@@ -382,14 +400,31 @@ def _build_campaign_card(c: dict, cchans: list, templates: list,
         <form method="post" action="/campaigns/channel/add">
           <input type="hidden" name="campaign_id" value="{camp_id}"/>
           <input type="hidden" name="campaign_name" value="{camp_name}"/>
-          <div class="form-row">
+          <div class="form-row" style="flex-wrap:wrap;gap:8px;align-items:flex-end">
             <div class="field-group">
               <div class="field-label">Добавить канал</div>
               <select name="channel_id">{ch_opts}</select>
             </div>
-            <div style="display:flex;align-items:flex-end">
-              <button class="btn btn-sm">+ Добавить и создать ссылку</button>
+            <div class="field-group" style="min-width:220px;flex:1">
+              <div class="field-label">
+                🔗 Invite-ссылка вручную
+                <span style="font-weight:400;color:var(--text3);font-size:.7rem">
+                  (рекомендуется — создай в Telegram с "Approve new members" ✓)
+                </span>
+              </div>
+              <input type="text" name="manual_invite_link"
+                     placeholder="https://t.me/+xxxxxxxx (оставь пустым — бот создаст сам)"
+                     style="width:100%;font-size:.8rem"/>
             </div>
+            <div style="display:flex;align-items:flex-end">
+              <button class="btn btn-sm">+ Добавить</button>
+            </div>
+          </div>
+          <div style="font-size:.71rem;color:var(--text3);margin-top:4px;padding:6px 10px;
+                      background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.18);
+                      border-radius:6px">
+            💡 <b>Как создать ссылку с Approve new members:</b>
+            Telegram → канал → Edit → Invite Links → Create Link → включи <b>Approve New Members</b> → создай → скопируй
           </div>
         </form>
 
@@ -615,21 +650,46 @@ async def campaigns_delete(request: Request, campaign_id: int = Form(...)):
 
 @router.post("/campaigns/channel/add")
 async def campaigns_channel_add(request: Request, campaign_id: int = Form(...),
-                                 campaign_name: str = Form(...), channel_id: str = Form(...)):
+                                 campaign_name: str = Form(...), channel_id: str = Form(...),
+                                 manual_invite_link: str = Form("")):
     user, err = require_auth(request)
     if err: return err
     try:
-        b1 = bot_manager.get_tracker_bot()
-        if not b1:
-            return RedirectResponse("/campaigns?err_msg=%D0%91%D0%BE%D1%82+1+%D0%BD%D0%B5+%D0%B7%D0%B0%D0%BF%D1%83%D1%89%D0%B5%D0%BD", 303)
-        link_name = f"{campaign_name[:20]}_{channel_id[-6:]}"
-        link_obj  = await b1.create_chat_invite_link(chat_id=int(channel_id), name=link_name[:32])
+        # Получаем название канала
+        ch_name = channel_id
         try:
-            chat    = await b1.get_chat(int(channel_id))
-            ch_name = chat.title or channel_id
+            b1 = bot_manager.get_tracker_bot()
+            if b1:
+                chat    = await b1.get_chat(int(channel_id))
+                ch_name = chat.title or channel_id
         except Exception:
-            ch_name = channel_id
-        db.add_campaign_channel(campaign_id, channel_id, ch_name, link_obj.invite_link)
+            pass
+
+        # Если пользователь вставил ссылку вручную — используем её
+        manual = manual_invite_link.strip()
+        if manual and "t.me/" in manual:
+            invite_link = manual.replace(" ", "+")
+        else:
+            # Создаём ссылку через бота с creates_join_request=True
+            b1 = bot_manager.get_tracker_bot()
+            if not b1:
+                return RedirectResponse("/campaigns?err_msg=%D0%91%D0%BE%D1%82+%D0%BD%D0%B5+%D0%B7%D0%B0%D0%BF%D1%83%D1%89%D0%B5%D0%BD", 303)
+            link_name = f"{campaign_name[:20]}_{channel_id[-6:]}"
+            try:
+                link_obj = await b1.create_chat_invite_link(
+                    chat_id=int(channel_id),
+                    name=link_name[:32],
+                    creates_join_request=True
+                )
+            except Exception:
+                # Если creates_join_request не поддерживается — создаём обычную
+                link_obj = await b1.create_chat_invite_link(
+                    chat_id=int(channel_id),
+                    name=link_name[:32]
+                )
+            invite_link = link_obj.invite_link
+
+        db.add_campaign_channel(campaign_id, channel_id, ch_name, invite_link)
         return RedirectResponse("/campaigns?msg=%D0%9A%D0%B0%D0%BD%D0%B0%D0%BB+%D0%B4%D0%BE%D0%B1%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD+%D0%B2+%D0%BA%D0%B0%D0%BC%D0%BF%D0%B0%D0%BD%D0%B8%D1%8E", 303)
     except Exception as e:
         return RedirectResponse(f"/campaigns?err_msg={_qp(str(e).splitlines()[0][:80])}", 303)
@@ -671,6 +731,23 @@ async def campaigns_channel_refresh_name(request: Request, cc_id: int = Form(...
         return RedirectResponse(f"/campaigns?msg={_qp(f'Название обновлено: {ch_name}')}", 303)
     except Exception as e:
         return RedirectResponse(f"/campaigns?err_msg={_qp(str(e).splitlines()[0][:80])}", 303)
+
+
+@router.post("/campaigns/channel/set_link")
+async def campaigns_channel_set_link(request: Request, cc_id: int = Form(...),
+                                      campaign_id: int = Form(...),
+                                      invite_link: str = Form(...)):
+    """Заменить invite-ссылку для канала в кампании (вручную созданная ссылка)."""
+    user, err = require_auth(request)
+    if err: return err
+    link = invite_link.strip().replace(" ", "+")
+    if not link or "t.me/" not in link:
+        return RedirectResponse(f"/campaigns?err_msg={_qp('Некорректная ссылка')}", 303)
+    with db._conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE campaign_channels SET invite_link=%s WHERE id=%s", (link, cc_id))
+        conn.commit()
+    return RedirectResponse(f"/campaigns?msg={_qp('Ссылка обновлена')}", 303)
 
 
 @router.post("/campaigns/channel/delete")

@@ -243,6 +243,14 @@ def _build_tracker_dp() -> Dispatcher:
 
         _utm_source   = click_data.get("utm_source")  if click_data else None
         _utm_campaign = click_data.get("utm_campaign") if click_data else None
+        # IP и User-Agent из момента клика на лендинг (улучшают matching)
+        _client_ip    = click_data.get("ip_address")  if click_data else None
+        _user_agent   = click_data.get("user_agent")  if click_data else None
+        # event_source_url: URL лендинга из которого пришёл пользователь
+        _app_url      = _db.get_setting("app_url") or ""
+        _camp_slug    = campaign.get("slug") if campaign else None
+        _event_source_url = (f"{_app_url}/l/{_camp_slug}" if _camp_slug and _app_url
+                             else _app_url or None)
 
         # test_event_code: из проекта кампании → глобальный
         test_event_code = None
@@ -254,14 +262,17 @@ def _build_tracker_dp() -> Dispatcher:
         log.info(f"[BOT1] test_event_code={test_event_code or '—'} project={_project.get('name') if _project else '—'}")
 
         # ── Лог с качеством matching ──────────────────────────────────────────
+        _ip_ua_score  = sum([bool(_client_ip), bool(_user_agent)])
         _score = sum([bool(_fbclid), bool(_fbp), bool(_fbc)])
-        _matching = ["❌ нет данных", "⚠️ слабый", "✅ хороший", "✅✅ отличный"][_score]
+        _score_labels = ["❌ нет данных", "⚠️ слабый", "✅ хороший", "✅✅ отличный"]
+        _matching = _score_labels[min(_score, 3)]
         _pixel_src = f"проект '{_project['name']}'" if _project else "глобальный"
 
         log.info(
             f"[BOT1] JOIN user={user.id} channel={cid} campaign={campaign_name} | "
             f"pixel={_pixel_src} | matching={_matching} | "
-            f"fbclid={'✓' if _fbclid else '—'} fbp={'✓' if _fbp else '—'} fbc={'✓' if _fbc else '—'}"
+            f"fbclid={'✓' if _fbclid else '—'} fbp={'✓' if _fbp else '—'} fbc={'✓' if _fbc else '—'} "
+            f"ip={'✓' if _client_ip else '—'} ua={'✓' if _user_agent else '—'}"
         )
         if not _score:
             log.warning(
@@ -277,6 +288,9 @@ def _build_tracker_dp() -> Dispatcher:
             fbc=_fbc,
             utm_source=_utm_source,
             utm_campaign=_utm_campaign,
+            client_ip=_client_ip,
+            user_agent=_user_agent,
+            event_source_url=_event_source_url,
             test_event_code=test_event_code,
         )
 

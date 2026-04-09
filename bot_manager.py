@@ -38,7 +38,10 @@ def _build_tracker_dp() -> Dispatcher:
 
     @dp.message(CommandStart())
     async def on_start(message: types.Message):
-        """Обрабатываем /start ref_{click_id} — привязываем click_id к user_id."""
+        """
+        /start ref_{click_id} — привязываем tg_user_id к клику и отправляем
+        пользователю инвайт-ссылку канала. Это даёт точный matching при вступлении.
+        """
         try:
             args = message.text.split(maxsplit=1)
             if len(args) < 2:
@@ -46,11 +49,36 @@ def _build_tracker_dp() -> Dispatcher:
             param = args[1].strip()
             if not param.startswith("ref_"):
                 return
+
             click_id = param[4:]  # убираем "ref_"
             user_id  = str(message.from_user.id)
-            # Сохраняем связь user_id → click_id
+
+            # Сохраняем связь tg_user_id → click_id
             _db.bind_click_to_user(click_id, user_id)
             log.info(f"[BOT1] bound click_id={click_id} to user={user_id}")
+
+            # Достаём инвайт-ссылку из клика (target_id) и отправляем пользователю
+            click = _db.get_click(click_id)
+            invite_link = click.get("target_id") if click else None
+
+            if invite_link and "t.me/" in invite_link:
+                # Находим название кампании для кнопки
+                campaign = _db.get_campaign_by_invite_link(invite_link)
+                btn_label = "Вступить в группу"
+                if campaign:
+                    btn_label = f"Вступить → {campaign.get('name', 'группу')}"
+
+                keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(text=btn_label, url=invite_link)
+                ]])
+                await message.answer(
+                    "Привет! Нажми кнопку ниже чтобы вступить в группу 👇",
+                    reply_markup=keyboard
+                )
+                log.info(f"[BOT1] sent invite_link to user={user_id} link={invite_link[:50]}")
+            else:
+                log.warning(f"[BOT1] no invite_link for click_id={click_id}")
+
         except Exception as e:
             log.warning(f"[BOT1] on_start error: {e}")
 

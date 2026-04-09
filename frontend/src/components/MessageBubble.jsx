@@ -49,10 +49,18 @@ export default function MessageBubble({ message, readMaxId }) {
     )
   }
 
+  // Detect image: by media_type or by URL extension
+  function looksLikeImage(url) {
+    return /\.(jpe?g|png|gif|webp|bmp|avif)(\?|$)/i.test(url || '')
+  }
+  const PLACEHOLDER_TEXTS = ['[файл]', '[медиафайл]', '[файл отправляется...]']
+
   // Media content
   let mediaContent = null
   if (message.media_url) {
-    if (message.media_type && message.media_type.startsWith('image/')) {
+    const isImg = (message.media_type && message.media_type.startsWith('image/')) ||
+                  looksLikeImage(message.media_url)
+    if (isImg) {
       mediaContent = (
         <a href={message.media_url} target="_blank" rel="noopener noreferrer">
           <img
@@ -64,7 +72,7 @@ export default function MessageBubble({ message, readMaxId }) {
         </a>
       )
     } else {
-      const fileName = message.media_url.split('/').pop() || 'файл'
+      const fileName = message.media_url.split('/').pop().split('?')[0] || 'файл'
       mediaContent = (
         <a
           className="msg-file-link"
@@ -79,6 +87,10 @@ export default function MessageBubble({ message, readMaxId }) {
     }
   }
 
+  // Hide placeholder text when real media is present
+  const showText = message.content &&
+    !(message.media_url && PLACEHOLDER_TEXTS.includes(message.content))
+
   return (
     <div className={`msg-wrapper ${isManager ? 'manager' : 'user'}${isPending ? ' msg-pending' : ''}`}>
       <div className={`msg-bubble ${isManager ? 'manager' : 'user'}`}>
@@ -90,8 +102,8 @@ export default function MessageBubble({ message, readMaxId }) {
         {/* Media */}
         {mediaContent}
 
-        {/* Text content */}
-        {message.content && (
+        {/* Text content (hidden if placeholder and media present) */}
+        {showText && (
           <div className="msg-content">{message.content}</div>
         )}
 

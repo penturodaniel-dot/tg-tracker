@@ -4,6 +4,7 @@ import ChatPanel from './components/ChatPanel.jsx'
 import ScriptsPanel from './components/ScriptsPanel.jsx'
 import NavSidebar from './components/NavSidebar.jsx'
 import { useConvs } from './hooks/useConvs.js'
+import { useNotifications } from './hooks/useNotifications.js'
 
 export default function App() {
   const [selectedId, setSelectedId] = useState(null)
@@ -23,6 +24,8 @@ export default function App() {
     loadMore,
     removeConv,
   } = useConvs()
+
+  useNotifications(convs)
 
   const handleSelect = useCallback((id) => {
     setSelectedId(id)

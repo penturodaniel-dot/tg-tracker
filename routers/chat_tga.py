@@ -1544,30 +1544,42 @@ async def api_tg_account_mark_read(request: Request, conv_id: int = Form(...)):
     if err: return JSONResponse({"error": "unauthorized"}, 401)
     try:
         db.mark_tg_account_conv_read(conv_id)
+        # Сообщить TG сервису чтобы обновить галочки прочтения
+        conv = db.get_tg_account_conversation(conv_id)
+        if conv and conv.get("tg_user_id"):
+            import asyncio as _aio
+            async def _do_mark():
+                try:
+                    await tg_api("post", "/mark_read", json={"user_id": conv["tg_user_id"]})
+                except Exception:
+                    pass
+            _aio.create_task(_do_mark())
     except Exception:
         pass
     return JSONResponse({"ok": True})
 
 
 @router.get("/api/tg_account/scripts")
-async def api_tg_account_scripts(request: Request, conv_id: int = 0):
-    """Скрипты для React панели — по проекту диалога или все."""
+async def api_tg_account_scripts(request: Request):
+    """Скрипты для React панели — все проекты, сгруппированные по проекту и категории."""
     user = check_session(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
-    project_id = None
-    if conv_id:
-        conv = db.get_tg_account_conversation(conv_id)
-        if conv and conv.get("utm_campaign"):
-            proj = db.get_project_by_utm(conv["utm_campaign"])
-            if proj: project_id = proj["id"]
-    # Берём скрипты проекта или первого доступного проекта
-    if not project_id:
-        projects = db.get_projects()
-        if projects: project_id = projects[0]["id"]
-    scripts = db.get_scripts(project_id) if project_id else []
-    # Группируем по категории
-    groups: dict = {}
-    for s in scripts:
-        cat = s.get("category") or "Общие"
-        groups.setdefault(cat, []).append({"id": s["id"], "name": s.get("title",""), "content": s.get("body","")})
-    return JSONResponse({"groups": [{"name": k, "scripts": v} for k, v in groups.items()]})
+    projects = db.get_projects() or []
+    result = []
+    for proj in projects:
+        scripts = db.get_scripts(proj["id"]) or []
+        if not scripts:
+            continue
+        cats: dict = {}
+        for s in scripts:
+            cat = s.get("category") or "Общие"
+            cats.setdefault(cat, []).append({
+                "id": s["id"],
+                "name": s.get("title", ""),
+                "content": s.get("body", ""),
+            })
+        result.append({
+            "project": proj.get("name", ""),
+            "groups": [{"name": k, "scripts": v} for k, v in cats.items()],
+        })
+    return JSONResponse({"projects": result})

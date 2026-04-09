@@ -838,8 +838,21 @@ body {
   margin-top: 24px;
 }
 
+.script-project {
+  margin-bottom: 4px;
+}
+
+.script-project-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--orange);
+  padding: 6px 4px 2px;
+  letter-spacing: 0.02em;
+}
+
 .script-group {
-  margin-bottom: 12px;
+  margin-bottom: 6px;
+  padding-left: 4px;
 }
 
 .script-group-name {

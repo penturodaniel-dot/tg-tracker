@@ -5,11 +5,12 @@ const NAV_SECTIONS = [
     id: 'clients',
     label: 'Клиенты',
     items: [
-      { icon: '📡', label: 'Каналы',       href: '/channels' },
-      { icon: '🔗', label: 'Кампании',     href: '/campaigns' },
-      { icon: '📣', label: 'Автопостинг',  href: '/autopost' },
-      { icon: '🎨', label: 'Шаблоны',      href: '/landings' },
-      { icon: '📈', label: 'Статистика',   href: '/analytics/clients' },
+      { icon: '📡', label: 'Каналы',          href: '/channels' },
+      { icon: '🔗', label: 'Кампании',        href: '/campaigns' },
+      { icon: '📣', label: 'Автопостинг',     href: '/autopost' },
+      { icon: '📝', label: 'Шаблоны постов',  href: '/autopost/templates' },
+      { icon: '🎨', label: 'Шаблоны',         href: '/landings' },
+      { icon: '📈', label: 'Статистика',      href: '/analytics/clients' },
     ]
   },
   {
@@ -23,6 +24,16 @@ const NAV_SECTIONS = [
       { icon: '📝', label: 'Скрипты',      href: '/scripts' },
       { icon: '🌐', label: 'Лендинги HR',  href: '/landings_staff' },
       { icon: '📊', label: 'Статистика',   href: '/analytics/staff' },
+    ]
+  },
+  {
+    id: 'settings',
+    label: 'Настройки',
+    items: [
+      { icon: '🏷️', label: 'Теги',          href: '/tags' },
+      { icon: '🔐', label: 'Пользователи',  href: '/users' },
+      { icon: '🎯', label: 'Проекты',       href: '/projects' },
+      { icon: '⚙️', label: 'Настройки',    href: '/settings' },
     ]
   },
 ]

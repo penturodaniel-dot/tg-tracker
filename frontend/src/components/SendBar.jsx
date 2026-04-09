@@ -68,11 +68,12 @@ export default function SendBar({ convId, onOptimisticSend, textareaRef: externa
     try {
       await sendMessage(convId, snapshot)
     } catch (e) {
-      // restore text if send fails
       setText(snapshot)
       alert('Ошибка отправки: ' + e.message)
     } finally {
       setSending(false)
+      // restore focus so user can type next message immediately
+      setTimeout(() => textareaRef.current?.focus(), 0)
     }
   }
 

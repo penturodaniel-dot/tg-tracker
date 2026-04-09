@@ -1528,6 +1528,8 @@ async def api_tg_account_conv(request: Request, conv_id: int):
         "utm_campaign":  conv.get("utm_campaign") or "",
         "utm_source":    conv.get("utm_source") or "",
         "utm_medium":    conv.get("utm_medium") or "",
+        "utm_content":   conv.get("utm_content") or "",
+        "utm_term":      conv.get("utm_term") or "",
         "created_at":    (conv.get("created_at") or "")[:16].replace("T"," "),
         "tags": [{"id": t["id"], "name": t["name"], "color": t.get("color","#888")} for t in (tags or [])],
         "staff_id":      staff["id"] if staff else None,

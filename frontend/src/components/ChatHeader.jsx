@@ -181,9 +181,10 @@ export default function ChatHeader({ conv, onUpdate, onDeleted }) {
               </a>
             )}
             {conv.phone && <span>{conv.phone}</span>}
-            {conv.utm_campaign && (
-              <span style={{ color: 'var(--text3)', fontSize: 11 }}>
-                {conv.utm_campaign}{conv.utm_source ? ` · ${conv.utm_source}` : ''}
+            {(conv.utm_campaign || conv.utm_source) && (
+              <span style={{ color: 'var(--text3)', fontSize: 11, opacity: 0.8 }}>
+                {[conv.utm_campaign, conv.utm_source, conv.utm_content, conv.utm_term]
+                  .filter(Boolean).join(' · ')}
               </span>
             )}
             {conv.staff_id ? (

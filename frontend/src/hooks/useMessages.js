@@ -87,10 +87,14 @@ export function useMessages(convId) {
       if (hasNewUserMsgs) markRead(id).catch(() => {})
 
       if (isFullRefresh) {
-        // Replace all real messages with fresh data (picks up is_read changes),
-        // keep pending optimistic messages
+        // Replace real messages with fresh data; dedup pending against incoming
         setMessages(prev => {
-          const pending = prev.filter(m => m._pending)
+          let pending = prev.filter(m => m._pending)
+          for (const realMsg of incoming) {
+            if (realMsg.sender_type !== 'manager') continue
+            const idx = pending.findIndex(m => m.content === realMsg.content)
+            if (idx !== -1) pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)]
+          }
           return [...incoming, ...pending]
         })
       } else {

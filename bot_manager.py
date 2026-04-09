@@ -232,7 +232,7 @@ async def start_tracker_bot(token: str):
         _tracker_task = asyncio.create_task(
             _tracker_dp.start_polling(
                 _tracker_bot,
-                allowed_updates=["chat_member"],
+                allowed_updates=["chat_member", "message"],
                 drop_pending_updates=True,
                 handle_signals=False,
             )

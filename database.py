@@ -749,6 +749,12 @@ class Database:
                    user_agent=None, ip_address=None, click_id=None):
         if not click_id:
             click_id = secrets.token_urlsafe(12)
+        # Нормализуем fbclid: {{fbclid}} — незаполненный шаблон Facebook, трактуем как None
+        if fbclid and fbclid.strip() in ("{{fbclid}}", "{fbclid}", ""):
+            fbclid = None
+        # Нормализуем target_id: + в t.me ссылках декодируется браузером как пробел
+        if target_id and "t.me/" in target_id:
+            target_id = target_id.replace(" ", "+")
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""INSERT INTO click_tracking
@@ -794,12 +800,14 @@ class Database:
         """Найти последний клик по invite_link канала — самый точный matching."""
         from datetime import timedelta
         cutoff = (datetime.utcnow() - timedelta(minutes=minutes)).isoformat()
+        # Нормализуем: + в t.me ссылках мог быть сохранён как пробел (URL decode баг)
+        normalized = invite_link.replace("+", " ") if invite_link else invite_link
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""SELECT * FROM click_tracking
-                    WHERE target_id = %s AND created_at > %s
+                    WHERE (target_id = %s OR target_id = %s) AND created_at > %s
                     ORDER BY created_at DESC LIMIT 1""",
-                    (invite_link, cutoff))
+                    (invite_link, normalized, cutoff))
                 r = cur.fetchone()
                 return dict(r) if r else None
 

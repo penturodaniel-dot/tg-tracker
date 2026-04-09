@@ -1269,7 +1269,15 @@ async def tg_account_send_lead(request: Request, conv_id: int = Form(...)):
             event_source_url="https://t.me/",
             test_event_code=px["tt_test_event_code"],
         )
-    return JSONResponse({"ok": True, "sent": bool(sent)})
+    if _is_fetch(request):
+        return JSONResponse({"ok": True, "sent": bool(sent)})
+    return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
+
+
+def _is_fetch(request: Request) -> bool:
+    """True если запрос от fetch/XHR (React), False если обычная форма браузера."""
+    accept = request.headers.get("accept", "")
+    return "application/json" in accept or request.headers.get("x-requested-with") == "XMLHttpRequest"
 
 
 @router.post("/tg_account/close")
@@ -1277,7 +1285,9 @@ async def tg_account_close(request: Request, conv_id: int = Form(...)):
     user, err = require_auth(request)
     if err: return JSONResponse({"error": "unauthorized"}, 401)
     db.close_tg_account_conv(conv_id)
-    return JSONResponse({"ok": True})
+    if _is_fetch(request):
+        return JSONResponse({"ok": True})
+    return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
 
 
 @router.post("/tg_account/reopen")
@@ -1285,7 +1295,9 @@ async def tg_account_reopen(request: Request, conv_id: int = Form(...)):
     user, err = require_auth(request)
     if err: return JSONResponse({"error": "unauthorized"}, 401)
     db.reopen_tg_account_conv(conv_id)
-    return JSONResponse({"ok": True})
+    if _is_fetch(request):
+        return JSONResponse({"ok": True})
+    return RedirectResponse(f"/tg_account/chat?conv_id={conv_id}", 303)
 
 
 @router.post("/tg_account/delete")

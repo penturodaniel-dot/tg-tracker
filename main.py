@@ -1065,18 +1065,14 @@ async def go_redirect(
     click_id = _sec.token_urlsafe(12)
 
     # Строим destination:
-    # - канальные инвайты (t.me/+XXX, t.me/joinchat/) — редиректим через
-    #   трекер-бота: t.me/BOT?start=ref_CLICK_ID. Бот сохраняет tg_user_id
-    #   и отправляет инвайт-ссылку пользователю — это даёт точный matching.
+    # - канальные инвайты (t.me/+XXX, t.me/joinchat/) — редирект напрямую.
+    #   Если на канале включены join requests, бот перехватит запрос,
+    #   привяжет tg_user_id к клику и одобрит — точный matching без лишних шагов.
     # - бот-ссылки (t.me/botname без +) — добавляем ?start=ref_ напрямую
-    _tracker_bot_username = db.get_setting("tracker_bot_username") or ""
     destination = to
     if "t.me/" in to:
         is_invite = "/+" in to or "/joinchat/" in to
-        if is_invite and _tracker_bot_username:
-            # Направляем через бота для сохранения tg_user_id
-            destination = f"https://t.me/{_tracker_bot_username.lstrip('@')}?start=ref_{click_id}"
-        elif not is_invite:
+        if not is_invite:
             sep = "&" if "?" in to else "?"
             destination = f"{to}{sep}start=ref_{click_id}"
 

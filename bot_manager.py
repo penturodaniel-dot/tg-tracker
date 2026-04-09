@@ -82,6 +82,59 @@ def _build_tracker_dp() -> Dispatcher:
         except Exception as e:
             log.warning(f"[BOT1] on_start error: {e}")
 
+    @dp.chat_join_request()
+    async def on_join_request(event: types.ChatJoinRequest):
+        """
+        Join Request флоу: пользователь нажал 'Запрос на вступление' в канале.
+        Привязываем его tg_user_id к клику (чтобы on_join нашёл точное совпадение),
+        затем одобряем запрос — пользователь попадает в канал без лишних шагов.
+        """
+        try:
+            channel_ids = _db.get_channel_ids()
+            cid = str(event.chat.id)
+            if cid not in channel_ids:
+                # Канал не отслеживается — просто одобряем
+                await event.approve()
+                return
+
+            user_id_str = str(event.from_user.id)
+            raw_link    = event.invite_link.invite_link if event.invite_link else None
+
+            _CLICK_WINDOW = 10080  # 7 дней
+
+            # Ищем клик по invite_link — пользователь только что перешёл по ней
+            click_data = {}
+            if raw_link:
+                click_data = _db.get_latest_click_by_link(raw_link, minutes=_CLICK_WINDOW) or {}
+
+            # Фолбэк: поиск по utm_campaign кампании
+            if not click_data:
+                campaign = _db.get_campaign_by_link(raw_link)
+                if campaign and campaign.get("project_id"):
+                    _proj = _db.get_project(int(campaign["project_id"]))
+                    if _proj and _proj.get("utm_campaigns"):
+                        for _utm in [u.strip() for u in _proj["utm_campaigns"].split(",") if u.strip()]:
+                            click_data = _db.get_latest_click_by_utm(_utm, minutes=_CLICK_WINDOW) or {}
+                            if click_data:
+                                break
+
+            if click_data:
+                # Привязываем tg_user_id → on_join найдёт этот клик через Приоритет 0
+                _db.bind_click_to_user(click_data["click_id"], user_id_str)
+                log.info(f"[BOT1] join_request: bound user={user_id_str} → click={click_data['click_id']} fbclid={'✓' if click_data.get('fbclid') else '—'}")
+            else:
+                log.info(f"[BOT1] join_request: user={user_id_str} no click found (organic)")
+
+            # Одобряем запрос — on_join сработает следующим и отправит Subscribe в FB
+            await event.approve()
+
+        except Exception as e:
+            log.warning(f"[BOT1] on_join_request error: {e}")
+            try:
+                await event.approve()
+            except Exception:
+                pass
+
     @dp.chat_member(ChatMemberUpdatedFilter(JOIN_TRANSITION))
     async def on_join(event: types.ChatMemberUpdated):
         channel_ids = _db.get_channel_ids()
@@ -232,7 +285,7 @@ async def start_tracker_bot(token: str):
         _tracker_task = asyncio.create_task(
             _tracker_dp.start_polling(
                 _tracker_bot,
-                allowed_updates=["chat_member", "message"],
+                allowed_updates=["chat_member", "chat_join_request", "message"],
                 drop_pending_updates=True,
                 handle_signals=False,
             )

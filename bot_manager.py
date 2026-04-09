@@ -125,6 +125,15 @@ def _build_tracker_dp() -> Dispatcher:
             else:
                 log.info(f"[BOT1] join_request: user={user_id_str} no click found (organic)")
 
+            # Задержка перед одобрением — защита от бана Telegram при высоком трафике.
+            # Значение берём из настроек CRM (join_request_delay_sec), по умолчанию 1 сек.
+            try:
+                _delay = float(_db.get_setting("join_request_delay_sec") or 1)
+            except Exception:
+                _delay = 1.0
+            if _delay > 0:
+                await asyncio.sleep(_delay)
+
             # Одобряем запрос — on_join сработает следующим и отправит Subscribe в FB
             await event.approve()
 

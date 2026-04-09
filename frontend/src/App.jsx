@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react'
 import ConvList from './components/ConvList.jsx'
 import ChatPanel from './components/ChatPanel.jsx'
 import ScriptsPanel from './components/ScriptsPanel.jsx'
+import NavSidebar from './components/NavSidebar.jsx'
 import { useConvs } from './hooks/useConvs.js'
 
 export default function App() {
@@ -44,6 +45,7 @@ export default function App() {
 
   return (
     <div className="app-layout">
+      <NavSidebar />
       <ConvList
         convs={convs}
         status={status}

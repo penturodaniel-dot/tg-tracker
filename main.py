@@ -1055,17 +1055,25 @@ async def go_redirect(
         return HTMLResponse("<h2>Ссылка не указана</h2>", 400)
 
     to = to.strip()
+    # Восстанавливаем + в t.me ссылках: браузер декодирует + как пробел в query string
+    if "t.me/" in to:
+        to = to.replace(" ", "+")
     cookie_fbp = request.cookies.get("_fbp") or fbp
 
     # Генерируем click_id сразу — без ожидания БД
     import secrets as _sec
     click_id = _sec.token_urlsafe(12)
 
-    # Строим destination мгновенно
+    # Строим destination:
+    # - канальные инвайты (t.me/+XXX, t.me/joinchat/) — редирект напрямую,
+    #   ?start= там не работает (только у ботов)
+    # - бот-ссылки (t.me/botname без +) — добавляем ?start=ref_
     destination = to
-    if "t.me" in to:
-        sep = "&" if "?" in to else "?"
-        destination = f"{to}{sep}start=ref_{click_id}"
+    if "t.me/" in to:
+        is_invite = "/+" in to or "/joinchat/" in to
+        if not is_invite:
+            sep = "&" if "?" in to else "?"
+            destination = f"{to}{sep}start=ref_{click_id}"
 
     # Сохраняем клик в фоне — не блокируем редирект
     async def _save():
@@ -2266,9 +2274,11 @@ async def public_landing(request: Request, slug: str,
             _utm_source_val   = utm_source or "facebook"
 
         # Строим /go ссылки для каждого канала
+        # quote() нужен чтобы + в t.me/+XXX не декодировался как пробел в query string
         btns = []
         for cc in channels:
-            go_url = f"{app_url}/go?to={cc['invite_link'].strip()}&utm_campaign={_utm_campaign_val}&utm_source={_utm_source_val}&utm_medium={utm_medium or 'paid'}"
+            _inv = quote(cc['invite_link'].strip(), safe='')
+            go_url = f"{app_url}/go?to={_inv}&utm_campaign={_utm_campaign_val}&utm_source={_utm_source_val}&utm_medium={utm_medium or 'paid'}"
             if fbclid:      go_url += f"&fbclid={fbclid}"
             if utm_content: go_url += f"&utm_content={utm_content}"
             btns.append({

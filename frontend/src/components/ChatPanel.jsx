@@ -5,7 +5,7 @@ import SendBar from './SendBar.jsx'
 import { useConv } from '../hooks/useConv.js'
 import { useMessages } from '../hooks/useMessages.js'
 
-export default function ChatPanel({ convId, onConvUpdate, onConvDeleted, scriptText, onScriptConsumed }) {
+export default function ChatPanel({ convId, onConvUpdate, onConvDeleted, scriptText, onScriptConsumed, scriptsVisible, onShowScripts }) {
   const { conv, loading: convLoading, refresh: refreshConv } = useConv(convId)
   const { messages, readMaxId, loading: msgsLoading, addOptimistic } = useMessages(convId)
   const textareaRef = useRef(null)
@@ -43,18 +43,29 @@ export default function ChatPanel({ convId, onConvUpdate, onConvDeleted, scriptT
     addOptimistic(text, 'Менеджер')
   }, [addOptimistic])
 
+  const showScriptsBtn = !scriptsVisible && (
+    <button
+      className="scripts-show-btn"
+      title="Показать скрипты"
+      onClick={onShowScripts}
+    >
+      📝
+    </button>
+  )
+
   if (!convId) {
     return (
-      <div className="chat-panel">
+      <div className="chat-panel" style={{ position: 'relative' }}>
         <div className="chat-empty">
           Выберите диалог
         </div>
+        {showScriptsBtn}
       </div>
     )
   }
 
   return (
-    <div className="chat-panel">
+    <div className="chat-panel" style={{ position: 'relative' }}>
       <ChatHeader
         conv={conv}
         onUpdate={handleConvUpdate}
@@ -70,6 +81,7 @@ export default function ChatPanel({ convId, onConvUpdate, onConvDeleted, scriptT
         onOptimisticSend={handleOptimisticSend}
         textareaRef={textareaRef}
       />
+      {showScriptsBtn}
     </div>
   )
 }

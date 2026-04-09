@@ -1458,12 +1458,16 @@ async def api_tg_user_status(request: Request, user_id: str):
 
 
 @router.get("/api/tg_account_convs")
-async def api_tg_account_convs(request: Request, status: str = "open", offset: int = 0):
+async def api_tg_account_convs(request: Request, status: str = "open", offset: int = 0, tag_id: int = 0):
     """Список TG диалогов для авто-обновления и пагинации"""
     user = check_session(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
     status_arg = status if status != "all" else None
     convs = db.get_tg_account_conversations(status=status_arg, limit=30, offset=offset)
+    # Filter by tag if requested
+    if tag_id > 0:
+        conv_tags_map = db.get_all_conv_tags_map("tga")
+        convs = [c for c in convs if any(t["id"] == tag_id for t in conv_tags_map.get(c["id"], []))]
     tga_in_staff = db.get_tga_conv_ids_in_staff()
     return JSONResponse({"convs": [
         {
@@ -1495,6 +1499,8 @@ async def api_tg_account_conv(request: Request, conv_id: int):
     conv = db.get_tg_account_conversation(conv_id)
     if not conv: return JSONResponse({"error": "not found"}, 404)
     tags = db.get_conv_tags("tga", conv_id)
+    # Ищем сотрудника по tga_conv_id (прямая связь)
+    staff = db.get_staff_by_tg_account_conv(conv_id)
     return JSONResponse({
         "id":            conv["id"],
         "tg_user_id":    conv.get("tg_user_id") or "",
@@ -1514,6 +1520,8 @@ async def api_tg_account_conv(request: Request, conv_id: int):
         "utm_medium":    conv.get("utm_medium") or "",
         "created_at":    (conv.get("created_at") or "")[:16].replace("T"," "),
         "tags": [{"id": t["id"], "name": t["name"], "color": t.get("color","#888")} for t in (tags or [])],
+        "staff_id":      staff["id"] if staff else None,
+        "staff_name":    staff.get("name", "") if staff else "",
     })
 
 

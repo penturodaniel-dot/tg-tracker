@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { closeConv, reopenConv, deleteConv, sendLead, fetchUserStatus } from '../api.js'
+import { closeConv, reopenConv, deleteConv, sendLead, fetchUserStatus, addConvTag, removeConvTag, fetchAllTags } from '../api.js'
 
 function useOnlineStatus(tgUserId) {
   const [status, setStatus] = useState(null) // null | 'online' | 'recently' | string
@@ -41,13 +41,87 @@ function StatusDot({ status }) {
   )
 }
 
+function TagDropdown({ convId, convTags, onAdded }) {
+  const [allTags, setAllTags] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    fetchAllTags()
+      .then(data => setAllTags(data.tags || []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const existingIds = new Set((convTags || []).map(t => t.id))
+  const available = allTags.filter(t => !existingIds.has(t.id))
+
+  async function handleAdd(tagId) {
+    if (busy) return
+    setBusy(true)
+    try {
+      await addConvTag(convId, tagId)
+      onAdded()
+    } catch (e) {
+      alert('Ошибка: ' + e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="tag-add-dropdown" ref={ref}>
+      {loading && <div className="tag-add-dropdown-empty">Загрузка...</div>}
+      {!loading && available.length === 0 && (
+        <div className="tag-add-dropdown-empty">Все теги добавлены</div>
+      )}
+      {!loading && available.map(tag => (
+        <button
+          key={tag.id}
+          className="tag-add-dropdown-item"
+          disabled={busy}
+          onClick={() => handleAdd(tag.id)}
+        >
+          <span style={{
+            display: 'inline-block',
+            width: 8, height: 8,
+            borderRadius: '50%',
+            background: tag.color || '#888',
+            marginRight: 6,
+          }} />
+          {tag.name}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function ChatHeader({ conv, onUpdate, onDeleted }) {
   const [busy, setBusy] = useState(false)
   const [leadSentLocal, setLeadSentLocal] = useState(false)
+  const [showTagDropdown, setShowTagDropdown] = useState(false)
+  const tagDropdownRef = useRef(null)
+  const tagBtnRef = useRef(null)
   const onlineStatus = useOnlineStatus(conv?.tg_user_id)
 
   // Sync local lead state when conv changes
   useEffect(() => { setLeadSentLocal(false) }, [conv?.id])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showTagDropdown) return
+    function handleClick(e) {
+      if (
+        tagDropdownRef.current && !tagDropdownRef.current.contains(e.target) &&
+        tagBtnRef.current && !tagBtnRef.current.contains(e.target)
+      ) {
+        setShowTagDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showTagDropdown])
 
   if (!conv) return null
 
@@ -64,9 +138,17 @@ export default function ChatHeader({ conv, onUpdate, onDeleted }) {
     }
   }
 
+  async function handleRemoveTag(tagId) {
+    try {
+      await removeConvTag(conv.id, tagId)
+      onUpdate()
+    } catch (e) {
+      alert('Ошибка: ' + e.message)
+    }
+  }
+
   const isOpen    = conv.status === 'open'
   const leadSent  = !!conv.fb_event_sent || leadSentLocal
-  const appUrl    = window.location.origin
 
   return (
     <div className="chat-header">
@@ -89,7 +171,7 @@ export default function ChatHeader({ conv, onUpdate, onDeleted }) {
             </span>
           </div>
 
-          {/* Sub row: username · phone · utm */}
+          {/* Sub row: username · phone · utm · «В базе» */}
           <div className="chat-header-sub">
             {conv.username && (
               <a href={`https://t.me/${conv.username.replace('@','')}`}
@@ -104,19 +186,74 @@ export default function ChatHeader({ conv, onUpdate, onDeleted }) {
                 {conv.utm_campaign}{conv.utm_source ? ` · ${conv.utm_source}` : ''}
               </span>
             )}
+            {conv.staff_id && (
+              <a
+                href={`/staff?edit=${conv.staff_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  background: '#052e16', color: '#86efac',
+                  border: '1px solid #166534', borderRadius: 6,
+                  padding: '2px 8px', fontSize: 11, textDecoration: 'none',
+                }}
+              >
+                ✅ В базе · {conv.staff_name || 'Карточка'} →
+              </a>
+            )}
           </div>
 
           {/* Tags */}
-          {conv.tags && conv.tags.length > 0 && (
-            <div className="chat-header-tags">
-              {conv.tags.map(tag => (
-                <span key={tag.id} className="tag-badge"
-                  style={{ background: tag.color + '22', color: tag.color, borderColor: tag.color + '55' }}>
-                  #{tag.name}
-                </span>
-              ))}
+          <div className="chat-header-tags" style={{ position: 'relative' }}>
+            {(conv.tags || []).map(tag => (
+              <span key={tag.id} className="tag-badge"
+                style={{
+                  background: tag.color + '22', color: tag.color,
+                  borderColor: tag.color + '55',
+                  display: 'inline-flex', alignItems: 'center', gap: 3,
+                }}>
+                #{tag.name}
+                <button
+                  onClick={() => handleRemoveTag(tag.id)}
+                  title="Удалить тег"
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: tag.color, opacity: 0.7, padding: 0, fontSize: 11,
+                    lineHeight: 1, display: 'inline-flex', alignItems: 'center',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+
+            {/* Add tag button */}
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <button
+                ref={tagBtnRef}
+                className="tag-badge"
+                onClick={() => setShowTagDropdown(v => !v)}
+                style={{
+                  background: 'var(--bg3)', color: 'var(--text3)',
+                  borderColor: 'var(--border2)', cursor: 'pointer',
+                  border: '1px dashed var(--border2)',
+                }}
+              >
+                + Тег
+              </button>
+              {showTagDropdown && (
+                <div ref={tagDropdownRef}>
+                  <TagDropdown
+                    convId={conv.id}
+                    convTags={conv.tags}
+                    onAdded={() => { setShowTagDropdown(false); onUpdate() }}
+                  />
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 

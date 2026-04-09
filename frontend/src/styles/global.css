@@ -968,3 +968,100 @@ body {
 .btn-green:hover:not(:disabled) {
   background: rgba(34, 197, 94, 0.25);
 }
+
+/* Scripts panel show button (vertical, right edge of ChatPanel) */
+.scripts-show-btn {
+  position: absolute;
+  right: -1px;
+  top: 50%;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  color: var(--text2);
+  font-size: 16px;
+  padding: 10px 5px;
+  cursor: pointer;
+  z-index: 10;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+.scripts-show-btn:hover {
+  background: var(--bg3);
+  color: var(--text);
+}
+
+/* Tag filter bar in ConvList */
+.tag-filter-bar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 6px 0 2px;
+}
+
+.tag-filter-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.tag-filter-btn:hover {
+  background: var(--bg3);
+  color: var(--text);
+}
+
+.tag-filter-btn.active {
+  background: var(--border2);
+  color: var(--text);
+}
+
+/* Tag add dropdown */
+.tag-add-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  min-width: 150px;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  margin-top: 4px;
+}
+
+.tag-add-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 12px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.tag-add-dropdown-item:hover {
+  background: var(--bg3);
+}
+
+.tag-add-dropdown-empty {
+  padding: 10px 12px;
+  color: var(--text3);
+  font-size: 12px;
+}

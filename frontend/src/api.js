@@ -36,8 +36,9 @@ export async function postForm(url, data) {
 
 // ── Convs ────────────────────────────────────────────────────────────────────
 
-export function fetchConvs(status = 'open', offset = 0) {
+export function fetchConvs(status = 'open', offset = 0, tagId = null) {
   const params = new URLSearchParams({ status, offset })
+  if (tagId) params.set('tag_id', tagId)
   return get(`/api/tg_account_convs?${params}`)
 }
 
@@ -91,4 +92,36 @@ export function fetchScripts() {
 
 export function fetchUserStatus(tgUserId) {
   return get(`/api/tg_user_status/${tgUserId}`)
+}
+
+// ── Tags ─────────────────────────────────────────────────────────────────────
+
+export function fetchAllTags() {
+  return get('/api/tags')
+}
+
+export function addConvTag(convId, tagId) {
+  return fetch('/api/conv_tag/add', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conv_type: 'tga', conv_id: convId, tag_id: tagId }),
+  }).then(res => {
+    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized') }
+    if (!res.ok) throw new Error(`POST /api/conv_tag/add failed: ${res.status}`)
+    return res.json()
+  })
+}
+
+export function removeConvTag(convId, tagId) {
+  return fetch('/api/conv_tag/remove', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conv_type: 'tga', conv_id: convId, tag_id: tagId }),
+  }).then(res => {
+    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized') }
+    if (!res.ok) throw new Error(`POST /api/conv_tag/remove failed: ${res.status}`)
+    return res.json()
+  })
 }

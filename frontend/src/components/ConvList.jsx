@@ -1,5 +1,6 @@
-import React, { useRef, useCallback } from 'react'
+import React, { useRef, useCallback, useEffect, useState } from 'react'
 import ConvItem from './ConvItem.jsx'
+import { fetchAllTags } from '../api.js'
 
 const TABS = [
   { value: 'open',   label: 'Открытые' },
@@ -13,6 +14,8 @@ export default function ConvList({
   setStatus,
   search,
   setSearch,
+  tagFilter,
+  setTagFilter,
   loading,
   hasMore,
   loadMore,
@@ -20,6 +23,13 @@ export default function ConvList({
   onSelect,
 }) {
   const scrollRef = useRef(null)
+  const [tags, setTags] = useState([])
+
+  useEffect(() => {
+    fetchAllTags()
+      .then(data => setTags(data.tags || []))
+      .catch(() => {})
+  }, [])
 
   // Infinite scroll: detect near-bottom
   const handleScroll = useCallback(() => {
@@ -53,6 +63,38 @@ export default function ConvList({
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
+        {tags.length > 0 && (
+          <div className="tag-filter-bar">
+            <button
+              className={`tag-filter-btn${tagFilter === null ? ' active' : ''}`}
+              onClick={() => setTagFilter(null)}
+            >
+              Все
+            </button>
+            {tags.map(tag => (
+              <button
+                key={tag.id}
+                className={`tag-filter-btn${tagFilter === tag.id ? ' active' : ''}`}
+                onClick={() => setTagFilter(tagFilter === tag.id ? null : tag.id)}
+                style={tagFilter === tag.id ? {
+                  background: tag.color + '33',
+                  color: tag.color,
+                  borderColor: tag.color + '88',
+                } : {}}
+              >
+                <span style={{
+                  display: 'inline-block',
+                  width: 7, height: 7,
+                  borderRadius: '50%',
+                  background: tag.color || '#888',
+                  marginRight: 4,
+                  verticalAlign: 'middle',
+                }} />
+                {tag.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="conv-list-scroll" ref={scrollRef} onScroll={handleScroll}>

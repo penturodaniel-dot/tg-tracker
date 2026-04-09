@@ -8,6 +8,7 @@ import { useConvs } from './hooks/useConvs.js'
 export default function App() {
   const [selectedId, setSelectedId] = useState(null)
   const [pendingScript, setPendingScript] = useState(null)
+  const [scriptsVisible, setScriptsVisible] = useState(true)
 
   const {
     convs,
@@ -15,6 +16,8 @@ export default function App() {
     setStatus,
     search,
     setSearch,
+    tagFilter,
+    setTagFilter,
     loading,
     hasMore,
     loadMore,
@@ -52,6 +55,8 @@ export default function App() {
         setStatus={setStatus}
         search={search}
         setSearch={setSearch}
+        tagFilter={tagFilter}
+        setTagFilter={setTagFilter}
         loading={loading}
         hasMore={hasMore}
         loadMore={loadMore}
@@ -64,8 +69,14 @@ export default function App() {
         onConvDeleted={handleConvDeleted}
         scriptText={pendingScript}
         onScriptConsumed={handleScriptConsumed}
+        scriptsVisible={scriptsVisible}
+        onShowScripts={() => setScriptsVisible(true)}
       />
-      <ScriptsPanel onSelectScript={handleScriptSelect} />
+      <ScriptsPanel
+        onSelectScript={handleScriptSelect}
+        visible={scriptsVisible}
+        onToggleVisible={() => setScriptsVisible(false)}
+      />
     </div>
   )
 }

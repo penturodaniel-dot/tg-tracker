@@ -6,6 +6,7 @@ const POLL_INTERVAL = 5000
 /**
  * Manages the conversation list with:
  *  - status tab filtering (open / closed / all)
+ *  - tag filter (null | number)
  *  - client-side search
  *  - infinite scroll (offset-based)
  *  - polling every 5 seconds
@@ -13,6 +14,7 @@ const POLL_INTERVAL = 5000
 export function useConvs() {
   const [status, setStatus] = useState('open')
   const [search, setSearch] = useState('')
+  const [tagFilter, setTagFilter] = useState(null)
   const [convs, setConvs] = useState([])
   const [offset, setOffset] = useState(0)
   const [hasMore, setHasMore] = useState(false)
@@ -21,17 +23,19 @@ export function useConvs() {
 
   const offsetRef = useRef(0)
   const statusRef = useRef(status)
+  const tagFilterRef = useRef(tagFilter)
 
   // Keep refs in sync so interval callbacks see current values
   useEffect(() => { statusRef.current = status }, [status])
   useEffect(() => { offsetRef.current = offset }, [offset])
+  useEffect(() => { tagFilterRef.current = tagFilter }, [tagFilter])
 
   // Load first page (or refresh)
-  const loadInitial = useCallback(async (st) => {
+  const loadInitial = useCallback(async (st, tag) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchConvs(st, 0)
+      const data = await fetchConvs(st, 0, tag)
       setConvs(data.convs || [])
       setHasMore(data.has_more || false)
       setOffset(data.convs?.length || 0)
@@ -42,15 +46,15 @@ export function useConvs() {
     }
   }, [])
 
-  // Re-load when status changes
+  // Re-load when status or tagFilter changes
   useEffect(() => {
-    loadInitial(status)
-  }, [status, loadInitial])
+    loadInitial(status, tagFilter)
+  }, [status, tagFilter, loadInitial])
 
   // Silent poll: merge new data at the top without resetting scroll
   const pollConvs = useCallback(async () => {
     try {
-      const data = await fetchConvs(statusRef.current, 0)
+      const data = await fetchConvs(statusRef.current, 0, tagFilterRef.current)
       const incoming = data.convs || []
       setConvs(prev => {
         // Build a map of existing convs by id for O(1) lookup
@@ -80,7 +84,7 @@ export function useConvs() {
     if (loading || !hasMore) return
     setLoading(true)
     try {
-      const data = await fetchConvs(statusRef.current, offsetRef.current)
+      const data = await fetchConvs(statusRef.current, offsetRef.current, tagFilterRef.current)
       const incoming = data.convs || []
       setConvs(prev => {
         const ids = new Set(prev.map(c => c.id))
@@ -113,6 +117,8 @@ export function useConvs() {
     setStatus,
     search,
     setSearch,
+    tagFilter,
+    setTagFilter,
     loading,
     error,
     hasMore: hasMore && !search.trim(),

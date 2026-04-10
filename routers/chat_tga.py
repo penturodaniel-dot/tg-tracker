@@ -849,10 +849,15 @@ async def tg_account_setup(request: Request, msg: str = ""):
     tg_phone    = db.get_setting("tg_account_phone", "")
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
 
-    # If we just successfully connected (success redirect), force status to connected.
-    # The TG service may fire a "disconnected" webhook during session cleanup that races
-    # with the sign_in response and overwrites the "connected" we set.
-    if "подключён" in msg and tg_status != "connected":
+    # При редиректе после явного отключения — принудительно выставляем disconnected.
+    # TG сервис может сделать авто-реконнект и вернуть статус "connected" в БД раньше,
+    # чем страница отрендерится.
+    if "отключён" in msg:
+        tg_status = "disconnected"
+        db.set_setting("tg_account_status", "disconnected")
+    # При редиректе после успешного входа — принудительно выставляем connected.
+    # TG сервис может прислать "disconnected" вебхук (старая сессия) и перезаписать статус.
+    elif "подключён" in msg and tg_status != "connected":
         tg_status = "connected"
         db.set_setting("tg_account_status", "connected")
 

@@ -849,17 +849,21 @@ async def tg_account_setup(request: Request, msg: str = ""):
     tg_phone    = db.get_setting("tg_account_phone", "")
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
 
-    # При редиректе после явного отключения — принудительно выставляем disconnected.
-    # TG сервис может сделать авто-реконнект и вернуть статус "connected" в БД раньше,
-    # чем страница отрендерится.
-    if "отключён" in msg:
-        tg_status = "disconnected"
-        db.set_setting("tg_account_status", "disconnected")
-    # При редиректе после успешного входа — принудительно выставляем connected.
-    # TG сервис может прислать "disconnected" вебхук (старая сессия) и перезаписать статус.
-    elif "подключён" in msg and tg_status != "connected":
-        tg_status = "connected"
-        db.set_setting("tg_account_status", "connected")
+    # Используем msg как источник истины при редиректе — БД может отставать из-за вебхуков.
+    # Каждый POST-обработчик редиректит с конкретным msg, однозначно определяющим нужный экран.
+    if msg:
+        if "отправлен" in msg:          # send_code → показываем форму ввода кода
+            tg_status = "awaiting_code"
+            db.set_setting("tg_account_status", "awaiting_code")
+        elif "2FA" in msg or "2fa" in msg or "пароль" in msg.lower():
+            tg_status = "awaiting_2fa"
+            db.set_setting("tg_account_status", "awaiting_2fa")
+        elif "отключён" in msg:         # disconnect → форма подключения нового аккаунта
+            tg_status = "disconnected"
+            db.set_setting("tg_account_status", "disconnected")
+        elif "подключён" in msg:        # sign_in / sign_in_2fa → зелёный блок "подключён"
+            tg_status = "connected"
+            db.set_setting("tg_account_status", "connected")
 
     if tg_status == "connected":
         body_html = f"""

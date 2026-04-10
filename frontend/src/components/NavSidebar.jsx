@@ -42,12 +42,10 @@ const NAV_SECTIONS = [
 
 const STORAGE_KEY = 'nav_expanded'
 
-// Проверяем доступ к вкладке по window.__USER.permissions
 function canAccessTab(tab) {
   const u = window.__USER
   if (!u || u.role === 'admin') return true
   const perms = (u.permissions || '').split(',').map(p => p.trim()).filter(Boolean)
-  // Пустые permissions = все открыты (обратная совместимость)
   return perms.length === 0 || perms.includes(tab)
 }
 
@@ -63,6 +61,8 @@ export default function NavSidebar() {
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, expanded ? '1' : '0') } catch {}
   }, [expanded])
+
+  const username = window.__USER?.username || ''
 
   return (
     <div className={`nav-sidebar ${expanded ? 'nav-sidebar--open' : ''}`}>
@@ -112,6 +112,24 @@ export default function NavSidebar() {
           </div>
         )
       })}
+
+      {/* Logout — прибит к низу */}
+      <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border)', paddingTop: '4px' }}>
+        {expanded && username && (
+          <div style={{ padding: '6px 12px 2px', fontSize: '11px', color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {username}
+          </div>
+        )}
+        <a
+          href="/logout"
+          className="nav-link"
+          title={!expanded ? 'Выйти' : undefined}
+          style={{ color: 'var(--text3)' }}
+        >
+          <span className="nav-link-icon">🚪</span>
+          {expanded && <span className="nav-link-text">Выйти</span>}
+        </a>
+      </div>
     </div>
   )
 }

@@ -59,6 +59,15 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
         ("analytics_staff",  "📊 Статистика Сотрудников"),
     ]
 
+    # Действия в чатах
+    ALL_ACTIONS = [
+        ("can_delete",    "🗑 Удалять диалоги"),
+        ("can_send_lead", "📤 Отправлять Lead в FB/TikTok"),
+        ("can_close",     "✓ Закрывать / открывать диалоги"),
+        ("can_see_utm",   "🔗 Видеть UTM и источники трафика"),
+        ("can_export",    "📥 Экспортировать данные"),
+    ]
+
     def perm_checkboxes(selected_perms):
         sel = [p.strip() for p in selected_perms.split(",") if p.strip()]
         boxes = ""
@@ -69,6 +78,17 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
               {tab_name}
             </label>'''
         return f'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;margin-top:8px">{boxes}</div>'
+
+    def action_checkboxes(selected_actions):
+        sel = [a.strip() for a in selected_actions.split(",") if a.strip()]
+        boxes = ""
+        for act_id, act_name in ALL_ACTIONS:
+            checked = "checked" if (not sel or act_id in sel) else ""
+            boxes += f'''<label style="display:flex;align-items:center;gap:7px;padding:5px 10px;background:var(--bg3);border-radius:7px;cursor:pointer;font-size:.82rem">
+              <input type="checkbox" name="act_{act_id}" value="{act_id}" {checked} style="accent-color:#34d399">
+              {act_name}
+            </label>'''
+        return f'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;margin-top:8px">{boxes}</div>'
 
     # Форма редактирования
     edit_form = ""
@@ -98,6 +118,10 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
                     <div class="field-label">🔒 Доступы к вкладкам (отмеченные вкладки доступны менеджеру)</div>
                     {perm_checkboxes(eu_perms)}
                   </div>
+                  <div class="field-group" style="margin-bottom:12px">
+                    <div class="field-label">⚡ Действия в чатах (пусто = все разрешены)</div>
+                    {action_checkboxes(eu.get('actions') or '')}
+                  </div>
                   <div style="display:flex;gap:8px">
                     <button class="btn-orange">💾 Сохранить</button>
                     <a href="/users"><button class="btn-gray" type="button">Отмена</button></a>
@@ -108,8 +132,11 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
     rows = ""
     for u in users:
         perms = u.get("permissions") or ""
+        acts  = u.get("actions") or ""
         perm_count = len([p for p in perms.split(",") if p.strip()]) if perms else len(ALL_TABS)
+        act_count  = len([a for a in acts.split(",")  if a.strip()]) if acts  else len(ALL_ACTIONS)
         perm_badge = f'<span class="badge-gray" style="font-size:.7rem">{perm_count}/{len(ALL_TABS)} вкладок</span>'
+        act_badge  = f'<span class="badge-gray" style="font-size:.7rem;background:rgba(52,211,153,.1);color:#34d399">{act_count}/{len(ALL_ACTIONS)} действий</span>'
         is_self = u["username"] == user["username"]
         self_badge = ' <span style="font-size:.7rem;color:var(--orange)">(вы)</span>' if is_self else ""
         edit_btn = f'<a href="/users?edit={u["id"]}"><button class="btn-gray btn-sm">✏️</button></a>'
@@ -119,7 +146,7 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
             <td>{u.get('display_name') or '—'}</td>
             <td><b>{u['username']}</b>{self_badge}</td>
             <td><span class="{'badge' if u['role']=='admin' else 'badge-gray'}">{u['role']}</span></td>
-            <td>{perm_badge}</td>
+            <td>{perm_badge}<br>{act_badge}</td>
             <td>{u['created_at'][:10]}</td>
             <td style="white-space:nowrap">{edit_btn} {del_btn}</td>
         </tr>"""
@@ -168,6 +195,10 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
         <div class="field-group" style="margin-bottom:12px">
           <div class="field-label">🔒 Доступы к вкладкам (по умолчанию — все открыты)</div>
           {perm_checkboxes("")}
+        </div>
+        <div class="field-group" style="margin-bottom:12px">
+          <div class="field-label">⚡ Действия в чатах (пусто = все разрешены)</div>
+          {action_checkboxes("")}
         </div>
         <button class="btn">Добавить</button>
       </form>
@@ -222,11 +253,14 @@ async def users_add(request: Request, username: str = Form(...), password: str =
     if err: return err
     ALL_TAB_IDS = ["channels","campaigns","landings","analytics_clients",
                    "tg_account_chat","wa_chat","staff","landings_staff","analytics_staff"]
+    ALL_ACT_IDS = ["can_delete","can_send_lead","can_close","can_see_utm","can_export"]
     form = await request.form()
     checked = [t for t in ALL_TAB_IDS if form.get(f"perm_{t}")]
     perms = "" if len(checked) == len(ALL_TAB_IDS) else ",".join(checked)
+    acts_checked = [a for a in ALL_ACT_IDS if form.get(f"act_{a}")]
+    actions = "" if len(acts_checked) == len(ALL_ACT_IDS) else ",".join(acts_checked)
     try:
-        db.create_user(username.strip(), password, role, perms, display_name.strip())
+        db.create_user(username.strip(), password, role, perms, display_name.strip(), actions)
         return RedirectResponse("/users?msg=Пользователь+добавлен", 303)
     except:
         return RedirectResponse("/users?msg=Такой+логин+уже+существует", 303)
@@ -239,10 +273,13 @@ async def users_update(request: Request, user_id: int = Form(...), username: str
     if err: return err
     ALL_TAB_IDS = ["channels","campaigns","landings","analytics_clients",
                    "tg_account_chat","wa_chat","staff","landings_staff","analytics_staff"]
+    ALL_ACT_IDS = ["can_delete","can_send_lead","can_close","can_see_utm","can_export"]
     form = await request.form()
     checked = [t for t in ALL_TAB_IDS if form.get(f"perm_{t}")]
     perms = "" if len(checked) == len(ALL_TAB_IDS) else ",".join(checked)
-    db.update_user(user_id, username.strip(), role, perms, new_password.strip() or None, display_name.strip())
+    acts_checked = [a for a in ALL_ACT_IDS if form.get(f"act_{a}")]
+    actions = "" if len(acts_checked) == len(ALL_ACT_IDS) else ",".join(acts_checked)
+    db.update_user(user_id, username.strip(), role, perms, new_password.strip() or None, display_name.strip(), actions)
     return RedirectResponse("/users?msg=Сохранено", 303)
 
 

@@ -133,6 +133,7 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
             "role":        user.get("role", "manager"),
             "username":    user.get("username", ""),
             "permissions": user.get("permissions", ""),
+            "actions":     user.get("actions", ""),
         })
         _inject = f'<script>window.__USER={_user_data};</script>'
         _html = _html.replace('</head>', _inject + '</head>', 1)
@@ -1270,8 +1271,8 @@ async def tg_account_send_media(request: Request, conv_id: int = Form(...), file
 
 @router.post("/tg_account/send_lead")
 async def tg_account_send_lead(request: Request, conv_id: int = Form(...)):
-    user, err = require_auth(request)
-    if err: return err
+    user, err = require_auth(request, action="can_send_lead")
+    if err: return JSONResponse({"error": "forbidden"}, 403)
     conv = db.get_tg_account_conversation(conv_id)
     if not conv: return RedirectResponse("/tg_account/chat", 303)
     if conv.get("fb_event_sent"):
@@ -1329,8 +1330,8 @@ def _is_fetch(request: Request) -> bool:
 
 @router.post("/tg_account/close")
 async def tg_account_close(request: Request, conv_id: int = Form(...)):
-    user, err = require_auth(request)
-    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    user, err = require_auth(request, action="can_close")
+    if err: return JSONResponse({"error": "forbidden"}, 403)
     db.close_tg_account_conv(conv_id)
     if _is_fetch(request):
         return JSONResponse({"ok": True})
@@ -1339,8 +1340,8 @@ async def tg_account_close(request: Request, conv_id: int = Form(...)):
 
 @router.post("/tg_account/reopen")
 async def tg_account_reopen(request: Request, conv_id: int = Form(...)):
-    user, err = require_auth(request)
-    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    user, err = require_auth(request, action="can_close")
+    if err: return JSONResponse({"error": "forbidden"}, 403)
     db.reopen_tg_account_conv(conv_id)
     if _is_fetch(request):
         return JSONResponse({"ok": True})
@@ -1349,8 +1350,8 @@ async def tg_account_reopen(request: Request, conv_id: int = Form(...)):
 
 @router.post("/tg_account/delete")
 async def tg_account_delete(request: Request, conv_id: int = Form(...)):
-    user, err = require_auth(request, role="admin")
-    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    user, err = require_auth(request, action="can_delete")
+    if err: return JSONResponse({"error": "forbidden"}, 403)
     db.delete_tg_account_conversation(conv_id)
     return JSONResponse({"ok": True})
 

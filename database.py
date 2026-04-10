@@ -264,6 +264,8 @@ class Database:
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT DEFAULT ''",
                     # Раздельные пиксели клиенты/сотрудники
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT ''",
+                    # Действия в чатах (can_delete, can_send_lead, can_close, can_see_utm, can_export)
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS actions TEXT DEFAULT ''",
                     # Staff clicks — UTM трекинг для HR лендингов
                     """CREATE TABLE IF NOT EXISTS staff_clicks (
                         id          SERIAL PRIMARY KEY,
@@ -484,33 +486,33 @@ class Database:
     def get_users(self):
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id,username,role,created_at,permissions,display_name FROM users ORDER BY created_at")
+                cur.execute("SELECT id,username,role,created_at,permissions,display_name,actions FROM users ORDER BY created_at")
                 return [dict(r) for r in cur.fetchall()]
 
     def get_user_by_id(self, user_id):
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id,username,role,created_at,permissions,display_name FROM users WHERE id=%s", (user_id,))
+                cur.execute("SELECT id,username,role,created_at,permissions,display_name,actions FROM users WHERE id=%s", (user_id,))
                 r = cur.fetchone(); return dict(r) if r else None
 
-    def create_user(self, username, password, role="manager", permissions="", display_name=""):
+    def create_user(self, username, password, role="manager", permissions="", display_name="", actions=""):
         pwd = hashlib.sha256(password.encode()).hexdigest()
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("INSERT INTO users (username,password,role,created_at,permissions,display_name) VALUES (%s,%s,%s,%s,%s,%s)",
-                            (username, pwd, role, datetime.utcnow().isoformat(), permissions, display_name))
+                cur.execute("INSERT INTO users (username,password,role,created_at,permissions,display_name,actions) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                            (username, pwd, role, datetime.utcnow().isoformat(), permissions, display_name, actions))
             conn.commit()
 
-    def update_user(self, user_id, username, role, permissions, new_password=None, display_name=None):
+    def update_user(self, user_id, username, role, permissions, new_password=None, display_name=None, actions=""):
         with self._conn() as conn:
             with conn.cursor() as cur:
                 if new_password:
                     pwd = hashlib.sha256(new_password.encode()).hexdigest()
-                    cur.execute("UPDATE users SET username=%s,role=%s,permissions=%s,password=%s,display_name=%s WHERE id=%s",
-                                (username, role, permissions, pwd, display_name or "", user_id))
+                    cur.execute("UPDATE users SET username=%s,role=%s,permissions=%s,password=%s,display_name=%s,actions=%s WHERE id=%s",
+                                (username, role, permissions, pwd, display_name or "", actions, user_id))
                 else:
-                    cur.execute("UPDATE users SET username=%s,role=%s,permissions=%s,display_name=%s WHERE id=%s",
-                                (username, role, permissions, display_name or "", user_id))
+                    cur.execute("UPDATE users SET username=%s,role=%s,permissions=%s,display_name=%s,actions=%s WHERE id=%s",
+                                (username, role, permissions, display_name or "", actions, user_id))
             conn.commit()
 
     def delete_user(self, user_id):

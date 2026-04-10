@@ -97,7 +97,14 @@ function TagDropdown({ convId, convTags, onAdded }) {
   )
 }
 
-const isAdmin = () => (window.__USER?.role === 'admin')
+const isAdmin = () => window.__USER?.role === 'admin'
+
+// Проверяем разрешение на действие: admin = всё, пустые actions = всё, иначе — проверяем список
+const canDo = (action) => {
+  if (window.__USER?.role === 'admin') return true
+  const acts = (window.__USER?.actions || '').split(',').map(a => a.trim()).filter(Boolean)
+  return acts.length === 0 || acts.includes(action)
+}
 
 export default function ChatHeader({ conv, onUpdate, onDeleted }) {
   const [busy, setBusy] = useState(false)
@@ -284,21 +291,23 @@ export default function ChatHeader({ conv, onUpdate, onDeleted }) {
           </a>
         )}
 
-        {/* Lead button */}
-        <button
-          className={`btn ${leadSent ? 'btn-green' : 'btn-orange'} btn-sm`}
-          disabled={leadSent || busy}
-          title={leadSent ? 'Lead уже отправлен' : 'Отправить Lead в Facebook/TikTok'}
-          onClick={() => handleAction(async () => {
-            await sendLead(conv.id)
-            setLeadSentLocal(true)
-          })}
-        >
-          {leadSent ? '✅ Lead ✓' : 'Lead'}
-        </button>
+        {/* Lead button — только при наличии can_send_lead */}
+        {canDo('can_send_lead') && (
+          <button
+            className={`btn ${leadSent ? 'btn-green' : 'btn-orange'} btn-sm`}
+            disabled={leadSent || busy}
+            title={leadSent ? 'Lead уже отправлен' : 'Отправить Lead в Facebook/TikTok'}
+            onClick={() => handleAction(async () => {
+              await sendLead(conv.id)
+              setLeadSentLocal(true)
+            })}
+          >
+            {leadSent ? '✅ Lead ✓' : 'Lead'}
+          </button>
+        )}
 
-        {/* Close / Reopen */}
-        {isOpen ? (
+        {/* Close / Reopen — только при наличии can_close */}
+        {canDo('can_close') && (isOpen ? (
           <button className="btn btn-gray btn-sm" disabled={busy}
             onClick={() => handleAction(() => closeConv(conv.id))}>
             Закрыть
@@ -308,10 +317,10 @@ export default function ChatHeader({ conv, onUpdate, onDeleted }) {
             onClick={() => handleAction(() => reopenConv(conv.id))}>
             Открыть
           </button>
-        )}
+        ))}
 
-        {/* Delete — только для admin */}
-        {isAdmin() && (
+        {/* Delete — только при наличии can_delete */}
+        {canDo('can_delete') && (
           <button className="btn btn-red btn-sm" disabled={busy}
             onClick={() => {
               if (window.confirm('Удалить диалог? Это нельзя отменить.')) {

@@ -248,7 +248,7 @@ def check_session(request: Request) -> dict | None:
     return None
 
 
-def require_auth(request: Request, role: str = None, tab: str = None):
+def require_auth(request: Request, role: str = None, tab: str = None, action: str = None):
     user = check_session(request)
     if not user:
         return None, RedirectResponse("/login", 303)
@@ -260,6 +260,13 @@ def require_auth(request: Request, role: str = None, tab: str = None):
         allowed = [p.strip() for p in perms.split(",") if p.strip()]
         if allowed and tab not in allowed:
             return None, HTMLResponse(f'<html><body style="background:var(--bg);color:var(--text);font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px"><div style="font-size:2rem">🚫</div><div style="font-size:1.1rem;font-weight:600">Нет доступа к этому разделу</div><a href="/" style="color:var(--orange);font-size:.9rem">← Назад</a></body></html>', 403)
+    # Проверяем доступ к действию для менеджеров
+    if action and user["role"] != "admin":
+        acts = user.get("actions", "") or ""
+        allowed_acts = [a.strip() for a in acts.split(",") if a.strip()]
+        # Пустые actions = все разрешено (обратная совместимость)
+        if allowed_acts and action not in allowed_acts:
+            return None, JSONResponse({"error": "forbidden", "detail": f"Действие '{action}' не разрешено"}, status_code=403)
     return user, None
 
 

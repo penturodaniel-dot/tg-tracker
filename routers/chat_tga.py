@@ -848,6 +848,13 @@ async def tg_account_setup(request: Request, msg: str = ""):
     tg_phone    = db.get_setting("tg_account_phone", "")
     alert = f'<div class="alert-green">✅ {msg}</div>' if msg else ""
 
+    # If we just successfully connected (success redirect), force status to connected.
+    # The TG service may fire a "disconnected" webhook during session cleanup that races
+    # with the sign_in response and overwrites the "connected" we set.
+    if "подключён" in msg and tg_status != "connected":
+        tg_status = "connected"
+        db.set_setting("tg_account_status", "connected")
+
     if tg_status == "connected":
         body_html = f"""
           <div style="background:#052e16;border:1px solid #166534;border-radius:12px;padding:16px;margin-bottom:20px">
@@ -974,6 +981,7 @@ async def tg_account_sign_in_2fa(request: Request, password: str = Form(...)):
     result = await tg_api("post", "/auth/sign_in", json={"password": password})
     if result.get("error"):
         return RedirectResponse(f"/tg_account/setup?msg=Ошибка: {result['error']}", 303)
+    db.set_setting("tg_account_status", "connected")
     return RedirectResponse("/tg_account/setup?msg=Аккаунт+подключён", 303)
 
 
@@ -1010,8 +1018,13 @@ async def tg_account_webhook(request: Request):
             db.set_setting("tg_account_name", data.get("name", ""))
 
         elif event == "disconnected":
-            db.set_setting("tg_account_status", "disconnected")
-            db.set_setting("tg_account_username", "")
+            # Don't overwrite an active auth flow or a recently-confirmed connection.
+            # TG service often fires "disconnected" when cleaning up the old session
+            # right after a successful sign_in, which would race with the "connected" we just set.
+            current_status = db.get_setting("tg_account_status", "disconnected")
+            if current_status not in ("connected", "awaiting_code", "awaiting_2fa"):
+                db.set_setting("tg_account_status", "disconnected")
+                db.set_setting("tg_account_username", "")
 
         elif event == "message":
             tg_user_id  = data.get("tg_user_id", "")

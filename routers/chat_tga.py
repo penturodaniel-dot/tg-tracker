@@ -10,6 +10,7 @@ routers/chat_tga.py — Telegram Account чат роуты
 """
 
 import httpx
+import time
 from datetime import datetime
 from fastapi import APIRouter, Request, Form, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -955,6 +956,7 @@ async def tg_account_send_code(request: Request, phone: str = Form(...),
     # Сохраняем в БД: ждём ввода кода
     db.set_setting("tg_account_status", "awaiting_code")
     db.set_setting("tg_account_phone",  phone.strip())
+    db.set_setting("tg_disconnect_time", "0")  # снимаем блокировку ready-вебхука
     return RedirectResponse("/tg_account/setup?msg=Код+отправлен", 303)
 
 
@@ -989,6 +991,8 @@ async def tg_account_sign_in_2fa(request: Request, password: str = Form(...)):
 async def tg_account_disconnect(request: Request):
     user, err = require_auth(request, role="admin")
     if err: return err
+    # Ставим метку времени отключения ПЕРЕД sign_out, чтобы вебхук ready не перезаписал статус
+    db.set_setting("tg_disconnect_time", str(int(time.time())))
     await tg_api("post", "/auth/sign_out")
     db.set_setting("tg_account_status", "disconnected")
     db.set_setting("tg_account_username", "")
@@ -1012,10 +1016,16 @@ async def tg_account_webhook(request: Request):
 
     try:
         if event == "ready":
-            db.set_setting("tg_account_status", "connected")
-            db.set_setting("tg_account_username", data.get("username", ""))
-            db.set_setting("tg_account_phone", data.get("phone", ""))
-            db.set_setting("tg_account_name", data.get("name", ""))
+            # Игнорируем ready-вебхук в течение 30 сек после явного отключения
+            # (TG сервис иногда делает авто-реконнект после sign_out)
+            disconnect_time = int(db.get_setting("tg_disconnect_time", "0") or "0")
+            if time.time() - disconnect_time < 30:
+                log.info("[TG webhook] Ignoring 'ready' event within 30s of manual disconnect")
+            else:
+                db.set_setting("tg_account_status", "connected")
+                db.set_setting("tg_account_username", data.get("username", ""))
+                db.set_setting("tg_account_phone", data.get("phone", ""))
+                db.set_setting("tg_account_name", data.get("name", ""))
 
         elif event == "disconnected":
             # Don't overwrite an active auth flow or a recently-confirmed connection.

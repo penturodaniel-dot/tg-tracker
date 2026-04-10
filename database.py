@@ -58,6 +58,13 @@ class Database:
                 CREATE TABLE IF NOT EXISTS channels (
                     id SERIAL PRIMARY KEY, name TEXT NOT NULL,
                     channel_id TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS channel_member_snapshots (
+                    id          SERIAL PRIMARY KEY,
+                    channel_id  TEXT NOT NULL,
+                    member_count INTEGER NOT NULL DEFAULT 0,
+                    snapped_at  TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_ch_snap_channel ON channel_member_snapshots(channel_id, snapped_at DESC);
 
                 -- Кампания = группа каналов + лендинг
                 CREATE TABLE IF NOT EXISTS campaigns (
@@ -560,6 +567,48 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM channels WHERE channel_id=%s", (channel_id,))
             conn.commit()
+
+    def save_channel_snapshot(self, channel_id: str, member_count: int):
+        """Сохранить снапшот количества участников канала."""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO channel_member_snapshots (channel_id, member_count, snapped_at) VALUES (%s,%s,%s)",
+                    (channel_id, member_count, datetime.utcnow().isoformat())
+                )
+            conn.commit()
+
+    def get_channel_member_counts(self):
+        """Вернуть последний снапшот + прирост за ~24ч для каждого канала."""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                # Последний снапшот для каждого канала
+                cur.execute("""
+                    SELECT DISTINCT ON (channel_id) channel_id, member_count, snapped_at
+                    FROM channel_member_snapshots
+                    ORDER BY channel_id, snapped_at DESC
+                """)
+                latest = {r['channel_id']: dict(r) for r in cur.fetchall()}
+
+                # Снапшот ~24ч назад для расчёта прироста
+                cur.execute("""
+                    SELECT DISTINCT ON (channel_id) channel_id, member_count
+                    FROM channel_member_snapshots
+                    WHERE snapped_at <= (NOW() - INTERVAL '20 hours')::text
+                    ORDER BY channel_id, snapped_at DESC
+                """)
+                yesterday = {r['channel_id']: r['member_count'] for r in cur.fetchall()}
+
+                result = {}
+                for cid, row in latest.items():
+                    prev = yesterday.get(cid)
+                    delta = (row['member_count'] - prev) if prev is not None else None
+                    result[cid] = {
+                        'member_count': row['member_count'],
+                        'delta': delta,
+                        'snapped_at': row['snapped_at'],
+                    }
+                return result
 
     def get_channel_ids(self):
         with self._conn() as conn:

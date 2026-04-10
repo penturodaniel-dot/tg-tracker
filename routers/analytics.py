@@ -33,11 +33,35 @@ def setup(_db, _log, _require_auth, _base, _nav_html, _render_conv_tags_picker_f
 # ANALYTICS
 # ══════════════════════════════════════════════════════════════════════════════
 
+@router.post("/analytics/clients/reset_stats")
+async def analytics_reset_stats(request: Request):
+    """Установить дату начала отсчёта статистики на сегодня."""
+    user, err = require_auth(request)
+    if err: return err
+    from datetime import date
+    db.set_setting("stats_reset_date", date.today().isoformat())
+    return RedirectResponse("/analytics/clients?msg=reset", 303)
+
+
+@router.post("/analytics/clients/clear_reset")
+async def analytics_clear_reset(request: Request):
+    """Убрать дату сброса — показывать всю статистику."""
+    user, err = require_auth(request)
+    if err: return err
+    db.set_setting("stats_reset_date", "")
+    return RedirectResponse("/analytics/clients", 303)
+
+
 @router.get("/analytics/clients", response_class=HTMLResponse)
 async def analytics_clients(request: Request,
     date_from: str = "", date_to: str = "", period: str = "30"):
     user, err = require_auth(request)
     if err: return err
+
+    # Дата сброса статистики — если установлена, используем как date_from
+    reset_date = db.get_setting("stats_reset_date", "")
+    if reset_date and not date_from:
+        date_from = reset_date
 
     days = int(period) if period.isdigit() else 30
     df   = date_from or None
@@ -146,47 +170,67 @@ async def analytics_clients(request: Request,
         </tr>"""
     recent_rows = recent_rows or '<tr><td colspan="5"><div class="empty">Нет подписок за период</div></td></tr>'
 
-    # Dual chart data (joins + clicks по дням)
-    chart_html = _dual_sparkline(joins_day, clicks_day)
-
     sel_period = lambda v,l: f'<option value="{v}" {"selected" if period==v else ""}>{l}</option>'
+
+    # Баннер сброса статистики
+    reset_date  = db.get_setting("stats_reset_date", "")
+    reset_banner = ""
+    if reset_date:
+        reset_banner = f"""<div style="background:rgba(251,146,60,.1);border:1px solid #f97316;
+            border-radius:10px;padding:10px 16px;margin-bottom:16px;
+            display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <span style="color:#fb923c;font-size:.88rem">
+            🔁 Статистика считается с <b>{reset_date}</b> (новый запуск кампании)
+          </span>
+          <form method="post" action="/analytics/clients/clear_reset" style="margin:0">
+            <button class="btn-gray" style="font-size:.78rem;padding:4px 10px">✕ Показать всё</button>
+          </form>
+        </div>"""
+
     content = f"""<div class="page-wrap">
     <div class="page-title">📈 Статистика Клиентов</div>
     <div class="page-sub">Подписки, клики, кампании, конверсия</div>
 
-    <form method="get" action="/analytics/clients" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:24px">
-      <div class="field-group" style="max-width:150px">
-        <div class="field-label">Период</div>
-        <select name="period" onchange="this.form.submit()">
-          {sel_period("7","7 дней")}
-          {sel_period("14","14 дней")}
-          {sel_period("30","30 дней")}
-          {sel_period("60","60 дней")}
-          {sel_period("90","90 дней")}
-        </select>
-      </div>
-      <div class="field-group"><div class="field-label">С даты</div>
-        <input type="date" name="date_from" value="{date_from}"/></div>
-      <div class="field-group"><div class="field-label">По дату</div>
-        <input type="date" name="date_to" value="{date_to}"/></div>
-      <div style="display:flex;align-items:flex-end;gap:6px">
-        <button class="btn">Применить</button>
-        <a href="/analytics/clients" class="btn-gray">Сбросить</a>
-      </div>
-    </form>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+      <form method="get" action="/analytics/clients" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div class="field-group" style="max-width:150px">
+          <div class="field-label">Период</div>
+          <select name="period" onchange="this.form.submit()">
+            {sel_period("7","7 дней")}
+            {sel_period("14","14 дней")}
+            {sel_period("30","30 дней")}
+            {sel_period("60","60 дней")}
+            {sel_period("90","90 дней")}
+          </select>
+        </div>
+        <div class="field-group"><div class="field-label">С даты</div>
+          <input type="date" name="date_from" value="{date_from}"/></div>
+        <div class="field-group"><div class="field-label">По дату</div>
+          <input type="date" name="date_to" value="{date_to}"/></div>
+        <div style="display:flex;align-items:flex-end;gap:6px">
+          <button class="btn">Применить</button>
+          <a href="/analytics/clients" class="btn-gray">Сбросить фильтр</a>
+        </div>
+      </form>
+      <form method="post" action="/analytics/clients/reset_stats"
+            style="display:flex;align-items:flex-end"
+            onsubmit="return confirm('Начать отсчёт статистики с сегодня? Старые данные сохранятся, просто не будут показываться по умолчанию.')">
+        <button class="btn" style="background:rgba(249,115,22,.15);border-color:#f97316;color:#fb923c;font-size:.82rem"
+          title="Сбросить счётчик — статистика будет считаться с сегодня (при запуске новой кампании)">
+          🔁 Новый запуск
+        </button>
+      </form>
+    </div>
+
+    {reset_banner}
 
     <div class="kpi-grid">
       {kpi(summary['total'], 'Подписок всего', f"{summary['from_ads']} из рекламы / {summary['organic']} organic")}
-      {kpi(cl_summary['total'], 'Кликов на /go', f"{cl_summary['from_fb']} из Facebook")}
-      {kpi(f"{cr}%", 'Конверсия', 'клики → подписки', "#34d399" if cr>10 else "#f97316")}
+      {kpi(cl_summary['total'], 'Кликов /go', f"{cl_summary['from_fb']} FB · только отслеживаемые переходы")}
+      {kpi(f"{cr}%", 'CR /go→подписка', 'только tracked клики', "#34d399" if cr>10 else "#f97316")}
       {kpi(cl_summary['has_fbp'], 'С fbp cookie', 'для FB CAPI matching')}
       {kpi(summary['channels_active'], 'Активных каналов', '')}
       {kpi(summary['campaigns_active'], 'Кампаний', '')}
-    </div>
-
-    <div class="section">
-      <div class="section-head"><h3>📊 Подписки и клики по дням</h3></div>
-      <div class="section-body">{chart_html}</div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
@@ -205,14 +249,16 @@ async def analytics_clients(request: Request,
     <div class="section">
       <div class="section-head">
         <h3>🎯 Воронка по кампаниям</h3>
-        <span style="font-size:.75rem;color:var(--text3)">клики → подписки → конверсия</span>
+        <span style="font-size:.75rem;color:var(--text3)">
+          подписки → конверсия · <span title="Клики считаются только по переходам через /go/ссылку лендинга">👆 клики = только /go переходы</span>
+        </span>
       </div>
       <table>
         <thead><tr>
           <th>Кампания / Города</th>
-          <th title="Кликов на лендинг через /go">👆 Клики</th>
-          <th title="Подписок на каналы">✅ Подписки</th>
-          <th title="Конверсия клик→подписка">📊 CR</th>
+          <th title="Переходов через /go лендинг (отслеживаемые клики)">👆 /go клики</th>
+          <th title="Подписок на каналы (все источники)">✅ Подписки</th>
+          <th title="Конверсия: /go клики → подписки (только tracked)">📊 CR</th>
           <th title="FB подписки / FB клики">📘 FB</th>
           <th>Последняя</th>
         </tr></thead>

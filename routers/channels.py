@@ -41,14 +41,36 @@ async def channels_page(request: Request, msg: str = "", err_msg: str = ""):
     msg     = msg.split("\n")[0][:120]
     user, err = require_auth(request)
     if err: return err
-    channels = db.get_channels()
+    channels    = db.get_channels()
+    member_data = db.get_channel_member_counts()   # {channel_id: {member_count, delta, snapped_at}}
     b1 = bot_manager.get_tracker_bot()
     bot_link     = (await b1.get_me()).username if b1 else "—"
     bot_link_url = f"https://t.me/{bot_link}" if b1 else "—"
-    rows = "".join(
-        f"""<tr>
+
+    rows = ""
+    for c in channels:
+        md = member_data.get(c['channel_id'], {})
+        mc = md.get('member_count')
+        delta = md.get('delta')
+        snapped = (md.get('snapped_at') or '')[:16].replace('T', ' ')
+
+        # Колонка "Подписчики в TG"
+        if mc is not None:
+            delta_html = ""
+            if delta is not None:
+                color = "#34d399" if delta > 0 else ("#f87171" if delta < 0 else "var(--text3)")
+                sign  = "+" if delta > 0 else ""
+                delta_html = f' <span style="color:{color};font-size:.78rem;font-weight:600">{sign}{delta}/сут</span>'
+            mc_html = f'<span style="font-weight:700;color:#60a5fa">{mc:,}</span>{delta_html}'
+            snap_hint = f'<div style="font-size:.65rem;color:var(--text3)">обновлено {snapped}</div>'
+        else:
+            mc_html   = '<span style="color:var(--text3);font-size:.8rem">—</span>'
+            snap_hint = '<div style="font-size:.65rem;color:var(--text3)">не обновлялось</div>'
+
+        rows += f"""<tr>
           <td><b>{c['name']}</b></td>
           <td><span class="tag">{c['channel_id']}</span></td>
+          <td>{mc_html}{snap_hint}</td>
           <td style="color:#34d399;font-weight:600">{c['total_joins']}</td>
           <td>{c['created_at'][:10]}</td>
           <td><form method="post" action="/channels/delete">
@@ -56,8 +78,7 @@ async def channels_page(request: Request, msg: str = "", err_msg: str = ""):
             <button class="del-btn">✕</button>
           </form></td>
         </tr>"""
-        for c in channels
-    ) or '<tr><td colspan="5"><div class="empty">Каналов нет</div></td></tr>'
+    rows = rows or '<tr><td colspan="6"><div class="empty">Каналов нет</div></td></tr>'
 
     alert = (f'<div class="alert-green">✅ {msg}</div>' if msg
              else f'<div class="alert-red">❌ {err_msg}</div>' if err_msg else "")
@@ -83,9 +104,24 @@ async def channels_page(request: Request, msg: str = "", err_msg: str = ""):
       </div>
     </div>
     <div class="section">
-      <div class="section-head"><h3>📋 Каналы ({len(channels)})</h3></div>
-      <table><thead><tr><th>Название</th><th>ID</th><th>Подписчиков</th><th>Добавлен</th><th></th></tr></thead>
-      <tbody>{rows}</tbody></table>
+      <div class="section-head">
+        <h3>📋 Каналы ({len(channels)})</h3>
+        <form method="post" action="/channels/refresh_members" style="margin:0">
+          <button class="btn" style="font-size:.8rem;padding:5px 12px"
+            title="Получить актуальное количество подписчиков из Telegram">
+            🔄 Обновить подписчиков
+          </button>
+        </form>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Название</th><th>ID</th>
+          <th title="Реальное число подписчиков из TG API">👥 Подписчики TG</th>
+          <th title="Вступлений через трекер">🔗 Трекер</th>
+          <th>Добавлен</th><th></th>
+        </tr></thead>
+        <tbody>{rows}</tbody>
+      </table>
     </div>
     </div>"""
     return HTMLResponse(base(content, "channels", request))
@@ -105,6 +141,31 @@ async def channels_delete(request: Request, channel_id: str = Form(...)):
     if err: return err
     db.delete_channel(channel_id)
     return RedirectResponse("/channels?msg=%D0%A3%D0%B4%D0%B0%D0%BB%D1%91%D0%BD", 303)
+
+
+@router.post("/channels/refresh_members")
+async def channels_refresh_members(request: Request):
+    """Получить актуальное количество подписчиков каждого канала из Telegram API."""
+    user, err = require_auth(request)
+    if err: return err
+    bot = bot_manager.get_tracker_bot()
+    if not bot:
+        return RedirectResponse("/channels?err_msg=Бот+не+запущен", 303)
+    channels = db.get_channels()
+    updated = 0
+    errors  = []
+    for c in channels:
+        try:
+            count = await bot.get_chat_member_count(c['channel_id'])
+            db.save_channel_snapshot(c['channel_id'], count)
+            updated += 1
+        except Exception as e:
+            errors.append(f"{c['name']}: {str(e)[:60]}")
+    if errors:
+        from urllib.parse import quote_plus
+        return RedirectResponse(f"/channels?err_msg={quote_plus('Ошибка: ' + '; '.join(errors[:2]))}", 303)
+    from urllib.parse import quote_plus
+    return RedirectResponse(f"/channels?msg={quote_plus(f'Обновлено {updated} каналов')}", 303)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

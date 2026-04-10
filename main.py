@@ -263,8 +263,11 @@ def require_auth(request: Request, role: str = None, tab: str = None, action: st
     # Проверяем доступ к действию для менеджеров
     if action and user["role"] != "admin":
         acts = user.get("actions", "") or ""
+        if acts == "none":
+            # Явно всё запрещено
+            return None, JSONResponse({"error": "forbidden", "detail": f"Действие '{action}' не разрешено"}, status_code=403)
         allowed_acts = [a.strip() for a in acts.split(",") if a.strip()]
-        # Пустые actions = все разрешено (обратная совместимость)
+        # Пустые actions = все разрешено (обратная совместимость для старых аккаунтов)
         if allowed_acts and action not in allowed_acts:
             return None, JSONResponse({"error": "forbidden", "detail": f"Действие '{action}' не разрешено"}, status_code=403)
     return user, None

@@ -257,14 +257,22 @@ async def users_security(request: Request,
 async def users_add(request: Request, username: str = Form(...), password: str = Form(...), role: str = Form("manager"), display_name: str = Form("")):
     user, err = require_auth(request, role="admin")
     if err: return err
-    ALL_TAB_IDS = ["channels","campaigns","landings","analytics_clients",
-                   "tg_account_chat","wa_chat","staff","landings_staff","analytics_staff"]
+    ALL_TAB_IDS = ["channels","campaigns","autopost","autopost_tpl","landings","analytics_clients",
+                   "tg_account_chat","wa_chat","staff","staff_bonuses","scripts","landings_staff","analytics_staff"]
     ALL_ACT_IDS = ["can_delete","can_send_lead","can_close","can_see_utm","can_export"]
     form = await request.form()
     checked = [t for t in ALL_TAB_IDS if form.get(f"perm_{t}")]
     perms = "" if len(checked) == len(ALL_TAB_IDS) else ",".join(checked)
     acts_checked = [a for a in ALL_ACT_IDS if form.get(f"act_{a}")]
-    actions = "" if len(acts_checked) == len(ALL_ACT_IDS) else ",".join(acts_checked)
+    # "" = не настроено (все разрешены, обратная совместимость)
+    # "none" = явно ничего нельзя (все галочки сняты)
+    # "can_x,..." = только эти действия
+    if not acts_checked:
+        actions = "none"
+    elif len(acts_checked) == len(ALL_ACT_IDS):
+        actions = ""
+    else:
+        actions = ",".join(acts_checked)
     try:
         db.create_user(username.strip(), password, role, perms, display_name.strip(), actions)
         return RedirectResponse("/users?msg=Пользователь+добавлен", 303)
@@ -277,14 +285,19 @@ async def users_update(request: Request, user_id: int = Form(...), username: str
                         role: str = Form("manager"), new_password: str = Form(""), display_name: str = Form("")):
     user, err = require_auth(request, role="admin")
     if err: return err
-    ALL_TAB_IDS = ["channels","campaigns","landings","analytics_clients",
-                   "tg_account_chat","wa_chat","staff","landings_staff","analytics_staff"]
+    ALL_TAB_IDS = ["channels","campaigns","autopost","autopost_tpl","landings","analytics_clients",
+                   "tg_account_chat","wa_chat","staff","staff_bonuses","scripts","landings_staff","analytics_staff"]
     ALL_ACT_IDS = ["can_delete","can_send_lead","can_close","can_see_utm","can_export"]
     form = await request.form()
     checked = [t for t in ALL_TAB_IDS if form.get(f"perm_{t}")]
     perms = "" if len(checked) == len(ALL_TAB_IDS) else ",".join(checked)
     acts_checked = [a for a in ALL_ACT_IDS if form.get(f"act_{a}")]
-    actions = "" if len(acts_checked) == len(ALL_ACT_IDS) else ",".join(acts_checked)
+    if not acts_checked:
+        actions = "none"
+    elif len(acts_checked) == len(ALL_ACT_IDS):
+        actions = ""
+    else:
+        actions = ",".join(acts_checked)
     db.update_user(user_id, username.strip(), role, perms, new_password.strip() or None, display_name.strip(), actions)
     return RedirectResponse("/users?msg=Сохранено", 303)
 

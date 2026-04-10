@@ -99,11 +99,17 @@ function TagDropdown({ convId, convTags, onAdded }) {
 
 const isAdmin = () => window.__USER?.role === 'admin'
 
-// Проверяем разрешение на действие: admin = всё, пустые actions = всё, иначе — проверяем список
+// Проверяем разрешение на действие:
+//   admin     → всё разрешено
+//   ""        → не настроено, все разрешены (обратная совместимость)
+//   "none"    → явно всё запрещено
+//   "can_x,…" → только указанные действия
 const canDo = (action) => {
   if (window.__USER?.role === 'admin') return true
-  const acts = (window.__USER?.actions || '').split(',').map(a => a.trim()).filter(Boolean)
-  return acts.length === 0 || acts.includes(action)
+  const raw = window.__USER?.actions || ''
+  if (!raw) return true          // не настроено — всё разрешено
+  if (raw === 'none') return false // явно ничего нельзя
+  return raw.split(',').map(a => a.trim()).filter(Boolean).includes(action)
 }
 
 export default function ChatHeader({ conv, onUpdate, onDeleted }) {

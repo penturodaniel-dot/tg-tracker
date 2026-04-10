@@ -97,6 +97,8 @@ function TagDropdown({ convId, convTags, onAdded }) {
   )
 }
 
+const isAdmin = () => (window.__USER?.role === 'admin')
+
 export default function ChatHeader({ conv, onUpdate, onDeleted }) {
   const [busy, setBusy] = useState(false)
   const [leadSentLocal, setLeadSentLocal] = useState(false)
@@ -308,18 +310,20 @@ export default function ChatHeader({ conv, onUpdate, onDeleted }) {
           </button>
         )}
 
-        {/* Delete */}
-        <button className="btn btn-red btn-sm" disabled={busy}
-          onClick={() => {
-            if (window.confirm('Удалить диалог? Это нельзя отменить.')) {
-              handleAction(async () => {
-                await deleteConv(conv.id)
-                onDeleted(conv.id)
-              })
-            }
-          }}>
-          🗑
-        </button>
+        {/* Delete — только для admin */}
+        {isAdmin() && (
+          <button className="btn btn-red btn-sm" disabled={busy}
+            onClick={() => {
+              if (window.confirm('Удалить диалог? Это нельзя отменить.')) {
+                handleAction(async () => {
+                  await deleteConv(conv.id)
+                  onDeleted(conv.id)
+                })
+              }
+            }}>
+            🗑
+          </button>
+        )}
       </div>
     </div>
   )

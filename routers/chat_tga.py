@@ -122,12 +122,21 @@ async def tg_account_chat_page(request: Request, conv_id: int = 0, status_filter
     user, err = require_auth(request)
     if err: return err
 
-    # Если React-сборка существует — отдаём SPA
+    # Если React-сборка существует — отдаём SPA с инжектированными данными юзера
     import os as _os
-    from fastapi.responses import FileResponse as _FR
+    import json as _json
     _react = _os.path.join(_os.path.dirname(__file__), '..', 'frontend', 'dist', 'index.html')
     if _os.path.exists(_react):
-        return _FR(_react, media_type="text/html")
+        with open(_react, encoding='utf-8') as _f:
+            _html = _f.read()
+        _user_data = _json.dumps({
+            "role":        user.get("role", "manager"),
+            "username":    user.get("username", ""),
+            "permissions": user.get("permissions", ""),
+        })
+        _inject = f'<script>window.__USER={_user_data};</script>'
+        _html = _html.replace('</head>', _inject + '</head>', 1)
+        return HTMLResponse(_html)
 
     convs = db.get_tg_account_conversations(status=status_filter if status_filter != "all" else None)
 

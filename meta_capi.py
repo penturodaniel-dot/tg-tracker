@@ -71,8 +71,9 @@ async def send_event(
     _website_events = {"Lead", "Contact", "PageView", "ViewContent", "Search",
                        "CompleteRegistration", "Purchase"}
     if event_name == "Lead":
-        _action_source = "website" if test_event_code else "system_generated"
-        _source_url = {"event_source_url": event_source_url or "https://t.me/"} if test_event_code else {}
+        # Lead всегда website — человек кликнул рекламу и написал нам, это website-конверсия
+        _action_source = "website"
+        _source_url = {"event_source_url": event_source_url or "https://t.me/"}
     elif event_name in _website_events:
         _action_source = "website"
         _source_url = {"event_source_url": event_source_url or "https://t.me/"}

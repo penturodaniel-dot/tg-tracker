@@ -46,15 +46,21 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
     sec_session_hours = db.get_setting("session_timeout_hours", "12")
     sec_max_attempts = db.get_setting("login_max_attempts", "5")
 
-    # Все вкладки и их названия
+    # Все вкладки и их названия (должны совпадать с tab-id в main.py nav)
     ALL_TABS = [
+        # ── Клиенты ──────────────────────────────────────────
         ("channels",         "📡 Каналы"),
         ("campaigns",        "🔗 Кампании"),
-        ("landings",         "🎨 Шаблоны"),
+        ("autopost",         "📣 Автопостинг"),
+        ("autopost_tpl",     "📝 Шаблоны постов"),
+        ("landings",         "🎨 Шаблоны лендингов"),
         ("analytics_clients","📈 Статистика Клиентов"),
-        ("tg_account_chat", "📱 TG Чаты"),
+        # ── Сотрудники ───────────────────────────────────────
+        ("tg_account_chat",  "📱 TG Чаты"),
         ("wa_chat",          "💚 WA Чаты"),
         ("staff",            "🗂 База сотрудников"),
+        ("staff_bonuses",    "💰 Бонусы"),
+        ("scripts",          "📝 Скрипты"),
         ("landings_staff",   "🌐 Лендинги HR"),
         ("analytics_staff",  "📊 Статистика Сотрудников"),
     ]

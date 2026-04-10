@@ -114,22 +114,20 @@ export default function NavSidebar() {
       })}
 
       {/* Logout — прибит к низу */}
-      <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border)', paddingTop: '4px' }}>
-        {expanded && username && (
-          <div style={{ padding: '6px 12px 2px', fontSize: '11px', color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {username}
-          </div>
+      <a
+        href="/logout"
+        className="nav-link"
+        title={!expanded ? 'Выйти' : undefined}
+        style={{ marginTop: 'auto', borderTop: '1px solid var(--border)', color: 'var(--text3)', paddingTop: '8px', paddingBottom: '8px', flexShrink: 0 }}
+      >
+        <span className="nav-link-icon">🚪</span>
+        {expanded && (
+          <span className="nav-link-text" style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+            <span>Выйти</span>
+            {username && <span style={{ fontSize: '10px', opacity: 0.5 }}>{username}</span>}
+          </span>
         )}
-        <a
-          href="/logout"
-          className="nav-link"
-          title={!expanded ? 'Выйти' : undefined}
-          style={{ color: 'var(--text3)' }}
-        >
-          <span className="nav-link-icon">🚪</span>
-          {expanded && <span className="nav-link-text">Выйти</span>}
-        </a>
-      </div>
+      </a>
     </div>
   )
 }

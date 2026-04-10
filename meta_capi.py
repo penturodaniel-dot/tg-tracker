@@ -106,9 +106,11 @@ async def send_event(
             resp = await client.post(f"https://graph.facebook.com/v19.0/{pixel_id}/events", json=payload)
             data = resp.json()
             if resp.status_code == 200 and data.get("events_received", 0) > 0:
-                log.info(f"Meta CAPI ✅ {event_name} user={user_id} fbp={'✓' if fbp else '—'} fbc={'✓' if fbc else '—'} events_received={data.get('events_received')} messages={data.get('messages_received')}")
+                _msgs = data.get('messages') or []
+                _test_tag = f" 🧪 TEST={_msgs}" if _msgs else ""
+                log.info(f"Meta CAPI ✅ {event_name} user={user_id} fbp={'✓' if fbp else '—'} fbc={'✓' if fbc else '—'} test_code={'✓' if test_event_code else '—'} events_received={data.get('events_received')}{_test_tag}")
                 return True
-            log.error(f"Meta CAPI ❌ {resp.status_code}: events_received={data.get('events_received',0)} error={data.get('error')} messages={data.get('messages_received')} full={data}")
+            log.error(f"Meta CAPI ❌ {resp.status_code}: events_received={data.get('events_received',0)} error={data.get('error')} messages={data.get('messages')} full={data}")
             return False
     except Exception as e:
         log.error(f"Meta CAPI exception: {e}")

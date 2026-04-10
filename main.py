@@ -2438,7 +2438,7 @@ async def go_staff_redirect(request: Request, ref: str = ""):
         _fb_landing_slug = click.get("landing_slug", "")
         _fb_landing_obj  = db.get_landing_by_slug(_fb_landing_slug) if _fb_landing_slug else None
         _fb_pixel, _fb_token = "", ""
-        _fb_event_name = "Lead"  # дефолт
+        _fb_event_name = "Contact"  # дефолт — клик на кнопку, Lead только при первом сообщении
         if _fb_landing_obj:
             # Пиксель из проекта или глобальный
             _fb_pid = _fb_landing_obj.get("project_id")
@@ -2450,8 +2450,9 @@ async def go_staff_redirect(request: Request, ref: str = ""):
             if not _fb_pixel:
                 _fb_pixel = db.get_setting("pixel_id", "") or ""
                 _fb_token = db.get_setting("meta_token", "") or ""
-            # Событие из настроек лендинга
-            _fb_event_name = (_fb_landing_obj.get("fb_event") or "Lead").strip() or "Lead"
+            # Событие из настроек лендинга — но Lead заменяем на Contact (Lead = первое сообщение)
+            _raw_event = (_fb_landing_obj.get("fb_event") or "Contact").strip() or "Contact"
+            _fb_event_name = "Contact" if _raw_event == "Lead" else _raw_event
         if _fb_pixel and _fb_token:
             import asyncio as _asyncio_fb
             _fb_app_url = db.get_setting("app_url", "").rstrip("/")

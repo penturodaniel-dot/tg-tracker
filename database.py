@@ -2197,10 +2197,10 @@ class Database:
             conn.commit()
 
     def get_tga_read_max_id(self, conv_id: int) -> int:
-        """Получить max tg_msg_id прочитанных исходящих сообщений."""
+        """Получить max DB id прочитанных исходящих сообщений."""
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("""SELECT COALESCE(MAX(tg_msg_id), 0) as max_id
+                cur.execute("""SELECT COALESCE(MAX(id), 0) as max_id
                     FROM tg_account_messages
                     WHERE conversation_id=%s AND sender_type='manager' AND is_read=TRUE""",
                     (conv_id,))

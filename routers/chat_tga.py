@@ -1169,6 +1169,12 @@ async def tg_account_webhook(request: Request):
                         except Exception:
                             pass
                     log.info(f"[AutoLead/TGA] conv={conv['id']} fb={px['fb_pixel'][:8] if px['fb_pixel'] else 'NONE'} tt={px.get('tt_pixel','')[:8] if px.get('tt_pixel') else 'NONE'} project={px['project_name'] or 'global'} utm={_campaign}")
+                    # Имя/телефон из TG для улучшения матчинга
+                    _visitor_name = _fresh_conv.get("visitor_name") or ""
+                    _name_parts = _visitor_name.strip().split(" ", 1)
+                    _fn = _name_parts[0] if _name_parts[0] else None
+                    _ln = _name_parts[1] if len(_name_parts) > 1 else None
+                    _ph = _fresh_conv.get("phone") or None
                     _fb_sent = await meta_capi.send_lead_event(
                         px["fb_pixel"], px["fb_token"],
                         user_id=str(tg_user_id), campaign=_campaign,
@@ -1178,6 +1184,7 @@ async def tg_account_webhook(request: Request):
                         test_event_code=px["test_event_code"],
                         event_source_url="https://t.me/",
                         event_time=_event_time,
+                        first_name=_fn, last_name=_ln, phone=_ph,
                     )
                     _tt_sent = False
                     # TikTok Lead

@@ -41,6 +41,9 @@ async def send_event(
     test_event_code: str = None,
     event_source_url: str = None,
     event_time: int = None,
+    first_name: str = None,
+    last_name: str = None,
+    phone: str = None,
 ) -> bool:
     if not pixel_id or not access_token:
         log.debug("Meta CAPI: pixel_id or token not set (skipped)")
@@ -59,6 +62,15 @@ async def send_event(
         user_data["client_ip_address"] = client_ip
     if user_agent:
         user_data["client_user_agent"] = user_agent
+    if first_name:
+        user_data["fn"] = [_hash(first_name)]
+    if last_name:
+        user_data["ln"] = [_hash(last_name)]
+    if phone:
+        # Нормализуем: только цифры, без +
+        _ph = "".join(c for c in str(phone) if c.isdigit())
+        if _ph:
+            user_data["ph"] = [_hash(_ph)]
 
     custom_data = {}
     if utm_source:   custom_data["utm_source"]   = utm_source

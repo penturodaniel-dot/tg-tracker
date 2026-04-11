@@ -108,6 +108,7 @@ def _project_card(p: dict, msg: str = "", err: str = "") -> str:
             <div class="field-group" style="flex:1;min-width:200px">
               <div class="field-label">Access Token <span style="color:var(--text3);font-weight:400">(пусто = не менять)</span></div>
               <input type="text" name="fb_token" placeholder="EAAxxxxxxx..."/>
+              <div style="font-size:.72rem;color:var(--text3);margin-top:3px">Сейчас: <code style="color:{'#86efac' if _fb_tok else 'var(--text3)'}">{_masked(_fb_tok) if _fb_tok else 'не задан'}</code></div>
             </div>
           </div>
 
@@ -122,6 +123,7 @@ def _project_card(p: dict, msg: str = "", err: str = "") -> str:
             <div class="field-group" style="flex:1;min-width:200px">
               <div class="field-label">Access Token <span style="color:var(--text3);font-weight:400">(пусто = не менять)</span></div>
               <input type="text" name="tt_token" placeholder="Оставь пустым чтобы не менять"/>
+              <div style="font-size:.72rem;color:var(--text3);margin-top:3px">Сейчас: <code style="color:{'#86efac' if _tt_tok else 'var(--text3)'}">{_masked(_tt_tok) if _tt_tok else 'не задан'}</code></div>
             </div>
           </div>
 

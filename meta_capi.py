@@ -44,6 +44,7 @@ async def send_event(
     first_name: str = None,
     last_name: str = None,
     phone: str = None,
+    event_id: str = None,
 ) -> bool:
     if not pixel_id or not access_token:
         log.debug("Meta CAPI: pixel_id or token not set (skipped)")
@@ -100,15 +101,19 @@ async def send_event(
             _action_source = "system_generated"
             _source_url = {"event_source_url": event_source_url} if event_source_url else {}
 
+    _event_entry = {
+        "event_name": event_name,
+        "event_time": event_time if event_time else int(time.time()),
+        "action_source": _action_source,
+        "user_data": user_data,
+        "custom_data": custom_data,
+        **_source_url,
+    }
+    if event_id:
+        _event_entry["event_id"] = event_id
+
     payload = {
-        "data": [{
-            "event_name": event_name,
-            "event_time": event_time if event_time else int(time.time()),
-            "action_source": _action_source,
-            "user_data": user_data,
-            "custom_data": custom_data,
-            **_source_url,
-        }],
+        "data": [_event_entry],
         "access_token": access_token,
     }
     if test_event_code:

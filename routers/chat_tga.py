@@ -1115,11 +1115,12 @@ async def tg_account_webhook(request: Request):
                     if click_data:
                         log.info(f"[TG webhook] UTM by ref_code: ref={_ref_id}")
 
-                # Шаг 2: time-window 3 мин — свежий клик (приоритет над старыми)
-                _tw_click = db.get_staff_click_recent_any(minutes=3, target_type="telegram")
-                if _tw_click and _tw_click.get("utm_source"):
-                    click_data = _tw_click
-                    log.info(f"[TG webhook] UTM by time-window src={_tw_click.get('utm_source')} utm={_tw_click.get('utm_campaign')}")
+                # Шаг 2: time-window 3 мин — только если Step 1 не дал результата
+                if not click_data:
+                    _tw_click = db.get_staff_click_recent_any(minutes=3, target_type="telegram")
+                    if _tw_click and _tw_click.get("utm_source"):
+                        click_data = _tw_click
+                        log.info(f"[TG webhook] UTM by time-window src={_tw_click.get('utm_source')} utm={_tw_click.get('utm_campaign')}")
 
                 # Шаг 3: матчинг по tg_user_id — только если нет свежего клика
                 if not click_data:
@@ -1175,6 +1176,7 @@ async def tg_account_webhook(request: Request):
                     _fn = _name_parts[0] if _name_parts[0] else None
                     _ln = _name_parts[1] if len(_name_parts) > 1 else None
                     _ph = _fresh_conv.get("phone") or None
+                    _event_id = f"lead_tga_{conv['id']}"
                     _fb_sent = await meta_capi.send_lead_event(
                         px["fb_pixel"], px["fb_token"],
                         user_id=str(tg_user_id), campaign=_campaign,
@@ -1185,6 +1187,7 @@ async def tg_account_webhook(request: Request):
                         event_source_url="https://t.me/",
                         event_time=_event_time,
                         first_name=_fn, last_name=_ln, phone=_ph,
+                        event_id=_event_id,
                     )
                     _tt_sent = False
                     # TikTok Lead

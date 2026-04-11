@@ -82,6 +82,30 @@ export function sendLead(convId) {
   return postForm('/tg_account/send_lead', { conv_id: convId })
 }
 
+export function deleteMessage(msgId) {
+  return fetch(`/api/tga/message/${msgId}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  }).then(res => {
+    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized') }
+    if (!res.ok) throw new Error(`DELETE message failed: ${res.status}`)
+    return res.json()
+  })
+}
+
+export function editMessage(msgId, text) {
+  return fetch(`/api/tga/message/${msgId}`, {
+    method: 'PATCH',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  }).then(res => {
+    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized') }
+    if (!res.ok) throw new Error(`PATCH message failed: ${res.status}`)
+    return res.json()
+  })
+}
+
 // ── Scripts ──────────────────────────────────────────────────────────────────
 
 export function fetchScripts() {

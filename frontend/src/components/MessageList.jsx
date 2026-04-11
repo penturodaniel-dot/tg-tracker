@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react'
 import MessageBubble, { DateSeparator, getMessageDate } from './MessageBubble.jsx'
 
-export default function MessageList({ messages, readMaxId, loading }) {
+export default function MessageList({ messages, readMaxId, loading, onDeleteMsg, onEditMsg }) {
   const bottomRef = useRef(null)
   const containerRef = useRef(null)
   const prevLengthRef = useRef(0)
@@ -60,7 +60,7 @@ export default function MessageList({ messages, readMaxId, loading }) {
       lastDate = dateKey
     }
     items.push(
-      <MessageBubble key={msg.id} message={msg} readMaxId={readMaxId} />
+      <MessageBubble key={msg.id} message={msg} readMaxId={readMaxId} onDelete={onDeleteMsg} onEdit={onEditMsg} />
     )
   })
 

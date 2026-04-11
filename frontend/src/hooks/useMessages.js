@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { fetchMessages, markRead } from '../api.js'
+import { fetchMessages, markRead, deleteMessage, editMessage } from '../api.js'
 
 const POLL_INTERVAL = 1500
 
@@ -153,5 +153,24 @@ export function useMessages(convId) {
     return tempId
   }, [])
 
-  return { messages, readMaxId, loading, addOptimistic }
+  const deleteMsg = useCallback(async (msgId) => {
+    setMessages(prev => prev.filter(m => m.id !== msgId))
+    try {
+      await deleteMessage(msgId)
+    } catch {
+      // re-fetch on failure
+      loadInitial(convIdRef.current)
+    }
+  }, [loadInitial])
+
+  const editMsg = useCallback(async (msgId, text) => {
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: text } : m))
+    try {
+      await editMessage(msgId, text)
+    } catch {
+      loadInitial(convIdRef.current)
+    }
+  }, [loadInitial])
+
+  return { messages, readMaxId, loading, addOptimistic, deleteMsg, editMsg }
 }

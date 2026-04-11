@@ -1060,6 +1060,7 @@ async def tg_account_webhook(request: Request):
             username    = data.get("username", "")
             sender_name = data.get("sender_name") or username or tg_user_id
             raw_text    = data.get("body") or ""
+            tg_msg_id   = data.get("message_id")
             has_media   = data.get("has_media", False)
             media_b64   = data.get("media_base64")
             media_type  = data.get("media_type", "")
@@ -1140,7 +1141,7 @@ async def tg_account_webhook(request: Request):
                     db.mark_staff_click_used(click_data["ref_id"])
                     conv = db.get_tg_account_conversation(conv["id"]) or conv
 
-            db.save_tg_account_message(conv["id"], tg_user_id, "visitor", text, media_url=media_url, media_type=media_type)
+            db.save_tg_account_message(conv["id"], tg_user_id, "visitor", text, media_url=media_url, media_type=media_type, tg_msg_id=tg_msg_id)
             db.update_tg_account_last_message(tg_user_id, text, increment_unread=True)
 
             # ── Авто-отправка Lead при первом сообщении (только платный трафик) ────
@@ -1245,7 +1246,8 @@ async def tg_account_send(request: Request, conv_id: int = Form(...), text: str 
     result = await tg_api("post", "/send", json={"to": conv["tg_user_id"], "message": text})
     if not result.get("error"):
         manager_name = user.get("display_name") or user.get("username") or "Менеджер"
-        db.save_tg_account_message(conv_id, conv["tg_user_id"], "manager", text, sender_name=manager_name)
+        tg_msg_id = result.get("message_id")
+        db.save_tg_account_message(conv_id, conv["tg_user_id"], "manager", text, sender_name=manager_name, tg_msg_id=tg_msg_id)
         db.update_tg_account_last_message(conv["tg_user_id"], f"Вы: {text}", increment_unread=False)
     return JSONResponse({"ok": not result.get("error"), "error": result.get("error")})
 
@@ -1363,6 +1365,48 @@ async def api_tg_account_messages(request: Request, conv_id: int, after: int = 0
     msgs = db.get_new_tg_account_messages(conv_id, after)
     read_max_id = db.get_tga_read_max_id(conv_id)
     return JSONResponse({"messages": msgs, "read_max_id": read_max_id})
+
+
+@router.delete("/api/tga/message/{msg_id}")
+async def api_tga_delete_message(request: Request, msg_id: int):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    # Получаем сообщение чтобы знать tg_user_id и tg_msg_id
+    row = db.get_tga_message_by_id(msg_id)
+    if not row:
+        return JSONResponse({"error": "not found"}, 404)
+    tg_user_id = row.get("tg_user_id")
+    tg_msg_id  = row.get("tg_msg_id")
+    if tg_msg_id:
+        try:
+            await tg_api("delete", f"/message/{tg_user_id}/{tg_msg_id}")
+        except Exception as e:
+            log.warning(f"[TGA] delete from TG failed: {e}")
+    db.delete_tg_account_message(msg_id)
+    return JSONResponse({"ok": True})
+
+
+@router.patch("/api/tga/message/{msg_id}")
+async def api_tga_edit_message(request: Request, msg_id: int):
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        return JSONResponse({"error": "text required"}, 400)
+    row = db.get_tga_message_by_id(msg_id)
+    if not row:
+        return JSONResponse({"error": "not found"}, 404)
+    if row.get("sender_type") != "manager":
+        return JSONResponse({"error": "can only edit own messages"}, 403)
+    tg_user_id = row.get("tg_user_id")
+    tg_msg_id  = row.get("tg_msg_id")
+    if tg_msg_id:
+        result = await tg_api("patch", f"/message/{tg_user_id}/{tg_msg_id}", json={"text": text})
+        if result.get("error"):
+            return JSONResponse({"error": result["error"]}, 400)
+    db.edit_tg_account_message(msg_id, text)
+    return JSONResponse({"ok": True})
 
 
 @router.get("/api/tga_chat_panel", response_class=HTMLResponse)

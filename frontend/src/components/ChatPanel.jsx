@@ -7,7 +7,7 @@ import { useMessages } from '../hooks/useMessages.js'
 
 export default function ChatPanel({ convId, onConvUpdate, onConvDeleted, scriptText, onScriptConsumed, scriptsVisible, onShowScripts }) {
   const { conv, loading: convLoading, refresh: refreshConv } = useConv(convId)
-  const { messages, readMaxId, loading: msgsLoading, addOptimistic } = useMessages(convId)
+  const { messages, readMaxId, loading: msgsLoading, addOptimistic, deleteMsg, editMsg } = useMessages(convId)
   const textareaRef = useRef(null)
 
   // When a script is selected in the panel, paste it into the textarea
@@ -75,6 +75,8 @@ export default function ChatPanel({ convId, onConvUpdate, onConvDeleted, scriptT
         messages={messages}
         readMaxId={readMaxId}
         loading={msgsLoading}
+        onDeleteMsg={deleteMsg}
+        onEditMsg={editMsg}
       />
       <SendBar
         convId={convId}

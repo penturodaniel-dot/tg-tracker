@@ -2208,14 +2208,36 @@ class Database:
                 return r["max_id"] if r else 0
 
     def save_tg_account_message(self, conv_id, tg_user_id, sender_type, content,
-                                 media_url=None, media_type=None, sender_name=None):
+                                 media_url=None, media_type=None, sender_name=None, tg_msg_id=None):
         self._init_tg_account_tables()
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""INSERT INTO tg_account_messages
-                    (conversation_id,tg_user_id,sender_type,sender_name,content,media_url,media_type,created_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
-                    (conv_id,tg_user_id,sender_type,sender_name or "",content,media_url,media_type,datetime.utcnow().isoformat()))
+                    (conversation_id,tg_user_id,sender_type,sender_name,content,media_url,media_type,created_at,tg_msg_id)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (conv_id,tg_user_id,sender_type,sender_name or "",content,media_url,media_type,datetime.utcnow().isoformat(),tg_msg_id))
+            conn.commit()
+
+    def get_tga_message_by_id(self, msg_id):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM tg_account_messages WHERE id=%s", (msg_id,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def delete_tg_account_message(self, msg_id):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM tg_account_messages WHERE id=%s", (msg_id,))
+            conn.commit()
+
+    def edit_tg_account_message(self, msg_id, content):
+        self._init_tg_account_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE tg_account_messages SET content=%s WHERE id=%s", (content, msg_id))
             conn.commit()
 
     def get_tg_account_messages(self, conv_id, limit=100):

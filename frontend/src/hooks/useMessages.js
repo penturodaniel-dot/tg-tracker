@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchMessages, markRead, deleteMessage, editMessage } from '../api.js'
 
+// Normalize content for dedup: handles \r\n vs \n differences from FormData
+function normContent(s) {
+  return typeof s === 'string' ? s.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim() : ''
+}
+
 const POLL_INTERVAL = 1500
 
 /**
@@ -92,7 +97,7 @@ export function useMessages(convId) {
           let pending = prev.filter(m => m._pending)
           for (const realMsg of incoming) {
             if (realMsg.sender_type !== 'manager') continue
-            const idx = pending.findIndex(m => m.content === realMsg.content)
+            const idx = pending.findIndex(m => normContent(m.content) === normContent(realMsg.content))
             if (idx !== -1) pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)]
           }
           return [...incoming, ...pending]
@@ -108,7 +113,7 @@ export function useMessages(convId) {
           for (const realMsg of newReal) {
             if (realMsg.sender_type !== 'manager') continue
             const idx = result.findIndex(
-              m => m._pending && m.content === realMsg.content
+              m => m._pending && normContent(m.content) === normContent(realMsg.content)
             )
             if (idx !== -1) {
               result = [...result.slice(0, idx), ...result.slice(idx + 1)]
@@ -172,5 +177,7 @@ export function useMessages(convId) {
     }
   }, [loadInitial])
 
-  return { messages, readMaxId, loading, addOptimistic, deleteMsg, editMsg }
+  const refresh = useCallback(() => { poll() }, [poll])
+
+  return { messages, readMaxId, loading, addOptimistic, deleteMsg, editMsg, refresh }
 }

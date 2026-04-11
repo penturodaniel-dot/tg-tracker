@@ -22,7 +22,7 @@ function SendIcon() {
 const MAX_ROWS = 5
 const LINE_HEIGHT = 21 // px
 
-export default function SendBar({ convId, onOptimisticSend, textareaRef: externalRef }) {
+export default function SendBar({ convId, onOptimisticSend, onAfterSend, textareaRef: externalRef }) {
   const [text, setText] = useState('')
   const [file, setFile] = useState(null)
   const [sending, setSending] = useState(false)
@@ -67,6 +67,7 @@ export default function SendBar({ convId, onOptimisticSend, textareaRef: externa
     if (onOptimisticSend) onOptimisticSend(snapshot)
     try {
       await sendMessage(convId, snapshot)
+      if (onAfterSend) onAfterSend()
     } catch (e) {
       setText(snapshot)
       alert('Ошибка отправки: ' + e.message)

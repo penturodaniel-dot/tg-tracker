@@ -19,6 +19,8 @@ export default function App() {
     setSearch,
     tagFilter,
     setTagFilter,
+    categoryFilter,
+    setCategoryFilter,
     loading,
     hasMore,
     loadMore,
@@ -60,6 +62,8 @@ export default function App() {
         setSearch={setSearch}
         tagFilter={tagFilter}
         setTagFilter={setTagFilter}
+        categoryFilter={categoryFilter}
+        setCategoryFilter={setCategoryFilter}
         loading={loading}
         hasMore={hasMore}
         loadMore={loadMore}

@@ -96,12 +96,28 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
             </label>'''
         return f'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;margin-top:8px">{boxes}</div>'
 
+    all_cats = db.get_categories()
+
+    def category_checkboxes(user_cat_ids):
+        if not all_cats:
+            return '<div style="color:var(--text3);font-size:.82rem">Нет категорий — <a href="/categories" style="color:var(--blue)">создай категории</a> сначала</div>'
+        boxes = ""
+        for cat in all_cats:
+            checked = "checked" if cat["id"] in user_cat_ids else ""
+            dot = f'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{cat["color"]};margin-right:5px;vertical-align:middle"></span>'
+            boxes += f'''<label style="display:flex;align-items:center;gap:7px;padding:5px 10px;background:var(--bg3);border-radius:7px;cursor:pointer;font-size:.82rem">
+              <input type="checkbox" name="cat_{cat['id']}" value="{cat['id']}" {checked} style="accent-color:#6366f1">
+              {dot}{cat['name']}
+            </label>'''
+        return f'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;margin-top:8px">{boxes}</div>'
+
     # Форма редактирования
     edit_form = ""
     if edit:
         eu = db.get_user_by_id(edit)
         if eu:
             eu_perms = eu.get("permissions") or ""
+            eu_cat_ids = db.get_user_category_access(eu["id"])
             edit_form = f"""<div class="section" style="border-left:3px solid #f97316;margin-bottom:20px">
               <div class="section-head"><h3>✏️ Редактировать: {eu['username']}</h3></div>
               <div class="section-body">
@@ -119,6 +135,10 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
                       </select></div>
                     <div class="field-group"><div class="field-label">Новый пароль (оставь пустым — не менять)</div>
                       <input type="password" name="new_password" placeholder="Новый пароль..."/></div>
+                  </div>
+                  <div class="field-group" style="margin-bottom:12px">
+                    <div class="field-label">🗂 Доступ к категориям чатов <span style="color:var(--text3);font-weight:400">(менеджер видит только отмеченные)</span></div>
+                    {category_checkboxes(eu_cat_ids)}
                   </div>
                   <div class="field-group" style="margin-bottom:12px">
                     <div class="field-label">🔒 Доступы к вкладкам (отмеченные вкладки доступны менеджеру)</div>
@@ -199,6 +219,10 @@ async def users_page(request: Request, msg: str = "", edit: int = 0):
             <select name="role"><option value="manager">manager</option><option value="admin">admin</option></select></div>
         </div>
         <div class="field-group" style="margin-bottom:12px">
+          <div class="field-label">🗂 Доступ к категориям чатов <span style="color:var(--text3);font-weight:400">(менеджер видит только отмеченные)</span></div>
+          {category_checkboxes([])}
+        </div>
+        <div class="field-group" style="margin-bottom:12px">
           <div class="field-label">🔒 Доступы к вкладкам (по умолчанию — все открыты)</div>
           {perm_checkboxes("")}
         </div>
@@ -273,8 +297,12 @@ async def users_add(request: Request, username: str = Form(...), password: str =
         actions = ""
     else:
         actions = ",".join(acts_checked)
+    all_cat_ids = [c["id"] for c in db.get_categories()]
+    cat_ids = [cid for cid in all_cat_ids if form.get(f"cat_{cid}")]
     try:
-        db.create_user(username.strip(), password, role, perms, display_name.strip(), actions)
+        new_id = db.create_user(username.strip(), password, role, perms, display_name.strip(), actions)
+        if new_id and cat_ids:
+            db.set_user_category_access(new_id, cat_ids)
         return RedirectResponse("/users?msg=Пользователь+добавлен", 303)
     except:
         return RedirectResponse("/users?msg=Такой+логин+уже+существует", 303)
@@ -299,6 +327,9 @@ async def users_update(request: Request, user_id: int = Form(...), username: str
     else:
         actions = ",".join(acts_checked)
     db.update_user(user_id, username.strip(), role, perms, new_password.strip() or None, display_name.strip(), actions)
+    all_cat_ids = [c["id"] for c in db.get_categories()]
+    cat_ids = [cid for cid in all_cat_ids if form.get(f"cat_{cid}")]
+    db.set_user_category_access(user_id, cat_ids)
     return RedirectResponse("/users?msg=Сохранено", 303)
 
 

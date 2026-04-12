@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react'
 import ConvItem from './ConvItem.jsx'
-import { fetchAllTags, fetchTgAccountStatus } from '../api.js'
+import { fetchAllTags, fetchTgAccountStatus, fetchCategories } from '../api.js'
 
 const TABS = [
   { value: 'open',   label: 'Открытые' },
@@ -16,6 +16,8 @@ export default function ConvList({
   setSearch,
   tagFilter,
   setTagFilter,
+  categoryFilter,
+  setCategoryFilter,
   loading,
   hasMore,
   loadMore,
@@ -24,11 +26,15 @@ export default function ConvList({
 }) {
   const scrollRef = useRef(null)
   const [tags, setTags] = useState([])
+  const [categories, setCategories] = useState([])
   const [tgStatus, setTgStatus] = useState(null)
 
   useEffect(() => {
     fetchAllTags()
       .then(data => setTags(data.tags || []))
+      .catch(() => {})
+    fetchCategories()
+      .then(data => setCategories(data.categories || []))
       .catch(() => {})
   }, [])
 
@@ -81,6 +87,38 @@ export default function ConvList({
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
+        {categories.length > 0 && (
+          <div className="tag-filter-bar">
+            <button
+              className={`tag-filter-btn${categoryFilter === null ? ' active' : ''}`}
+              onClick={() => setCategoryFilter(null)}
+            >
+              Все
+            </button>
+            {categories.map(cat => (
+              <button
+                key={cat.id}
+                className={`tag-filter-btn${categoryFilter === cat.id ? ' active' : ''}`}
+                onClick={() => setCategoryFilter(categoryFilter === cat.id ? null : cat.id)}
+                style={categoryFilter === cat.id ? {
+                  background: cat.color + '33',
+                  color: cat.color,
+                  borderColor: cat.color + '88',
+                } : {}}
+              >
+                <span style={{
+                  display: 'inline-block',
+                  width: 7, height: 7,
+                  borderRadius: '50%',
+                  background: cat.color || '#888',
+                  marginRight: 4,
+                  verticalAlign: 'middle',
+                }} />
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        )}
         {tags.length > 0 && (
           <div className="tag-filter-bar">
             <button

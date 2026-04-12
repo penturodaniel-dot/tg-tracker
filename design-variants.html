@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TGTracker — Варианты дизайна</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Inter, system-ui, sans-serif;
+  background: #0a0a0f;
+  color: #e2e8f0;
+  min-height: 100vh;
+}
+
+/* ─── SELECTOR PAGE ─── */
+.selector {
+  padding: 40px 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.selector-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #f1f5f9;
+}
+.selector-sub {
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 36px;
+}
+
+.themes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-bottom: 48px;
+}
+
+.theme-card {
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  position: relative;
+}
+.theme-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+}
+.theme-card.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.15);
+}
+
+.theme-preview {
+  height: 320px;
+  position: relative;
+  overflow: hidden;
+}
+.theme-info {
+  padding: 16px 18px;
+}
+.theme-name {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.theme-desc {
+  font-size: 12px;
+  opacity: 0.65;
+  line-height: 1.5;
+}
+.theme-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.selected-indicator {
+  display: none;
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #3b82f6;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #fff;
+  font-weight: 700;
+}
+.theme-card.active .selected-indicator {
+  display: flex;
+}
+
+/* ─── FULL MOCKUP SECTION ─── */
+.mockup-section {
+  margin-top: 48px;
+  border-top: 1px solid #1e293b;
+  padding-top: 36px;
+}
+.mockup-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #94a3b8;
+}
+.mockup-title span { color: #f1f5f9; }
+
+/* ─── APP SHELL MOCKUP ─── */
+.app-mock {
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  height: 580px;
+  border: 1px solid;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+}
+
+.mock-sidebar {
+  width: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 10px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.mock-sidebar-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.mock-sidebar-icon.active-nav { border-left: 2px solid; }
+
+.mock-conv-list {
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.mock-conv-header {
+  padding: 12px 10px 8px;
+  flex-shrink: 0;
+}
+.mock-conv-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+.mock-tabs {
+  display: flex;
+  gap: 2px;
+  border-radius: 6px;
+  padding: 2px;
+  margin-bottom: 8px;
+}
+.mock-tab {
+  flex: 1;
+  padding: 4px 0;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 4px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0.5;
+}
+.mock-tab.active { opacity: 1; }
+.mock-search {
+  height: 28px;
+  border-radius: 6px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  opacity: 0.5;
+  gap: 6px;
+}
+
+.mock-conv-items { flex: 1; overflow: hidden; }
+.mock-conv-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 9px 10px;
+  gap: 8px;
+  cursor: pointer;
+}
+.mock-conv-item.selected { }
+.mock-avatar {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.mock-conv-body { flex: 1; min-width: 0; }
+.mock-conv-name {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 2px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.mock-conv-name-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.mock-conv-time { font-size: 10px; opacity: 0.4; flex-shrink: 0; margin-left: 4px; }
+.mock-conv-last { font-size: 11px; opacity: 0.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mock-unread {
+  width: 16px; height: 16px; border-radius: 8px;
+  font-size: 9px; font-weight: 700; display: flex;
+  align-items: center; justify-content: center;
+  margin-left: 4px; flex-shrink: 0; color: #fff;
+}
+
+.mock-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+.mock-chat-header {
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.mock-chat-hinfo { flex: 1; }
+.mock-chat-hname { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.mock-chat-hsub { font-size: 10px; opacity: 0.5; margin-top: 1px; }
+.mock-chat-actions { display: flex; gap: 6px; align-items: center; }
+.mock-action-btn {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.mock-badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.mock-messages { flex: 1; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+.mock-bubble {
+  max-width: 68%;
+  padding: 8px 11px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.mock-bubble.in { align-self: flex-start; border-radius: 12px 12px 12px 2px; }
+.mock-bubble.out { align-self: flex-end; border-radius: 12px 12px 2px 12px; }
+.mock-bubble-meta { font-size: 9px; opacity: 0.5; margin-top: 3px; text-align: right; }
+
+.mock-send {
+  padding: 8px 10px;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.mock-send-box {
+  flex: 1;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 12px;
+  opacity: 0.5;
+  gap: 6px;
+}
+.mock-send-btn {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; cursor: pointer; flex-shrink: 0;
+}
+
+.mock-scripts {
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.mock-scripts-header {
+  padding: 12px 10px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+.mock-script-item {
+  margin: 0 6px 4px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* ═══════════════════════════════════════════════════════
+   ТЕМА 1 — Dark Pro (текущая, улучшенная)
+   Акцент: Оранжевый #f97316, фон #080c14
+═══════════════════════════════════════════════════════ */
+.t1 { --bg: #080c14; --bg2: #0d1120; --bg3: #111827; --border: #1c2438; --border2: #243048;
+      --text: #e2e8f0; --text2: #8892a4; --text3: #4b5675;
+      --acc: #f97316; --acc2: #ea580c; --acc-dim: rgba(249,115,22,0.12);
+      --blue: #3b82f6; --green: #22c55e; --red: #f87171; }
+
+.t1-card { background: var(--bg3); color: var(--text); }
+.t1-card .theme-name { color: var(--text); }
+.t1-card .theme-badge { background: rgba(249,115,22,0.15); color: #fb923c; border: 1px solid rgba(249,115,22,0.3); }
+
+/* Sidebar */
+.t1 .mock-sidebar { background: var(--bg2); border-right: 1px solid var(--border); }
+.t1 .mock-sidebar-icon { color: var(--text3); }
+.t1 .mock-sidebar-icon:hover { background: var(--bg3); color: var(--text2); }
+.t1 .mock-sidebar-icon.active-nav { color: var(--acc); border-left-color: var(--acc); background: var(--acc-dim); }
+
+/* Conv list */
+.t1 .mock-conv-list { background: var(--bg); border-right: 1px solid var(--border); }
+.t1 .mock-conv-title { color: var(--text3); }
+.t1 .mock-tabs { background: var(--bg3); }
+.t1 .mock-tab { color: var(--text2); }
+.t1 .mock-tab.active { background: var(--border2); color: var(--text); }
+.t1 .mock-search { background: var(--bg3); border: 1px solid var(--border); color: var(--text3); }
+.t1 .mock-conv-item { color: var(--text); border-left: 3px solid transparent; }
+.t1 .mock-conv-item:hover { background: var(--bg2); }
+.t1 .mock-conv-item.selected { background: var(--bg2); border-left-color: var(--acc); }
+.t1 .mock-avatar { background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); }
+.t1 .mock-unread { background: var(--acc); }
+
+/* Chat */
+.t1 .mock-chat { background: var(--bg); }
+.t1 .mock-chat-header { background: var(--bg2); border-bottom: 1px solid var(--border); }
+.t1 .mock-chat-hname { color: var(--text); }
+.t1 .mock-badge { background: rgba(34,197,94,0.1); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+.t1 .mock-action-btn.gray { background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); }
+.t1 .mock-action-btn.red { background: rgba(248,113,113,0.1); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+.t1 .mock-action-btn.orange { background: var(--acc); color: #fff; border: none; }
+.t1 .mock-bubble.in { background: var(--bg3); color: var(--text); }
+.t1 .mock-bubble.out { background: var(--acc); color: #fff; }
+.t1 .mock-send { background: var(--bg2); border-top: 1px solid var(--border); }
+.t1 .mock-send-box { background: var(--bg3); border: 1px solid var(--border); color: var(--text3); }
+.t1 .mock-send-btn { background: var(--acc); color: #fff; }
+
+/* Scripts */
+.t1 .mock-scripts { background: var(--bg); border-left: 1px solid var(--border); }
+.t1 .mock-script-item { background: var(--bg3); color: var(--text); }
+.t1 .mock-script-item:hover { background: var(--border); }
+
+.t1-shell { border-color: var(--border2); background: var(--bg); }
+
+/* ═══════════════════════════════════════════════════════
+   ТЕМА 2 — Midnight Violet
+   Акцент: Фиолетовый + Голубой
+═══════════════════════════════════════════════════════ */
+.t2 { --bg: #07080f; --bg2: #0c0d1a; --bg3: #10112b; --border: #1a1c35; --border2: #252848;
+      --text: #e4e6f4; --text2: #7f83b0; --text3: #3f4368;
+      --acc: #7c3aed; --acc2: #6d28d9; --acc-dim: rgba(124,58,237,0.12);
+      --acc-c: #06b6d4; --acc-c2: #0891b2;
+      --green: #34d399; --red: #f87171; }
+
+.t2-card { background: #10112b; color: var(--text); }
+.t2-card .theme-name { color: var(--text); }
+.t2-card .theme-badge { background: rgba(124,58,237,0.15); color: #a78bfa; border: 1px solid rgba(124,58,237,0.3); }
+
+.t2 .mock-sidebar { background: var(--bg2); border-right: 1px solid var(--border); }
+.t2 .mock-sidebar-icon { color: var(--text3); }
+.t2 .mock-sidebar-icon:hover { background: rgba(255,255,255,0.04); color: var(--text2); }
+.t2 .mock-sidebar-icon.active-nav { color: #a78bfa; border-left-color: var(--acc); background: var(--acc-dim); }
+
+.t2 .mock-conv-list { background: var(--bg); border-right: 1px solid var(--border); }
+.t2 .mock-conv-title { color: var(--text3); }
+.t2 .mock-tabs { background: rgba(255,255,255,0.04); }
+.t2 .mock-tab { color: var(--text2); }
+.t2 .mock-tab.active { background: rgba(255,255,255,0.08); color: var(--text); }
+.t2 .mock-search { background: var(--bg3); border: 1px solid var(--border); color: var(--text3); }
+.t2 .mock-conv-item { color: var(--text); border-left: 3px solid transparent; }
+.t2 .mock-conv-item:hover { background: rgba(255,255,255,0.025); }
+.t2 .mock-conv-item.selected { background: var(--acc-dim); border-left-color: var(--acc); }
+.t2 .mock-avatar { background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: #a78bfa; border: 1px solid #312e81; }
+.t2 .mock-unread { background: var(--acc); }
+
+.t2 .mock-chat { background: var(--bg); }
+.t2 .mock-chat-header { background: var(--bg2); border-bottom: 1px solid var(--border); }
+.t2 .mock-chat-hname { color: var(--text); }
+.t2 .mock-badge { background: rgba(52,211,153,0.1); color: var(--green); border: 1px solid rgba(52,211,153,0.25); }
+.t2 .mock-action-btn.gray { background: rgba(255,255,255,0.06); color: var(--text2); border: 1px solid var(--border2); }
+.t2 .mock-action-btn.red { background: rgba(248,113,113,0.1); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+.t2 .mock-action-btn.orange { background: var(--acc-c); color: #fff; border: none; }
+.t2 .mock-bubble.in { background: var(--bg3); color: var(--text); }
+.t2 .mock-bubble.out { background: linear-gradient(135deg, var(--acc) 0%, var(--acc-c) 100%); color: #fff; }
+.t2 .mock-send { background: var(--bg2); border-top: 1px solid var(--border); }
+.t2 .mock-send-box { background: var(--bg3); border: 1px solid var(--border); color: var(--text3); }
+.t2 .mock-send-btn { background: linear-gradient(135deg, var(--acc) 0%, var(--acc-c) 100%); color: #fff; }
+
+.t2 .mock-scripts { background: var(--bg); border-left: 1px solid var(--border); }
+.t2 .mock-script-item { background: rgba(255,255,255,0.04); color: var(--text); }
+.t2 .mock-script-item:hover { background: rgba(255,255,255,0.07); }
+
+.t2-shell { border-color: var(--border2); background: var(--bg); }
+
+/* ═══════════════════════════════════════════════════════
+   ТЕМА 3 — Clean Light
+   Белый фон, синий акцент
+═══════════════════════════════════════════════════════ */
+.t3 { --bg: #f8fafc; --bg2: #f1f5f9; --bg3: #e9eef6; --border: #e2e8f0; --border2: #cbd5e1;
+      --text: #0f172a; --text2: #475569; --text3: #94a3b8;
+      --acc: #2563eb; --acc2: #1d4ed8; --acc-dim: rgba(37,99,235,0.08);
+      --green: #16a34a; --red: #dc2626; }
+
+.t3-card { background: #f1f5f9; color: var(--text); border: 1px solid var(--border); }
+.t3-card .theme-name { color: var(--text); }
+.t3-card .theme-badge { background: rgba(37,99,235,0.1); color: #2563eb; border: 1px solid rgba(37,99,235,0.2); }
+
+.t3 .mock-sidebar { background: #fff; border-right: 1px solid var(--border); }
+.t3 .mock-sidebar-icon { color: var(--text3); }
+.t3 .mock-sidebar-icon:hover { background: var(--bg3); color: var(--text2); }
+.t3 .mock-sidebar-icon.active-nav { color: var(--acc); border-left-color: var(--acc); background: var(--acc-dim); }
+
+.t3 .mock-conv-list { background: #fff; border-right: 1px solid var(--border); }
+.t3 .mock-conv-title { color: var(--text3); }
+.t3 .mock-tabs { background: var(--bg3); }
+.t3 .mock-tab { color: var(--text2); }
+.t3 .mock-tab.active { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.t3 .mock-search { background: var(--bg3); border: 1px solid var(--border2); color: var(--text3); }
+.t3 .mock-conv-item { color: var(--text); border-left: 3px solid transparent; }
+.t3 .mock-conv-item:hover { background: var(--bg2); }
+.t3 .mock-conv-item.selected { background: var(--acc-dim); border-left-color: var(--acc); }
+.t3 .mock-avatar { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); color: var(--acc); border: 1px solid #bfdbfe; }
+.t3 .mock-unread { background: var(--acc); }
+
+.t3 .mock-chat { background: var(--bg2); }
+.t3 .mock-chat-header { background: #fff; border-bottom: 1px solid var(--border); }
+.t3 .mock-chat-hname { color: var(--text); }
+.t3 .mock-badge { background: rgba(22,163,74,0.08); color: var(--green); border: 1px solid rgba(22,163,74,0.2); }
+.t3 .mock-action-btn.gray { background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); }
+.t3 .mock-action-btn.red { background: rgba(220,38,38,0.07); color: var(--red); border: 1px solid rgba(220,38,38,0.2); }
+.t3 .mock-action-btn.orange { background: var(--acc); color: #fff; border: none; }
+.t3 .mock-bubble.in { background: #fff; color: var(--text); border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.t3 .mock-bubble.out { background: var(--acc); color: #fff; }
+.t3 .mock-send { background: #fff; border-top: 1px solid var(--border); }
+.t3 .mock-send-box { background: var(--bg3); border: 1px solid var(--border2); color: var(--text3); }
+.t3 .mock-send-btn { background: var(--acc); color: #fff; }
+
+.t3 .mock-scripts { background: #fff; border-left: 1px solid var(--border); }
+.t3 .mock-script-item { background: var(--bg3); color: var(--text); }
+.t3 .mock-script-item:hover { background: var(--border); }
+
+.t3-shell { border-color: var(--border2); background: var(--bg); }
+
+/* ─── PALETTE STRIPS ─── */
+.palette {
+  display: flex;
+  gap: 6px;
+  padding: 12px 18px;
+  flex-wrap: wrap;
+}
+.pal-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.pal-circle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+.pal-label {
+  font-size: 9px;
+  opacity: 0.5;
+  font-weight: 500;
+}
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 900px) {
+  .themes-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .themes-grid { grid-template-columns: 1fr; }
+  .app-mock { height: 420px; }
+  .mock-scripts { display: none !important; }
+}
+
+/* ─── COMPONENTS SHOWCASE ─── */
+.components-row {
+  display: flex;
+  gap: 24px;
+  margin-top: 32px;
+  flex-wrap: wrap;
+}
+.comp-block {
+  flex: 1;
+  min-width: 240px;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid;
+}
+.comp-block-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.45;
+  margin-bottom: 14px;
+}
+.comp-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.comp-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: Inter, sans-serif;
+}
+.comp-badge {
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-weight: 600;
+  display: inline-block;
+}
+.comp-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.comp-input {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: Inter, sans-serif;
+  outline: none;
+  margin-bottom: 8px;
+}
+
+/* T1 comp */
+.t1-comp { background: #0e1320; border-color: #1c2438; color: #e2e8f0; }
+.t1-comp .comp-block-title { color: #e2e8f0; }
+.t1-comp .comp-btn.primary { background: #f97316; color: #fff; }
+.t1-comp .comp-btn.secondary { background: #111827; color: #94a3b8; border-color: #242d42; }
+.t1-comp .comp-btn.danger { background: rgba(248,113,113,0.1); color: #f87171; border-color: rgba(248,113,113,0.3); }
+.t1-comp .comp-btn.success { background: rgba(34,197,94,0.12); color: #22c55e; border-color: rgba(34,197,94,0.3); }
+.t1-comp .comp-badge.open { background: rgba(34,197,94,0.1); color: #22c55e; border: 1px solid rgba(34,197,94,0.25); }
+.t1-comp .comp-badge.closed { background: #111827; color: #4b5675; border: 1px solid #1c2438; }
+.t1-comp .comp-badge.tag { border-radius: 20px; }
+.t1-comp .comp-input { background: #111827; border: 1px solid #1c2438; color: #e2e8f0; }
+.t1-comp .comp-input::placeholder { color: #4b5675; }
+
+/* T2 comp */
+.t2-comp { background: #0c0d1a; border-color: #1a1c35; color: #e4e6f4; }
+.t2-comp .comp-block-title { color: #e4e6f4; }
+.t2-comp .comp-btn.primary { background: linear-gradient(135deg, #7c3aed 0%, #06b6d4 100%); color: #fff; border: none; }
+.t2-comp .comp-btn.secondary { background: rgba(255,255,255,0.06); color: #7f83b0; border-color: #252848; }
+.t2-comp .comp-btn.danger { background: rgba(248,113,113,0.1); color: #f87171; border-color: rgba(248,113,113,0.3); }
+.t2-comp .comp-btn.success { background: rgba(52,211,153,0.1); color: #34d399; border-color: rgba(52,211,153,0.25); }
+.t2-comp .comp-badge.open { background: rgba(52,211,153,0.1); color: #34d399; border: 1px solid rgba(52,211,153,0.2); }
+.t2-comp .comp-badge.closed { background: rgba(255,255,255,0.04); color: #3f4368; border: 1px solid #1a1c35; }
+.t2-comp .comp-input { background: #10112b; border: 1px solid #1a1c35; color: #e4e6f4; }
+.t2-comp .comp-input::placeholder { color: #3f4368; }
+
+/* T3 comp */
+.t3-comp { background: #fff; border-color: #e2e8f0; color: #0f172a; }
+.t3-comp .comp-block-title { color: #0f172a; }
+.t3-comp .comp-btn.primary { background: #2563eb; color: #fff; }
+.t3-comp .comp-btn.secondary { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+.t3-comp .comp-btn.danger { background: rgba(220,38,38,0.07); color: #dc2626; border-color: rgba(220,38,38,0.2); }
+.t3-comp .comp-btn.success { background: rgba(22,163,74,0.08); color: #16a34a; border-color: rgba(22,163,74,0.2); }
+.t3-comp .comp-badge.open { background: rgba(22,163,74,0.08); color: #16a34a; border: 1px solid rgba(22,163,74,0.2); }
+.t3-comp .comp-badge.closed { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
+.t3-comp .comp-input { background: #f8fafc; border: 1px solid #cbd5e1; color: #0f172a; }
+.t3-comp .comp-input::placeholder { color: #94a3b8; }
+
+/* Switch animation */
+.mockup-preview { display: none; }
+.mockup-preview.visible { display: block; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+<div class="selector">
+  <div class="selector-title">🎨 TGTracker — Варианты редизайна</div>
+  <div class="selector-sub">Нажми на карточку, чтобы посмотреть полный мокап. Три направления дизайна.</div>
+
+  <div class="themes-grid">
+    <!-- CARD 1: Dark Pro -->
+    <div class="theme-card t1-card" onclick="selectTheme(1)" id="card-1">
+      <div class="selected-indicator">✓</div>
+      <span class="theme-badge">Текущее</span>
+      <div class="theme-preview">
+        <div style="height:100%;display:flex;flex-direction:column;">
+          <div style="background:#0d1120;padding:8px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #1c2438;">
+            <span style="font-size:13px;">📡</span>
+            <span style="font-size:11px;font-weight:700;color:#e2e8f0;opacity:0.7;">TGTracker</span>
+          </div>
+          <div style="display:flex;flex:1;overflow:hidden;">
+            <div style="width:40px;background:#0d1120;border-right:1px solid #1c2438;display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:4px;">
+              <div style="width:28px;height:28px;border-radius:6px;background:rgba(249,115,22,0.12);display:flex;align-items:center;justify-content:center;font-size:13px;border-left:2px solid #f97316;">📱</div>
+              <div style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;opacity:0.4;">💚</div>
+              <div style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;opacity:0.4;">🗂</div>
+              <div style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;opacity:0.4;">📊</div>
+            </div>
+            <div style="width:170px;background:#080c14;border-right:1px solid #1c2438;overflow:hidden;">
+              <div style="padding:8px 8px 6px;border-bottom:1px solid #1c2438;">
+                <div style="display:flex;gap:2px;background:#111827;border-radius:5px;padding:2px;margin-bottom:6px;">
+                  <div style="flex:1;background:#242d42;border-radius:3px;padding:3px;font-size:9px;color:#e2e8f0;text-align:center;">Открытые</div>
+                  <div style="flex:1;padding:3px;font-size:9px;color:#4b5675;text-align:center;">Закрытые</div>
+                </div>
+                <div style="background:#111827;border:1px solid #1c2438;border-radius:5px;padding:5px 8px;font-size:10px;color:#4b5675;">🔍 Поиск...</div>
+              </div>
+              <div style="padding-top:2px;">
+                <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:#0d1120;border-left:3px solid #f97316;">
+                  <div style="width:30px;height:30px;min-width:30px;border-radius:50%;background:#111827;border:1px solid #242d42;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#8892a4;">А</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:11px;font-weight:600;color:#e2e8f0;margin-bottom:1px;">Анна М.</div>
+                    <div style="font-size:9px;color:#4b5675;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Добрый день, подскажите...</div>
+                  </div>
+                  <div style="width:14px;height:14px;border-radius:7px;background:#f97316;font-size:8px;color:#fff;display:flex;align-items:center;justify-content:center;">3</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;">
+                  <div style="width:30px;height:30px;min-width:30px;border-radius:50%;background:#111827;border:1px solid #242d42;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#8892a4;">К</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:11px;font-weight:600;color:#e2e8f0;margin-bottom:1px;">Кирилл П.</div>
+                    <div style="font-size:9px;color:#4b5675;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Хочу уточнить по условиям</div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;">
+                  <div style="width:30px;height:30px;min-width:30px;border-radius:50%;background:#111827;border:1px solid #242d42;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#8892a4;">М</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:11px;font-weight:600;color:#e2e8f0;margin-bottom:1px;">Мария С.</div>
+                    <div style="font-size:9px;color:#4b5675;">Спасибо за информацию!</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="flex:1;background:#080c14;display:flex;flex-direction:column;overflow:hidden;">
+              <div style="background:#0d1120;border-bottom:1px solid #1c2438;padding:8px 12px;display:flex;align-items:center;gap:8px;">
+                <div style="width:32px;height:32px;min-width:32px;border-radius:50%;background:#111827;border:1px solid #242d42;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#8892a4;">А</div>
+                <div style="flex:1;">
+                  <div style="font-size:12px;font-weight:600;color:#e2e8f0;display:flex;align-items:center;gap:5px;">
+                    Анна М.
+                    <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.25);">Открыт</span>
+                  </div>
+                  <div style="font-size:9px;color:#4b5675;">@annamor · fb_ads_main</div>
+                </div>
+                <div style="display:flex;gap:5px;">
+                  <div style="background:#111827;border:1px solid #242d42;border-radius:4px;padding:3px 7px;font-size:9px;color:#8892a4;">Закрыть</div>
+                  <div style="background:#f97316;border-radius:4px;padding:3px 7px;font-size:9px;color:#fff;">Lead</div>
+                </div>
+              </div>
+              <div style="flex:1;padding:12px;display:flex;flex-direction:column;gap:8px;overflow:hidden;">
+                <div style="max-width:70%;align-self:flex-start;background:#111827;border-radius:12px 12px 12px 2px;padding:7px 10px;font-size:11px;color:#e2e8f0;line-height:1.4;">
+                  Добрый день! Хотела уточнить условия программы
+                  <div style="font-size:9px;opacity:0.4;text-align:right;margin-top:2px;">14:23</div>
+                </div>
+                <div style="max-width:70%;align-self:flex-end;background:#f97316;border-radius:12px 12px 2px 12px;padding:7px 10px;font-size:11px;color:#fff;line-height:1.4;">
+                  Здравствуйте! Конечно, расскажу подробнее
+                  <div style="font-size:9px;opacity:0.7;text-align:right;margin-top:2px;">14:24 ✓✓</div>
+                </div>
+              </div>
+              <div style="background:#0d1120;border-top:1px solid #1c2438;padding:7px 10px;display:flex;gap:6px;align-items:flex-end;">
+                <div style="flex:1;background:#111827;border:1px solid #1c2438;border-radius:7px;padding:6px 9px;font-size:11px;color:#4b5675;">Напишите сообщение...</div>
+                <div style="width:28px;height:28px;border-radius:6px;background:#f97316;display:flex;align-items:center;justify-content:center;font-size:14px;">➤</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="palette">
+        <div class="pal-swatch"><div class="pal-circle" style="background:#080c14;border:1px solid #1c2438;"></div><div class="pal-label">BG</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#0d1120;border:1px solid #1c2438;"></div><div class="pal-label">BG2</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#111827;border:1px solid #1c2438;"></div><div class="pal-label">BG3</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#f97316;"></div><div class="pal-label">Accent</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#3b82f6;"></div><div class="pal-label">Blue</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#22c55e;"></div><div class="pal-label">Green</div></div>
+      </div>
+      <div class="theme-info t1-card">
+        <div class="theme-name">🔶 Dark Pro (текущий)</div>
+        <div class="theme-desc">Глубокий тёмный синий фон + оранжевый акцент. Профессиональный, хорошо читается. Рекомендуется как базовый — минимум изменений.</div>
+      </div>
+    </div>
+
+    <!-- CARD 2: Midnight Violet -->
+    <div class="theme-card t2-card" onclick="selectTheme(2)" id="card-2">
+      <div class="selected-indicator">✓</div>
+      <span class="theme-badge" style="background:rgba(124,58,237,0.15);color:#a78bfa;border:1px solid rgba(124,58,237,0.3);">Новый</span>
+      <div class="theme-preview">
+        <div style="height:100%;display:flex;flex-direction:column;background:#07080f;">
+          <div style="background:#0c0d1a;padding:8px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #1a1c35;">
+            <span style="font-size:13px;">📡</span>
+            <span style="font-size:11px;font-weight:700;color:#e4e6f4;opacity:0.7;">TGTracker</span>
+          </div>
+          <div style="display:flex;flex:1;overflow:hidden;">
+            <div style="width:40px;background:#0c0d1a;border-right:1px solid #1a1c35;display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:4px;">
+              <div style="width:28px;height:28px;border-radius:6px;background:rgba(124,58,237,0.12);display:flex;align-items:center;justify-content:center;font-size:13px;border-left:2px solid #7c3aed;">📱</div>
+              <div style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;opacity:0.3;">💚</div>
+              <div style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;opacity:0.3;">🗂</div>
+            </div>
+            <div style="width:170px;background:#07080f;border-right:1px solid #1a1c35;overflow:hidden;">
+              <div style="padding:8px 8px 6px;border-bottom:1px solid #1a1c35;">
+                <div style="display:flex;gap:2px;background:rgba(255,255,255,0.04);border-radius:5px;padding:2px;margin-bottom:6px;">
+                  <div style="flex:1;background:rgba(255,255,255,0.08);border-radius:3px;padding:3px;font-size:9px;color:#e4e6f4;text-align:center;">Открытые</div>
+                  <div style="flex:1;padding:3px;font-size:9px;color:#3f4368;text-align:center;">Закрытые</div>
+                </div>
+                <div style="background:#10112b;border:1px solid #1a1c35;border-radius:5px;padding:5px 8px;font-size:10px;color:#3f4368;">🔍 Поиск...</div>
+              </div>
+              <div style="padding-top:2px;">
+                <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:rgba(124,58,237,0.1);border-left:3px solid #7c3aed;">
+                  <div style="width:30px;height:30px;min-width:30px;border-radius:50%;background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #312e81;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#a78bfa;">А</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:11px;font-weight:600;color:#e4e6f4;">Анна М.</div>
+                    <div style="font-size:9px;color:#3f4368;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Добрый день, подскажите...</div>
+                  </div>
+                  <div style="width:14px;height:14px;border-radius:7px;background:#7c3aed;font-size:8px;color:#fff;display:flex;align-items:center;justify-content:center;">3</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;">
+                  <div style="width:30px;height:30px;min-width:30px;border-radius:50%;background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #312e81;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#a78bfa;">К</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:11px;font-weight:600;color:#e4e6f4;">Кирилл П.</div>
+                    <div style="font-size:9px;color:#3f4368;">Хочу уточнить по условиям</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="flex:1;background:#07080f;display:flex;flex-direction:column;overflow:hidden;">
+              <div style="background:#0c0d1a;border-bottom:1px solid #1a1c35;padding:8px 12px;display:flex;align-items:center;gap:8px;">
+                <div style="width:32px;height:32px;min-width:32px;border-radius:50%;background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #312e81;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#a78bfa;">А</div>
+                <div style="flex:1;">
+                  <div style="font-size:12px;font-weight:600;color:#e4e6f4;display:flex;align-items:center;gap:5px;">
+                    Анна М.
+                    <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(52,211,153,0.1);color:#34d399;border:1px solid rgba(52,211,153,0.2);">Открыт</span>
+                  </div>
+                  <div style="font-size:9px;color:#3f4368;">@annamor · fb_ads_main</div>
+                </div>
+                <div style="display:flex;gap:5px;">
+                  <div style="background:rgba(255,255,255,0.06);border:1px solid #252848;border-radius:4px;padding:3px 7px;font-size:9px;color:#7f83b0;">Закрыть</div>
+                  <div style="background:linear-gradient(135deg,#7c3aed,#06b6d4);border-radius:4px;padding:3px 7px;font-size:9px;color:#fff;">Lead</div>
+                </div>
+              </div>
+              <div style="flex:1;padding:12px;display:flex;flex-direction:column;gap:8px;overflow:hidden;">
+                <div style="max-width:70%;align-self:flex-start;background:#10112b;border-radius:12px 12px 12px 2px;padding:7px 10px;font-size:11px;color:#e4e6f4;line-height:1.4;">
+                  Добрый день! Хотела уточнить условия
+                  <div style="font-size:9px;opacity:0.4;text-align:right;margin-top:2px;">14:23</div>
+                </div>
+                <div style="max-width:70%;align-self:flex-end;background:linear-gradient(135deg,#7c3aed,#06b6d4);border-radius:12px 12px 2px 12px;padding:7px 10px;font-size:11px;color:#fff;line-height:1.4;">
+                  Здравствуйте! Конечно, расскажу подробнее
+                  <div style="font-size:9px;opacity:0.7;text-align:right;margin-top:2px;">14:24 ✓✓</div>
+                </div>
+              </div>
+              <div style="background:#0c0d1a;border-top:1px solid #1a1c35;padding:7px 10px;display:flex;gap:6px;align-items:flex-end;">
+                <div style="flex:1;background:#10112b;border:1px solid #1a1c35;border-radius:7px;padding:6px 9px;font-size:11px;color:#3f4368;">Напишите сообщение...</div>
+                <div style="width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,#7c3aed,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:14px;">➤</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="palette">
+        <div class="pal-swatch"><div class="pal-circle" style="background:#07080f;border:1px solid #1a1c35;"></div><div class="pal-label">BG</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#0c0d1a;border:1px solid #1a1c35;"></div><div class="pal-label">BG2</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#10112b;border:1px solid #1a1c35;"></div><div class="pal-label">BG3</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#7c3aed;"></div><div class="pal-label">Violet</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#06b6d4;"></div><div class="pal-label">Cyan</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#34d399;"></div><div class="pal-label">Green</div></div>
+      </div>
+      <div class="theme-info t2-card">
+        <div class="theme-name">💜 Midnight Violet</div>
+        <div class="theme-desc">Тёмно-синий ночной фон + фиолетово-голубой градиент. Более стильный и современный вид. Хорошо для B2B продуктов.</div>
+      </div>
+    </div>
+
+    <!-- CARD 3: Clean Light -->
+    <div class="theme-card t3-card" onclick="selectTheme(3)" id="card-3">
+      <div class="selected-indicator">✓</div>
+      <span class="theme-badge" style="background:rgba(37,99,235,0.08);color:#2563eb;border:1px solid rgba(37,99,235,0.2);">Светлый</span>
+      <div class="theme-preview" style="background:#f8fafc;">
+        <div style="height:100%;display:flex;flex-direction:column;">
+          <div style="background:#fff;padding:8px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+            <span style="font-size:13px;">📡</span>
+            <span style="font-size:11px;font-weight:700;color:#0f172a;opacity:0.7;">TGTracker</span>
+          </div>
+          <div style="display:flex;flex:1;overflow:hidden;">
+            <div style="width:40px;background:#fff;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:4px;">
+              <div style="width:28px;height:28px;border-radius:6px;background:rgba(37,99,235,0.08);display:flex;align-items:center;justify-content:center;font-size:13px;border-left:2px solid #2563eb;">📱</div>
+              <div style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;opacity:0.3;">💚</div>
+              <div style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;opacity:0.3;">🗂</div>
+            </div>
+            <div style="width:170px;background:#fff;border-right:1px solid #e2e8f0;overflow:hidden;">
+              <div style="padding:8px 8px 6px;border-bottom:1px solid #e2e8f0;">
+                <div style="display:flex;gap:2px;background:#e9eef6;border-radius:5px;padding:2px;margin-bottom:6px;">
+                  <div style="flex:1;background:#fff;border-radius:3px;padding:3px;font-size:9px;color:#0f172a;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,0.08);">Открытые</div>
+                  <div style="flex:1;padding:3px;font-size:9px;color:#94a3b8;text-align:center;">Закрытые</div>
+                </div>
+                <div style="background:#e9eef6;border:1px solid #cbd5e1;border-radius:5px;padding:5px 8px;font-size:10px;color:#94a3b8;">🔍 Поиск...</div>
+              </div>
+              <div style="padding-top:2px;">
+                <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:rgba(37,99,235,0.06);border-left:3px solid #2563eb;">
+                  <div style="width:30px;height:30px;min-width:30px;border-radius:50%;background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1px solid #bfdbfe;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#2563eb;">А</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:11px;font-weight:600;color:#0f172a;">Анна М.</div>
+                    <div style="font-size:9px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Добрый день, подскажите...</div>
+                  </div>
+                  <div style="width:14px;height:14px;border-radius:7px;background:#2563eb;font-size:8px;color:#fff;display:flex;align-items:center;justify-content:center;">3</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;">
+                  <div style="width:30px;height:30px;min-width:30px;border-radius:50%;background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #bbf7d0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#16a34a;">К</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:11px;font-weight:600;color:#0f172a;">Кирилл П.</div>
+                    <div style="font-size:9px;color:#94a3b8;">Хочу уточнить по условиям</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="flex:1;background:#f1f5f9;display:flex;flex-direction:column;overflow:hidden;">
+              <div style="background:#fff;border-bottom:1px solid #e2e8f0;padding:8px 12px;display:flex;align-items:center;gap:8px;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+                <div style="width:32px;height:32px;min-width:32px;border-radius:50%;background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1px solid #bfdbfe;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#2563eb;">А</div>
+                <div style="flex:1;">
+                  <div style="font-size:12px;font-weight:600;color:#0f172a;display:flex;align-items:center;gap:5px;">
+                    Анна М.
+                    <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(22,163,74,0.08);color:#16a34a;border:1px solid rgba(22,163,74,0.2);">Открыт</span>
+                  </div>
+                  <div style="font-size:9px;color:#94a3b8;">@annamor · fb_ads_main</div>
+                </div>
+                <div style="display:flex;gap:5px;">
+                  <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:4px;padding:3px 7px;font-size:9px;color:#475569;">Закрыть</div>
+                  <div style="background:#2563eb;border-radius:4px;padding:3px 7px;font-size:9px;color:#fff;">Lead</div>
+                </div>
+              </div>
+              <div style="flex:1;padding:12px;display:flex;flex-direction:column;gap:8px;overflow:hidden;">
+                <div style="max-width:70%;align-self:flex-start;background:#fff;border-radius:12px 12px 12px 2px;padding:7px 10px;font-size:11px;color:#0f172a;line-height:1.4;border:1px solid #e2e8f0;box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                  Добрый день! Хотела уточнить условия
+                  <div style="font-size:9px;color:#94a3b8;text-align:right;margin-top:2px;">14:23</div>
+                </div>
+                <div style="max-width:70%;align-self:flex-end;background:#2563eb;border-radius:12px 12px 2px 12px;padding:7px 10px;font-size:11px;color:#fff;line-height:1.4;">
+                  Здравствуйте! Конечно, расскажу подробнее
+                  <div style="font-size:9px;opacity:0.7;text-align:right;margin-top:2px;">14:24 ✓✓</div>
+                </div>
+              </div>
+              <div style="background:#fff;border-top:1px solid #e2e8f0;padding:7px 10px;display:flex;gap:6px;align-items:flex-end;">
+                <div style="flex:1;background:#f8fafc;border:1px solid #cbd5e1;border-radius:7px;padding:6px 9px;font-size:11px;color:#94a3b8;">Напишите сообщение...</div>
+                <div style="width:28px;height:28px;border-radius:6px;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:14px;">➤</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="palette">
+        <div class="pal-swatch"><div class="pal-circle" style="background:#f8fafc;border:1px solid #e2e8f0;"></div><div class="pal-label">BG</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#f1f5f9;border:1px solid #e2e8f0;"></div><div class="pal-label">BG2</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#fff;border:1px solid #e2e8f0;"></div><div class="pal-label">White</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#2563eb;"></div><div class="pal-label">Blue</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#16a34a;"></div><div class="pal-label">Green</div></div>
+        <div class="pal-swatch"><div class="pal-circle" style="background:#dc2626;"></div><div class="pal-label">Red</div></div>
+      </div>
+      <div class="theme-info t3-card" style="background:#f1f5f9;">
+        <div class="theme-name" style="color:#0f172a;">☀️ Clean Light</div>
+        <div class="theme-desc" style="color:#475569;">Светлый минималистичный интерфейс в стиле Linear/Notion. Синий акцент. Легкий для глаз при дневной работе, хорошо выглядит на презентациях.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Components showcase -->
+  <div class="mockup-section">
+    <div class="mockup-title">Компоненты — <span id="comp-title">выбери тему выше</span></div>
+
+    <div class="mockup-preview" id="comp-1">
+      <div class="components-row">
+        <div class="comp-block t1-comp">
+          <div class="comp-block-title">Кнопки</div>
+          <div class="comp-buttons">
+            <button class="comp-btn primary t1-comp">Lead →</button>
+            <button class="comp-btn secondary t1-comp">Закрыть</button>
+            <button class="comp-btn success t1-comp">✅ Открыт</button>
+            <button class="comp-btn danger t1-comp">🗑 Удалить</button>
+          </div>
+          <div class="comp-block-title">Бейджи</div>
+          <div class="comp-badges">
+            <span class="comp-badge open t1-comp">Открыт</span>
+            <span class="comp-badge closed t1-comp">Закрыт</span>
+            <span class="comp-badge" style="background:rgba(249,115,22,0.12);color:#fb923c;border:1px solid rgba(249,115,22,0.3);border-radius:20px;">#вакансия</span>
+            <span class="comp-badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);border-radius:20px;">FB</span>
+          </div>
+          <div class="comp-block-title">Поля ввода</div>
+          <input class="comp-input t1-comp" placeholder="Поиск по диалогам..." readonly>
+          <input class="comp-input t1-comp" placeholder="Напишите сообщение..." readonly>
+        </div>
+        <div class="comp-block t1-comp">
+          <div class="comp-block-title">Сообщения</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="max-width:80%;align-self:flex-start;background:#111827;border-radius:12px 12px 12px 2px;padding:9px 12px;font-size:13px;color:#e2e8f0;line-height:1.45;">
+              Здравствуйте! Хотела уточнить условия программы
+              <div style="font-size:10px;opacity:0.4;text-align:right;margin-top:3px;">14:23</div>
+            </div>
+            <div style="max-width:80%;align-self:flex-end;background:#f97316;border-radius:12px 12px 2px 12px;padding:9px 12px;font-size:13px;color:#fff;line-height:1.45;">
+              Добрый день! Расскажу всё подробно 😊
+              <div style="font-size:10px;opacity:0.7;text-align:right;margin-top:3px;">14:24 ✓✓</div>
+            </div>
+            <div style="max-width:80%;align-self:flex-start;background:#111827;border-radius:12px 12px 12px 2px;padding:9px 12px;font-size:13px;color:#e2e8f0;line-height:1.45;">
+              Спасибо, очень помогли!
+              <div style="font-size:10px;opacity:0.4;text-align:right;margin-top:3px;">14:26</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mockup-preview" id="comp-2">
+      <div class="components-row">
+        <div class="comp-block t2-comp">
+          <div class="comp-block-title">Кнопки</div>
+          <div class="comp-buttons">
+            <button class="comp-btn primary t2-comp">Lead →</button>
+            <button class="comp-btn secondary t2-comp">Закрыть</button>
+            <button class="comp-btn success t2-comp">✅ Открыт</button>
+            <button class="comp-btn danger t2-comp">🗑 Удалить</button>
+          </div>
+          <div class="comp-block-title">Бейджи</div>
+          <div class="comp-badges">
+            <span class="comp-badge open t2-comp">Открыт</span>
+            <span class="comp-badge closed t2-comp">Закрыт</span>
+            <span class="comp-badge" style="background:rgba(124,58,237,0.15);color:#a78bfa;border:1px solid rgba(124,58,237,0.3);border-radius:20px;">#вакансия</span>
+            <span class="comp-badge" style="background:rgba(6,182,212,0.1);color:#06b6d4;border:1px solid rgba(6,182,212,0.25);border-radius:20px;">FB</span>
+          </div>
+          <div class="comp-block-title">Поля ввода</div>
+          <input class="comp-input t2-comp" placeholder="Поиск по диалогам..." readonly>
+          <input class="comp-input t2-comp" placeholder="Напишите сообщение..." readonly>
+        </div>
+        <div class="comp-block t2-comp">
+          <div class="comp-block-title">Сообщения</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="max-width:80%;align-self:flex-start;background:#10112b;border-radius:12px 12px 12px 2px;padding:9px 12px;font-size:13px;color:#e4e6f4;line-height:1.45;">
+              Здравствуйте! Хотела уточнить условия программы
+              <div style="font-size:10px;opacity:0.4;text-align:right;margin-top:3px;">14:23</div>
+            </div>
+            <div style="max-width:80%;align-self:flex-end;background:linear-gradient(135deg,#7c3aed 0%,#06b6d4 100%);border-radius:12px 12px 2px 12px;padding:9px 12px;font-size:13px;color:#fff;line-height:1.45;">
+              Добрый день! Расскажу всё подробно 😊
+              <div style="font-size:10px;opacity:0.7;text-align:right;margin-top:3px;">14:24 ✓✓</div>
+            </div>
+            <div style="max-width:80%;align-self:flex-start;background:#10112b;border-radius:12px 12px 12px 2px;padding:9px 12px;font-size:13px;color:#e4e6f4;line-height:1.45;">
+              Спасибо, очень помогли!
+              <div style="font-size:10px;opacity:0.4;text-align:right;margin-top:3px;">14:26</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mockup-preview" id="comp-3">
+      <div class="components-row">
+        <div class="comp-block t3-comp">
+          <div class="comp-block-title">Кнопки</div>
+          <div class="comp-buttons">
+            <button class="comp-btn primary t3-comp">Lead →</button>
+            <button class="comp-btn secondary t3-comp">Закрыть</button>
+            <button class="comp-btn success t3-comp">✅ Открыт</button>
+            <button class="comp-btn danger t3-comp">🗑 Удалить</button>
+          </div>
+          <div class="comp-block-title">Бейджи</div>
+          <div class="comp-badges">
+            <span class="comp-badge open t3-comp">Открыт</span>
+            <span class="comp-badge closed t3-comp">Закрыт</span>
+            <span class="comp-badge" style="background:rgba(37,99,235,0.08);color:#2563eb;border:1px solid rgba(37,99,235,0.2);border-radius:20px;">#вакансия</span>
+            <span class="comp-badge" style="background:rgba(22,163,74,0.08);color:#16a34a;border:1px solid rgba(22,163,74,0.2);border-radius:20px;">FB</span>
+          </div>
+          <div class="comp-block-title">Поля ввода</div>
+          <input class="comp-input t3-comp" placeholder="Поиск по диалогам..." readonly>
+          <input class="comp-input t3-comp" placeholder="Напишите сообщение..." readonly>
+        </div>
+        <div class="comp-block t3-comp">
+          <div class="comp-block-title">Сообщения</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="max-width:80%;align-self:flex-start;background:#fff;border-radius:12px 12px 12px 2px;padding:9px 12px;font-size:13px;color:#0f172a;line-height:1.45;border:1px solid #e2e8f0;box-shadow:0 1px 2px rgba(0,0,0,0.06);">
+              Здравствуйте! Хотела уточнить условия программы
+              <div style="font-size:10px;color:#94a3b8;text-align:right;margin-top:3px;">14:23</div>
+            </div>
+            <div style="max-width:80%;align-self:flex-end;background:#2563eb;border-radius:12px 12px 2px 12px;padding:9px 12px;font-size:13px;color:#fff;line-height:1.45;">
+              Добрый день! Расскажу всё подробно 😊
+              <div style="font-size:10px;opacity:0.7;text-align:right;margin-top:3px;">14:24 ✓✓</div>
+            </div>
+            <div style="max-width:80%;align-self:flex-start;background:#fff;border-radius:12px 12px 12px 2px;padding:9px 12px;font-size:13px;color:#0f172a;line-height:1.45;border:1px solid #e2e8f0;box-shadow:0 1px 2px rgba(0,0,0,0.06);">
+              Спасибо, очень помогли!
+              <div style="font-size:10px;color:#94a3b8;text-align:right;margin-top:3px;">14:26</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end mockup-section -->
+
+  <!-- Summary table -->
+  <div style="margin-top:48px;border-top:1px solid #1e293b;padding-top:36px;">
+    <div class="mockup-title">Сравнение <span>вариантов</span></div>
+    <div style="overflow-x:auto;margin-top:16px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="border-bottom:1px solid #1e293b;">
+            <th style="text-align:left;padding:10px 14px;color:#475569;font-weight:600;width:22%;">Критерий</th>
+            <th style="text-align:center;padding:10px 14px;color:#fb923c;font-weight:600;width:26%;">🔶 Dark Pro</th>
+            <th style="text-align:center;padding:10px 14px;color:#a78bfa;font-weight:600;width:26%;">💜 Midnight Violet</th>
+            <th style="text-align:center;padding:10px 14px;color:#3b82f6;font-weight:600;width:26%;">☀️ Clean Light</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #0f172a;">
+            <td style="padding:10px 14px;color:#64748b;">Объём изменений</td>
+            <td style="padding:10px 14px;text-align:center;color:#22c55e;">✅ Минимум</td>
+            <td style="padding:10px 14px;text-align:center;color:#f97316;">⚡ Средний</td>
+            <td style="padding:10px 14px;text-align:center;color:#f97316;">⚡ Средний</td>
+          </tr>
+          <tr style="border-bottom:1px solid #0f172a;">
+            <td style="padding:10px 14px;color:#64748b;">Нагрузка на глаза</td>
+            <td style="padding:10px 14px;text-align:center;">😐 Нормально</td>
+            <td style="padding:10px 14px;text-align:center;">😊 Хорошо</td>
+            <td style="padding:10px 14px;text-align:center;color:#22c55e;">✅ Отлично (день)</td>
+          </tr>
+          <tr style="border-bottom:1px solid #0f172a;">
+            <td style="padding:10px 14px;color:#64748b;">Ночная работа</td>
+            <td style="padding:10px 14px;text-align:center;color:#22c55e;">✅ Отлично</td>
+            <td style="padding:10px 14px;text-align:center;color:#22c55e;">✅ Отлично</td>
+            <td style="padding:10px 14px;text-align:center;">😐 Терпимо</td>
+          </tr>
+          <tr style="border-bottom:1px solid #0f172a;">
+            <td style="padding:10px 14px;color:#64748b;">Выглядит на скриншотах</td>
+            <td style="padding:10px 14px;text-align:center;">😐 Обычно</td>
+            <td style="padding:10px 14px;text-align:center;color:#22c55e;">✅ Стильно</td>
+            <td style="padding:10px 14px;text-align:center;color:#22c55e;">✅ Профессионально</td>
+          </tr>
+          <tr style="border-bottom:1px solid #0f172a;">
+            <td style="padding:10px 14px;color:#64748b;">Поддержка доп. тем</td>
+            <td style="padding:10px 14px;text-align:center;">—</td>
+            <td style="padding:10px 14px;text-align:center;color:#22c55e;">✅ + тёмный вариант</td>
+            <td style="padding:10px 14px;text-align:center;color:#22c55e;">✅ + тёмный вариант</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 14px;color:#64748b;">Рекомендация</td>
+            <td style="padding:10px 14px;text-align:center;color:#e2e8f0;">Если спешишь — бери</td>
+            <td style="padding:10px 14px;text-align:center;color:#a78bfa;">Если хочешь wow-эффект</td>
+            <td style="padding:10px 14px;text-align:center;color:#3b82f6;">Если B2B / онбординг</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- end selector -->
+
+<script>
+let selected = null;
+
+function selectTheme(n) {
+  // Deselect all
+  [1,2,3].forEach(i => {
+    document.getElementById('card-' + i).classList.remove('active');
+    document.getElementById('comp-' + i).classList.remove('visible');
+  });
+
+  // Select new
+  document.getElementById('card-' + n).classList.add('active');
+  document.getElementById('comp-' + n).classList.add('visible');
+
+  const names = {
+    1: '🔶 Dark Pro (текущий, улучшенный)',
+    2: '💜 Midnight Violet',
+    3: '☀️ Clean Light'
+  };
+  document.getElementById('comp-title').textContent = names[n];
+  selected = n;
+
+  // Scroll to mockup section
+  document.querySelector('.mockup-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Auto-select first on load
+selectTheme(1);
+</script>
+</body>
+</html>

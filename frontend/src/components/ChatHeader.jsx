@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { closeConv, reopenConv, deleteConv, sendLead, fetchUserStatus, addConvTag, removeConvTag, fetchAllTags } from '../api.js'
+import { closeConv, reopenConv, deleteConv, sendLead, fetchUserStatus, addConvTag, removeConvTag, fetchAllTags, fetchCategories, setConvCategory } from '../api.js'
 
 function useOnlineStatus(tgUserId) {
   const [status, setStatus] = useState(null) // null | 'online' | 'recently' | string
@@ -93,6 +93,61 @@ function TagDropdown({ convId, convTags, onAdded }) {
           {tag.name}
         </button>
       ))}
+    </div>
+  )
+}
+
+function CategorySelect({ conv, onUpdated }) {
+  const [categories, setCategories] = useState([])
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    fetchCategories()
+      .then(data => setCategories(data.categories || []))
+      .catch(() => {})
+  }, [])
+
+  if (!categories.length) return null
+
+  async function handleChange(e) {
+    const val = e.target.value
+    const catId = val === '' ? null : parseInt(val, 10)
+    setBusy(true)
+    try {
+      await setConvCategory(conv.id, catId)
+      onUpdated()
+    } catch (err) {
+      alert('Ошибка: ' + err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const current = categories.find(c => c.id === conv.category_id)
+
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+      {current && (
+        <span style={{
+          display: 'inline-block', width: 8, height: 8,
+          borderRadius: '50%', background: current.color, flexShrink: 0,
+        }} />
+      )}
+      <select
+        disabled={busy}
+        value={conv.category_id || ''}
+        onChange={handleChange}
+        style={{
+          background: 'var(--bg3)', border: '1px solid var(--border)',
+          borderRadius: 6, padding: '2px 6px', color: 'var(--text2)',
+          fontSize: 11, cursor: 'pointer',
+        }}
+      >
+        <option value="">— Категория</option>
+        {categories.map(cat => (
+          <option key={cat.id} value={cat.id}>{cat.name}</option>
+        ))}
+      </select>
     </div>
   )
 }
@@ -202,6 +257,7 @@ export default function ChatHeader({ conv, onUpdate, onDeleted }) {
                   .filter(Boolean).join(' · ')}
               </span>
             )}
+            <CategorySelect conv={conv} onUpdated={onUpdate} />
             {conv.staff_id ? (
               <a
                 href={`/staff?edit=${conv.staff_id}`}

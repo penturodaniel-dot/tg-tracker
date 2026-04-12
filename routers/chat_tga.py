@@ -1142,6 +1142,15 @@ async def tg_account_webhook(request: Request):
                     db.mark_staff_click_used(click_data["ref_id"])
                     conv = db.get_tg_account_conversation(conv["id"]) or conv
 
+            # ── Авто-назначение категории по UTM ─────────────────────────────
+            if not conv.get("category_id"):
+                _utm = conv.get("utm_campaign") or ""
+                if _utm:
+                    _cat = db.get_category_by_utm(_utm)
+                    if _cat:
+                        db.set_conv_category(conv["id"], _cat["id"])
+                        log.info(f"[TG webhook] category auto-assigned: conv={conv['id']} utm={_utm} → {_cat['name']}")
+
             db.save_tg_account_message(conv["id"], tg_user_id, "visitor", text, media_url=media_url, media_type=media_type, tg_msg_id=tg_msg_id)
             db.update_tg_account_last_message(tg_user_id, text, increment_unread=True)
 
@@ -1563,18 +1572,72 @@ async def api_tg_user_status(request: Request, user_id: str):
         return JSONResponse({"ok": False, "error": str(e)})
 
 
+@router.get("/api/categories")
+async def api_categories(request: Request):
+    """Список категорий для фронтенда"""
+    user = check_session(request)
+    if not user: return JSONResponse({"error": "unauthorized"}, 401)
+    cats = db.get_categories()
+    # Менеджеру возвращаем только его категории
+    if user.get("role") != "admin":
+        access = db.get_user_category_access(user["id"])
+        cats = [c for c in cats if c["id"] in access]
+    return JSONResponse({"categories": [
+        {"id": c["id"], "name": c["name"], "color": c["color"]} for c in cats
+    ]})
+
+
+@router.post("/api/tga/conv/{conv_id}/category")
+async def api_set_conv_category(request: Request, conv_id: int):
+    """Назначить категорию диалогу вручную"""
+    user, err = require_auth(request)
+    if err: return JSONResponse({"error": "unauthorized"}, 401)
+    body = await request.json()
+    category_id = body.get("category_id")  # None = убрать категорию
+    # Менеджер может назначать только из своих категорий
+    if user.get("role") != "admin" and category_id:
+        access = db.get_user_category_access(user["id"])
+        if category_id not in access:
+            return JSONResponse({"error": "forbidden"}, 403)
+    db.set_conv_category(conv_id, category_id)
+    return JSONResponse({"ok": True})
+
+
 @router.get("/api/tg_account_convs")
-async def api_tg_account_convs(request: Request, status: str = "open", offset: int = 0, tag_id: int = 0):
+async def api_tg_account_convs(request: Request, status: str = "open", offset: int = 0,
+                                tag_id: int = 0, category_id: int = 0):
     """Список TG диалогов для авто-обновления и пагинации"""
     user = check_session(request)
     if not user: return JSONResponse({"error": "unauthorized"}, 401)
     status_arg = status if status != "all" else None
-    convs = db.get_tg_account_conversations(status=status_arg, limit=30, offset=offset)
-    # Filter by tag if requested
+
+    # Фильтрация по категориям
+    if user.get("role") == "admin":
+        # Админ видит всё
+        if category_id > 0:
+            convs = db.get_tg_account_conversations_filtered(
+                status=status_arg, limit=30, offset=offset,
+                category_ids=[category_id], include_uncategorized=False)
+        else:
+            convs = db.get_tg_account_conversations(status=status_arg, limit=30, offset=offset)
+    else:
+        # Менеджер — только свои категории
+        access = db.get_user_category_access(user["id"])
+        if not access:
+            return JSONResponse({"convs": [], "has_more": False, "offset": offset})
+        filter_ids = [category_id] if category_id > 0 and category_id in access else access
+        convs = db.get_tg_account_conversations_filtered(
+            status=status_arg, limit=30, offset=offset,
+            category_ids=filter_ids, include_uncategorized=False)
+
+    # Фильтр по тегу
     if tag_id > 0:
         conv_tags_map = db.get_all_conv_tags_map("tga")
         convs = [c for c in convs if any(t["id"] == tag_id for t in conv_tags_map.get(c["id"], []))]
+
     tga_in_staff = db.get_tga_conv_ids_in_staff()
+    # Карта категорий для имён
+    cats_map = {c["id"]: c for c in db.get_categories()}
     return JSONResponse({"convs": [
         {
             "id": c["id"],
@@ -1593,6 +1656,9 @@ async def api_tg_account_convs(request: Request, status: str = "open", offset: i
             "fbclid":        bool(c.get("fbclid")),
             "fb_event_sent": c.get("fb_event_sent") or None,
             "in_staff":      bool(tga_in_staff.get(c["id"])),
+            "category_id":   c.get("category_id"),
+            "category_name": cats_map.get(c.get("category_id"), {}).get("name") if c.get("category_id") else None,
+            "category_color": cats_map.get(c.get("category_id"), {}).get("color") if c.get("category_id") else None,
         } for c in convs
     ], "has_more": len(convs) == 30, "offset": offset})
 

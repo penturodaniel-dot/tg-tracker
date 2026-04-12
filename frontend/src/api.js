@@ -36,9 +36,10 @@ export async function postForm(url, data) {
 
 // ── Convs ────────────────────────────────────────────────────────────────────
 
-export function fetchConvs(status = 'open', offset = 0, tagId = null) {
+export function fetchConvs(status = 'open', offset = 0, tagId = null, categoryId = null) {
   const params = new URLSearchParams({ status, offset })
   if (tagId) params.set('tag_id', tagId)
+  if (categoryId) params.set('category_id', categoryId)
   return get(`/api/tg_account_convs?${params}`)
 }
 
@@ -102,6 +103,25 @@ export function editMessage(msgId, text) {
   }).then(res => {
     if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized') }
     if (!res.ok) throw new Error(`PATCH message failed: ${res.status}`)
+    return res.json()
+  })
+}
+
+// ── Categories ───────────────────────────────────────────────────────────────
+
+export function fetchCategories() {
+  return get('/api/categories')
+}
+
+export function setConvCategory(convId, categoryId) {
+  return fetch(`/api/tga/conv/${convId}/category`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category_id: categoryId }),
+  }).then(res => {
+    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized') }
+    if (!res.ok) throw new Error(`POST category failed: ${res.status}`)
     return res.json()
   })
 }

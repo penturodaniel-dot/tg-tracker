@@ -482,6 +482,141 @@ class Database:
                 cur.execute("INSERT INTO settings (key,value) VALUES (%s,%s) ON CONFLICT (key) DO UPDATE SET value=%s", (key,value,value))
             conn.commit()
 
+    # ── Chat Categories ───────────────────────────────────────────────────────
+    def _init_categories_tables(self):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS chat_categories (
+                        id SERIAL PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        color TEXT NOT NULL DEFAULT '#6366f1',
+                        utm_campaigns TEXT NOT NULL DEFAULT '',
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS user_category_access (
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        category_id INTEGER NOT NULL REFERENCES chat_categories(id) ON DELETE CASCADE,
+                        PRIMARY KEY (user_id, category_id)
+                    )
+                """)
+                cur.execute("""
+                    ALTER TABLE tg_account_conversations
+                    ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES chat_categories(id) ON DELETE SET NULL
+                """)
+            conn.commit()
+
+    def get_categories(self):
+        self._init_categories_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM chat_categories ORDER BY name")
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_category(self, cat_id):
+        self._init_categories_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM chat_categories WHERE id=%s", (cat_id,))
+                r = cur.fetchone(); return dict(r) if r else None
+
+    def create_category(self, name, color="#6366f1", utm_campaigns=""):
+        self._init_categories_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO chat_categories (name,color,utm_campaigns) VALUES (%s,%s,%s) RETURNING id",
+                            (name, color, utm_campaigns))
+                return cur.fetchone()["id"]
+            conn.commit()
+
+    def update_category(self, cat_id, name, color, utm_campaigns):
+        self._init_categories_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE chat_categories SET name=%s, color=%s, utm_campaigns=%s WHERE id=%s",
+                            (name, color, utm_campaigns, cat_id))
+            conn.commit()
+
+    def delete_category(self, cat_id):
+        self._init_categories_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM chat_categories WHERE id=%s", (cat_id,))
+            conn.commit()
+
+    def set_conv_category(self, conv_id, category_id):
+        self._init_categories_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE tg_account_conversations SET category_id=%s WHERE id=%s",
+                            (category_id or None, conv_id))
+            conn.commit()
+        _cache.delete(f"tga_convs:open:0")
+        _cache.delete(f"tga_convs:all:0")
+        _cache.delete(f"tga_convs:closed:0")
+
+    def get_user_category_access(self, user_id):
+        self._init_categories_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT category_id FROM user_category_access WHERE user_id=%s", (user_id,))
+                return [r["category_id"] for r in cur.fetchall()]
+
+    def set_user_category_access(self, user_id, category_ids: list):
+        self._init_categories_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM user_category_access WHERE user_id=%s", (user_id,))
+                for cid in category_ids:
+                    cur.execute("INSERT INTO user_category_access (user_id,category_id) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                                (user_id, cid))
+            conn.commit()
+
+    def get_category_by_utm(self, utm_campaign: str):
+        """Найти категорию по utm_campaign (поиск в comma-separated поле)."""
+        self._init_categories_tables()
+        if not utm_campaign:
+            return None
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM chat_categories WHERE utm_campaigns != ''")
+                for row in cur.fetchall():
+                    utms = [u.strip().lower() for u in (row["utm_campaigns"] or "").split(",") if u.strip()]
+                    if utm_campaign.lower() in utms:
+                        return dict(row)
+        return None
+
+    def get_tg_account_conversations_filtered(self, status=None, limit=30, offset=0,
+                                               category_ids=None, include_uncategorized=False):
+        """Список диалогов с фильтрацией по категориям."""
+        self._init_categories_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                conditions = []
+                params = []
+                if status:
+                    conditions.append("status=%s"); params.append(status)
+                if category_ids is not None:
+                    cat_conditions = []
+                    if category_ids:
+                        placeholders = ",".join(["%s"] * len(category_ids))
+                        cat_conditions.append(f"category_id IN ({placeholders})")
+                        params.extend(category_ids)
+                    if include_uncategorized:
+                        cat_conditions.append("category_id IS NULL")
+                    if cat_conditions:
+                        conditions.append(f"({' OR '.join(cat_conditions)})")
+                    else:
+                        return []  # нет доступных категорий и uncategorized не включён
+                where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+                cur.execute(f"""SELECT * FROM tg_account_conversations
+                    {where}
+                    ORDER BY COALESCE(last_message_at,created_at) DESC
+                    LIMIT %s OFFSET %s""", params + [limit, offset])
+                return [dict(r) for r in cur.fetchall()]
+
     # ── Users ─────────────────────────────────────────────────────────────────
     def get_users(self):
         with self._conn() as conn:
@@ -499,9 +634,11 @@ class Database:
         pwd = hashlib.sha256(password.encode()).hexdigest()
         with self._conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("INSERT INTO users (username,password,role,created_at,permissions,display_name,actions) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                cur.execute("INSERT INTO users (username,password,role,created_at,permissions,display_name,actions) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                             (username, pwd, role, datetime.utcnow().isoformat(), permissions, display_name, actions))
+                new_id = cur.fetchone()["id"]
             conn.commit()
+        return new_id
 
     def update_user(self, user_id, username, role, permissions, new_password=None, display_name=None, actions=""):
         with self._conn() as conn:

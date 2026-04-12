@@ -158,6 +158,16 @@ async def settings_page(request: Request, msg: str = ""):
       </div>
     </div>
 
+    <div class="section" style="border-left:3px solid #6366f1">
+      <div class="section-head"><h3>🗂 Категории чатов</h3>
+        <a href="/categories" class="btn btn-sm" style="background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3)">Управление →</a>
+      </div>
+      <div class="section-body" style="color:var(--text2);font-size:.84rem">
+        Категории позволяют разделить чаты по направлениям и ограничить доступ менеджеров.
+        Категория назначается автоматически по UTM кампании или вручную в чате.
+      </div>
+    </div>
+
     <div class="section">
       <div class="section-head"><h3>🔔 Уведомления</h3></div>
       <div class="section-body">
@@ -279,4 +289,166 @@ async def settings_landing(request: Request, landing_title: str = Form(""), land
     if landing_title:    db.set_setting("landing_title", landing_title)
     if landing_subtitle: db.set_setting("landing_subtitle", landing_subtitle)
     return RedirectResponse("/settings?msg=Лендинг+обновлён", 303)
+
+
+# ── Категории чатов ────────────────────────────────────────────────────────────
+
+CATEGORY_COLORS = [
+    ("#6366f1", "Фиолетовый"), ("#3b82f6", "Синий"), ("#22c55e", "Зелёный"),
+    ("#f97316", "Оранжевый"),  ("#ef4444", "Красный"), ("#eab308", "Жёлтый"),
+    ("#ec4899", "Розовый"),    ("#14b8a6", "Бирюзовый"), ("#8b5cf6", "Лиловый"),
+]
+
+
+def _color_picker(selected):
+    opts = ""
+    for hex_color, name in CATEGORY_COLORS:
+        sel = 'selected' if hex_color == selected else ''
+        opts += f'<option value="{hex_color}" {sel}>{name}</option>'
+    return f'<select name="color" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;color:var(--text);font-size:.82rem">{opts}</select>'
+
+
+@router.get("/categories", response_class=HTMLResponse)
+async def categories_page(request: Request, msg: str = "", err: str = ""):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+
+    cats = db.get_categories()
+    alert = ""
+    if msg: alert = f'<div class="alert-green">✅ {msg}</div>'
+    if err: alert = f'<div class="alert-red">⚠️ {err}</div>'
+
+    def _cat_card(c):
+        cid = c["id"]
+        utms = c.get("utm_campaigns") or ""
+        utm_tags = "".join(
+            f'<span class="badge" style="margin-right:4px">{u.strip()}</span>'
+            for u in utms.split(",") if u.strip()
+        ) or '<span style="color:var(--text3);font-size:.78rem">не привязаны</span>'
+        dot = f'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{c["color"]};margin-right:6px;vertical-align:middle"></span>'
+        return f"""
+        <div class="section" id="cat-{cid}" style="border-left:3px solid {c['color']};margin-bottom:10px">
+          <div class="acc-head" onclick="accToggle('acc-cat-{cid}')"
+               style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:8px 0;user-select:none">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="acc-arrow" id="arrow-acc-cat-{cid}"
+                    style="font-size:.8rem;color:var(--text3);transition:transform .2s">▶</span>
+              {dot}<h3 style="margin:0">{c['name']}</h3>
+            </div>
+            <form method="post" action="/categories/delete" style="display:inline"
+                  onsubmit="event.stopPropagation();return confirm('Удалить категорию {c[\'name\']}?')">
+              <input type="hidden" name="cat_id" value="{cid}"/>
+              <button class="btn" onclick="event.stopPropagation()"
+                      style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3);font-size:.76rem;padding:3px 10px">
+                ✕ Удалить
+              </button>
+            </form>
+          </div>
+          <div class="acc-body" id="acc-cat-{cid}" style="display:none;padding-top:4px">
+            <form method="post" action="/categories/update">
+              <input type="hidden" name="cat_id" value="{cid}"/>
+              <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+                <div class="field-group" style="flex:1;min-width:160px">
+                  <div class="field-label">Название</div>
+                  <input type="text" name="name" value="{c['name']}" required/>
+                </div>
+                <div class="field-group" style="flex:0">
+                  <div class="field-label">Цвет</div>
+                  {_color_picker(c['color'])}
+                </div>
+                <div class="field-group" style="flex:2;min-width:220px">
+                  <div class="field-label">UTM кампании <span style="color:var(--text3);font-weight:400">(через запятую)</span></div>
+                  <input type="text" name="utm_campaigns" value="{utms}" placeholder="usa_ankety_fb, ankety_usa_v2"/>
+                  <div style="margin-top:6px">{utm_tags}</div>
+                </div>
+                <div style="display:flex;align-items:flex-end">
+                  <button class="btn">💾 Сохранить</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>"""
+
+    cards = "".join(_cat_card(c) for c in cats) if cats else \
+        '<div style="color:var(--text3);text-align:center;padding:32px 0">Категорий нет — создай первую ↓</div>'
+
+    content = f"""<div class="page-wrap">
+    <div class="page-title">🗂 Категории чатов</div>
+    <div class="page-sub">Разделяй чаты по направлениям и управляй доступом менеджеров</div>
+    {alert}
+
+    <div style="background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.2);border-radius:10px;
+                padding:12px 16px;margin-bottom:20px;font-size:.82rem;color:var(--text2);line-height:1.7">
+      💡 <b>Как работает:</b> привяжи UTM кампании к категории — чаты будут распределяться автоматически.
+      В карточке менеджера отметь галочками к каким категориям он имеет доступ.
+      Менеджер без категорий не видит ни одного чата.
+    </div>
+
+    {cards}
+
+    <div class="section" style="border-left:3px solid #22c55e;margin-top:16px">
+      <div class="section-head"><h3>➕ Новая категория</h3></div>
+      <div class="section-body">
+        <form method="post" action="/categories/create">
+          <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+            <div class="field-group" style="flex:1;min-width:160px">
+              <div class="field-label">Название</div>
+              <input type="text" name="name" placeholder="Например: Анкеты" required/>
+            </div>
+            <div class="field-group" style="flex:0">
+              <div class="field-label">Цвет</div>
+              {_color_picker('#6366f1')}
+            </div>
+            <div class="field-group" style="flex:2;min-width:220px">
+              <div class="field-label">UTM кампании <span style="color:var(--text3);font-weight:400">(через запятую, можно добавить потом)</span></div>
+              <input type="text" name="utm_campaigns" placeholder="usa_ankety_fb, ankety_usa_v2"/>
+            </div>
+            <div style="display:flex;align-items:flex-end">
+              <button class="btn" style="background:#22c55e;color:#fff">➕ Создать</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+    </div>
+
+    <style>.acc-section .section-head{{display:none}}</style>
+    <script>
+    function accToggle(id) {{
+      var b = document.getElementById(id);
+      var a = document.getElementById('arrow-' + id);
+      var open = b.style.display === 'none';
+      b.style.display = open ? 'block' : 'none';
+      a.style.transform = open ? 'rotate(90deg)' : 'rotate(0deg)';
+    }}
+    </script>"""
+
+    return HTMLResponse(base(content, "categories", request))
+
+
+@router.post("/categories/create")
+async def categories_create(request: Request, name: str = Form(...),
+                             color: str = Form("#6366f1"), utm_campaigns: str = Form("")):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+    db.create_category(name.strip(), color, utm_campaigns.strip())
+    return RedirectResponse("/categories?msg=Категория+создана", 303)
+
+
+@router.post("/categories/update")
+async def categories_update(request: Request, cat_id: int = Form(...),
+                             name: str = Form(""), color: str = Form("#6366f1"),
+                             utm_campaigns: str = Form("")):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+    db.update_category(cat_id, name.strip(), color, utm_campaigns.strip())
+    return RedirectResponse(f"/categories?msg=Сохранено#cat-{cat_id}", 303)
+
+
+@router.post("/categories/delete")
+async def categories_delete(request: Request, cat_id: int = Form(...)):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+    db.delete_category(cat_id)
+    return RedirectResponse("/categories?msg=Категория+удалена", 303)
 

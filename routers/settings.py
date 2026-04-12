@@ -325,18 +325,20 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
             f'<span class="badge" style="margin-right:4px">{u.strip()}</span>'
             for u in utms.split(",") if u.strip()
         ) or '<span style="color:var(--text3);font-size:.78rem">не привязаны</span>'
-        dot = f'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{c["color"]};margin-right:6px;vertical-align:middle"></span>'
+        cat_name = c['name']
+        cat_color = c['color']
+        dot = f'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{cat_color};margin-right:6px;vertical-align:middle"></span>'
         return f"""
-        <div class="section" id="cat-{cid}" style="border-left:3px solid {c['color']};margin-bottom:10px">
+        <div class="section" id="cat-{cid}" style="border-left:3px solid {cat_color};margin-bottom:10px">
           <div class="acc-head" onclick="accToggle('acc-cat-{cid}')"
                style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:8px 0;user-select:none">
             <div style="display:flex;align-items:center;gap:8px">
               <span class="acc-arrow" id="arrow-acc-cat-{cid}"
                     style="font-size:.8rem;color:var(--text3);transition:transform .2s">▶</span>
-              {dot}<h3 style="margin:0">{c['name']}</h3>
+              {dot}<h3 style="margin:0">{cat_name}</h3>
             </div>
             <form method="post" action="/categories/delete" style="display:inline"
-                  onsubmit="event.stopPropagation();return confirm('Удалить категорию {c[\'name\']}?')">
+                  onsubmit="event.stopPropagation();return confirm('Удалить категорию {cat_name}?')">
               <input type="hidden" name="cat_id" value="{cid}"/>
               <button class="btn" onclick="event.stopPropagation()"
                       style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3);font-size:.76rem;padding:3px 10px">

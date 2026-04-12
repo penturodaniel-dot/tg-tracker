@@ -496,6 +496,16 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
       В карточке менеджера отметь галочками к каким категориям он имеет доступ.
       Менеджер без категорий не видит ни одного чата.
     </div>
+    <div style="margin-bottom:16px">
+      <form method="post" action="/categories/backfill" style="display:inline">
+        <button class="btn" style="background:rgba(99,102,241,.2);color:#818cf8;border:1px solid rgba(99,102,241,.4)">
+          &#x1F504; Привязать существующие чаты по UTM
+        </button>
+      </form>
+      <span style="color:var(--text3);font-size:.78rem;margin-left:10px">
+        Разово пройдётся по всем чатам без категории и привяжет по UTM метке
+      </span>
+    </div>
     {cards}
     <div class="section" style="border-left:3px solid #22c55e;margin-top:16px;overflow:visible">
       <div class="section-head"><h3>&#x2795; Новая категория</h3></div>
@@ -562,4 +572,12 @@ async def categories_delete(request: Request, cat_id: int = Form(...)):
     if e: return e
     db.delete_category(cat_id)
     return RedirectResponse("/categories?msg=Категория+удалена", 303)
+
+
+@router.post("/categories/backfill")
+async def categories_backfill(request: Request):
+    user, e = require_auth(request, role="admin")
+    if e: return e
+    updated = db.backfill_categories_by_utm()
+    return RedirectResponse(f"/categories?msg=Привязано+{updated}+чатов", 303)
 

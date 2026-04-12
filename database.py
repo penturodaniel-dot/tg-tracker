@@ -586,6 +586,41 @@ class Database:
                         return dict(row)
         return None
 
+    def backfill_categories_by_utm(self):
+        """Привязать категории ко всем существующим чатам у которых есть utm_campaign но нет category_id."""
+        self._init_categories_tables()
+        updated = 0
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM chat_categories WHERE utm_campaigns != ''")
+                categories = [dict(r) for r in cur.fetchall()]
+                if not categories:
+                    return 0
+                # Строим map: utm_slug -> category_id
+                utm_to_cat = {}
+                for cat in categories:
+                    for slug in (cat["utm_campaigns"] or "").split(","):
+                        slug = slug.strip().lower()
+                        if slug:
+                            utm_to_cat[slug] = cat["id"]
+                # Берём все чаты без категории но с utm_campaign
+                cur.execute(
+                    "SELECT id, utm_campaign FROM tg_account_conversations "
+                    "WHERE category_id IS NULL AND utm_campaign IS NOT NULL AND utm_campaign != ''"
+                )
+                rows = cur.fetchall()
+                for row in rows:
+                    cat_id = utm_to_cat.get((row["utm_campaign"] or "").lower().strip())
+                    if cat_id:
+                        cur.execute(
+                            "UPDATE tg_account_conversations SET category_id=%s WHERE id=%s",
+                            (cat_id, row["id"])
+                        )
+                        updated += 1
+            conn.commit()
+        _cache.invalidate_prefix("tga_convs:")
+        return updated
+
     def get_tg_account_conversations_filtered(self, status=None, limit=30, offset=0,
                                                category_ids=None, include_uncategorized=False):
         """Список диалогов с фильтрацией по категориям."""

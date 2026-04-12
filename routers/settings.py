@@ -314,17 +314,42 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
     if e: return e
 
     cats = db.get_categories()
+    all_campaigns = db.get_campaigns()  # [{id, name, slug, ...}, ...]
     alert = ""
     if msg: alert = f'<div class="alert-green">✅ {msg}</div>'
     if err: alert = f'<div class="alert-red">⚠️ {err}</div>'
 
+    # JS-данные всех кампаний для пикера
+    import json as _json
+    campaigns_js = _json.dumps([
+        {"slug": c["slug"], "name": c["name"]} for c in all_campaigns
+    ])
+
+    def _utm_picker(picker_id, current_utms_str):
+        """Тег-пикер UTM кампаний. Скрытый input хранит comma-separated slugs."""
+        return f"""
+        <div class="utm-picker" id="picker-{picker_id}">
+          <input type="hidden" name="utm_campaigns" id="utm-val-{picker_id}" value="{current_utms_str}"/>
+          <div class="utm-tags-wrap" id="utm-tags-{picker_id}" style="display:flex;flex-wrap:wrap;gap:5px;min-height:28px;
+               padding:5px 8px;border:1px solid var(--border);border-radius:8px;cursor:text;background:var(--bg2);"
+               onclick="document.getElementById('utm-search-{picker_id}').focus()">
+          </div>
+          <div style="position:relative;margin-top:4px">
+            <input type="text" id="utm-search-{picker_id}" placeholder="Поиск кампании..."
+                   oninput="utmSearch('{picker_id}')" onfocus="utmShowDrop('{picker_id}')"
+                   autocomplete="off"
+                   style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);
+                          border-radius:6px;background:var(--bg2);color:var(--text);font-size:.82rem"/>
+            <div id="utm-drop-{picker_id}" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;
+                 background:var(--bg3);border:1px solid var(--border);border-radius:8px;
+                 box-shadow:0 4px 16px rgba(0,0,0,.25);max-height:180px;overflow-y:auto;margin-top:2px">
+            </div>
+          </div>
+        </div>"""
+
     def _cat_card(c):
         cid = c["id"]
         utms = c.get("utm_campaigns") or ""
-        utm_tags = "".join(
-            f'<span class="badge" style="margin-right:4px">{u.strip()}</span>'
-            for u in utms.split(",") if u.strip()
-        ) or '<span style="color:var(--text3);font-size:.78rem">не привязаны</span>'
         cat_name = c['name']
         cat_color = c['color']
         dot = f'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{cat_color};margin-right:6px;vertical-align:middle"></span>'
@@ -352,16 +377,15 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
               <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
                 <div class="field-group" style="flex:1;min-width:160px">
                   <div class="field-label">Название</div>
-                  <input type="text" name="name" value="{c['name']}" required/>
+                  <input type="text" name="name" value="{cat_name}" required/>
                 </div>
                 <div class="field-group" style="flex:0">
                   <div class="field-label">Цвет</div>
-                  {_color_picker(c['color'])}
+                  {_color_picker(cat_color)}
                 </div>
-                <div class="field-group" style="flex:2;min-width:220px">
-                  <div class="field-label">UTM кампании <span style="color:var(--text3);font-weight:400">(через запятую)</span></div>
-                  <input type="text" name="utm_campaigns" value="{utms}" placeholder="usa_ankety_fb, ankety_usa_v2"/>
-                  <div style="margin-top:6px">{utm_tags}</div>
+                <div class="field-group" style="flex:2;min-width:240px">
+                  <div class="field-label">UTM кампании</div>
+                  {_utm_picker(f'cat{cid}', utms)}
                 </div>
                 <div style="display:flex;align-items:flex-end">
                   <button class="btn">💾 Сохранить</button>
@@ -401,9 +425,9 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
               <div class="field-label">Цвет</div>
               {_color_picker('#6366f1')}
             </div>
-            <div class="field-group" style="flex:2;min-width:220px">
-              <div class="field-label">UTM кампании <span style="color:var(--text3);font-weight:400">(через запятую, можно добавить потом)</span></div>
-              <input type="text" name="utm_campaigns" placeholder="usa_ankety_fb, ankety_usa_v2"/>
+            <div class="field-group" style="flex:2;min-width:240px">
+              <div class="field-label">UTM кампании</div>
+              {_utm_picker('new', '')}
             </div>
             <div style="display:flex;align-items:flex-end">
               <button class="btn" style="background:#22c55e;color:#fff">➕ Создать</button>
@@ -414,15 +438,125 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
     </div>
     </div>
 
-    <style>.acc-section .section-head{{display:none}}</style>
+    <style>
+    .acc-section .section-head{{display:none}}
+    .utm-tag-chip {{
+      display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
+      border-radius:20px;font-size:.76rem;background:rgba(99,102,241,.18);
+      color:#818cf8;border:1px solid rgba(99,102,241,.35);white-space:nowrap;
+    }}
+    .utm-tag-chip .rm {{
+      cursor:pointer;opacity:.6;font-size:.7rem;line-height:1
+    }}
+    .utm-tag-chip .rm:hover {{opacity:1}}
+    .utm-drop-item {{
+      padding:7px 12px;cursor:pointer;font-size:.82rem;display:flex;align-items:center;gap:8px
+    }}
+    .utm-drop-item:hover {{background:var(--bg2)}}
+    .utm-drop-item.used {{opacity:.4;pointer-events:none}}
+    </style>
     <script>
+    var UTM_CAMPAIGNS = {campaigns_js};
+
+    function utmPickerInit(id) {{
+      var val = document.getElementById('utm-val-' + id).value;
+      var selected = val ? val.split(',').map(function(s){{return s.trim()}}).filter(Boolean) : [];
+      _utmRenderTags(id, selected);
+    }}
+
+    function _utmGetSelected(id) {{
+      var val = document.getElementById('utm-val-' + id).value;
+      return val ? val.split(',').map(function(s){{return s.trim()}}).filter(Boolean) : [];
+    }}
+
+    function _utmSetSelected(id, arr) {{
+      document.getElementById('utm-val-' + id).value = arr.join(',');
+      _utmRenderTags(id, arr);
+    }}
+
+    function _utmRenderTags(id, selected) {{
+      var wrap = document.getElementById('utm-tags-' + id);
+      wrap.innerHTML = '';
+      selected.forEach(function(slug) {{
+        var c = UTM_CAMPAIGNS.find(function(x){{return x.slug === slug}});
+        var label = c ? c.name + ' (' + slug + ')' : slug;
+        var chip = document.createElement('span');
+        chip.className = 'utm-tag-chip';
+        chip.innerHTML = label + ' <span class="rm" data-slug="' + slug + '" onclick="utmRemove(\'' + id + '\',\'' + slug + '\')">✕</span>';
+        wrap.appendChild(chip);
+      }});
+      if (!selected.length) {{
+        wrap.innerHTML = '<span style="color:var(--text3);font-size:.78rem">Нет кампаний</span>';
+      }}
+    }}
+
+    function utmRemove(id, slug) {{
+      var sel = _utmGetSelected(id).filter(function(s){{return s !== slug}});
+      _utmSetSelected(id, sel);
+    }}
+
+    function utmShowDrop(id) {{
+      var drop = document.getElementById('utm-drop-' + id);
+      utmSearch(id);
+      drop.style.display = 'block';
+    }}
+
+    function utmSearch(id) {{
+      var q = (document.getElementById('utm-search-' + id).value || '').toLowerCase();
+      var sel = _utmGetSelected(id);
+      var drop = document.getElementById('utm-drop-' + id);
+      var items = UTM_CAMPAIGNS.filter(function(c) {{
+        return !q || c.slug.includes(q) || c.name.toLowerCase().includes(q);
+      }});
+      if (!items.length) {{
+        drop.innerHTML = '<div class="utm-drop-item" style="color:var(--text3)">Нет кампаний</div>';
+      }} else {{
+        drop.innerHTML = items.map(function(c) {{
+          var used = sel.includes(c.slug);
+          return '<div class="utm-drop-item' + (used?' used':'') + '" onclick="utmAdd(\'' + id + '\',\'' + c.slug + '\')">' +
+            '<span style="color:var(--text3);font-size:.75rem">' + c.slug + '</span>' +
+            '<span>' + c.name + '</span>' +
+            (used ? '<span style="margin-left:auto;font-size:.7rem;color:#22c55e">✓</span>' : '') +
+            '</div>';
+        }}).join('');
+      }}
+      drop.style.display = 'block';
+    }}
+
+    function utmAdd(id, slug) {{
+      var sel = _utmGetSelected(id);
+      if (!sel.includes(slug)) sel.push(slug);
+      _utmSetSelected(id, sel);
+      document.getElementById('utm-search-' + id).value = '';
+      document.getElementById('utm-drop-' + id).style.display = 'none';
+    }}
+
+    // Закрыть дропдаун при клике снаружи
+    document.addEventListener('mousedown', function(e) {{
+      document.querySelectorAll('[id^="utm-drop-"]').forEach(function(drop) {{
+        var id = drop.id.replace('utm-drop-','');
+        var search = document.getElementById('utm-search-' + id);
+        if (!drop.contains(e.target) && e.target !== search) {{
+          drop.style.display = 'none';
+        }}
+      }});
+    }});
+
     function accToggle(id) {{
       var b = document.getElementById(id);
       var a = document.getElementById('arrow-' + id);
       var open = b.style.display === 'none';
       b.style.display = open ? 'block' : 'none';
       a.style.transform = open ? 'rotate(90deg)' : 'rotate(0deg)';
+      if (open) {{
+        // Инициализировать пикеры внутри открытого аккордеона
+        var pickerId = id.replace('acc-cat-','cat');
+        utmPickerInit(pickerId);
+      }}
     }}
+
+    // Инициализировать пикер новой категории сразу
+    utmPickerInit('new');
     </script>"""
 
     return HTMLResponse(base(content, "categories", request))

@@ -553,9 +553,7 @@ class Database:
                 cur.execute("UPDATE tg_account_conversations SET category_id=%s WHERE id=%s",
                             (category_id or None, conv_id))
             conn.commit()
-        _cache.delete(f"tga_convs:open:0")
-        _cache.delete(f"tga_convs:all:0")
-        _cache.delete(f"tga_convs:closed:0")
+        _cache.invalidate("tga_convs:open:0", "tga_convs:all:0", "tga_convs:closed:0")
 
     def get_user_category_access(self, user_id):
         self._init_categories_tables()

@@ -360,9 +360,9 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
         cat_color = c['color']
         dot = f'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{cat_color};margin-right:6px;vertical-align:middle"></span>'
         return f"""
-        <div class="section" id="cat-{cid}" style="border-left:3px solid {cat_color};margin-bottom:10px">
+        <div class="section" id="cat-{cid}" style="border-left:3px solid {cat_color};margin-bottom:10px;overflow:visible">
           <div class="acc-head" onclick="accToggle('acc-cat-{cid}')"
-               style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:8px 0;user-select:none">
+               style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:12px 18px;user-select:none;border-bottom:1px solid var(--border)">
             <div style="display:flex;align-items:center;gap:8px">
               <span class="acc-arrow" id="arrow-acc-cat-{cid}"
                     style="font-size:.8rem;color:var(--text3);transition:transform .2s">▶</span>
@@ -373,27 +373,27 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
               <input type="hidden" name="cat_id" value="{cid}"/>
               <button class="btn" onclick="event.stopPropagation()"
                       style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3);font-size:.76rem;padding:3px 10px">
-                ✕ Удалить
+                &#x2715; Удалить
               </button>
             </form>
           </div>
-          <div class="acc-body" id="acc-cat-{cid}" style="display:none;padding-top:4px">
+          <div id="acc-cat-{cid}" style="display:none;padding:14px 18px;overflow:visible">
             <form method="post" action="/categories/update">
               <input type="hidden" name="cat_id" value="{cid}"/>
-              <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:10px">
-                <div class="field-group" style="flex:1;min-width:160px">
+              <div style="display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:end;margin-bottom:12px">
+                <div class="field-group">
                   <div class="field-label">Название</div>
                   <input type="text" name="name" value="{cat_name}" required/>
                 </div>
-                <div class="field-group" style="flex:0">
+                <div class="field-group" style="flex:none">
                   <div class="field-label">Цвет</div>
                   {_color_picker(cat_color)}
                 </div>
-                <div style="display:flex;align-items:flex-end">
-                  <button class="btn">💾 Сохранить</button>
+                <div>
+                  <button class="btn">&#x1F4BE; Сохранить</button>
                 </div>
               </div>
-              <div class="field-group" style="width:100%">
+              <div class="field-group" style="overflow:visible">
                 <div class="field-label">UTM кампании <span style="color:var(--text3);font-weight:400">(из Проектов)</span></div>
                 {_utm_picker(f'cat{cid}', utms)}
               </div>
@@ -497,24 +497,24 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
       Менеджер без категорий не видит ни одного чата.
     </div>
     {cards}
-    <div class="section" style="border-left:3px solid #22c55e;margin-top:16px">
-      <div class="section-head"><h3>Новая категория</h3></div>
-      <div class="section-body">
+    <div class="section" style="border-left:3px solid #22c55e;margin-top:16px;overflow:visible">
+      <div class="section-head"><h3>&#x2795; Новая категория</h3></div>
+      <div class="section-body" style="overflow:visible">
         <form method="post" action="/categories/create">
-          <div style="display:flex;flex-wrap:nowrap;gap:12px;align-items:flex-end;margin-bottom:10px">
-            <div class="field-group" style="flex:1;min-width:120px">
+          <div style="display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:end;margin-bottom:12px">
+            <div class="field-group">
               <div class="field-label">Название</div>
               <input type="text" name="name" placeholder="Например: Анкеты" required/>
             </div>
-            <div class="field-group" style="flex:0;flex-shrink:0">
+            <div class="field-group" style="flex:none">
               <div class="field-label">Цвет</div>
               {color_new}
             </div>
-            <div style="flex-shrink:0;padding-top:18px">
-              <button class="btn" style="background:#22c55e;color:#fff;white-space:nowrap">+ Создать</button>
+            <div>
+              <button class="btn" style="background:#22c55e;color:#fff">&#x2795; Создать</button>
             </div>
           </div>
-          <div class="field-group">
+          <div class="field-group" style="overflow:visible">
             <div class="field-label">UTM кампании <span style="color:var(--text3);font-weight:400">(из Проектов)</span></div>
             {picker_new}
           </div>

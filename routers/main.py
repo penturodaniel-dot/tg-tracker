@@ -554,7 +554,7 @@ def nav_html(active: str, request: Request) -> str:
     # Определяем какой аккордеон активен
     clients_pages  = ["channels","campaigns","landings","analytics_clients"]
     staff_pages    = ["tg_account_chat","wa_chat","staff","scripts","landings_staff","analytics_staff"]
-    settings_pages = ["tags","users","projects","settings"]
+    settings_pages = ["tags","users","projects","settings","categories"]
     is_clients  = active in clients_pages or (active and any(active.startswith(p) for p in clients_pages))
     is_staff    = active in staff_pages   or (active and any(active.startswith(p) for p in staff_pages))
     is_settings = active in settings_pages
@@ -598,10 +598,11 @@ def nav_html(active: str, request: Request) -> str:
     settings_items = ""
     if role == "admin":
         settings_items = (
-            item("🏷️", "Теги",         "tags",      "blue") +
-            item("🔐", "Пользователи", "users",     "blue") +
-            item("🎯", "Проекты",      "projects",  "blue") +
-            item("⚙️", "Настройки",   "settings",  "blue")
+            item("🏷️", "Теги",         "tags",        "blue") +
+            item("🔐", "Пользователи", "users",       "blue") +
+            item("🎯", "Проекты",      "projects",    "blue") +
+            item("🗂",  "Категории",   "categories",  "blue") +
+            item("⚙️", "Настройки",   "settings",    "blue")
         )
 
     wa_dot = "dot-green" if wa_status == "ready" else ("dot-yellow" if wa_status == "qr" else "dot-red")

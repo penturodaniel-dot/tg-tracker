@@ -1696,6 +1696,7 @@ async def api_tg_account_conv(request: Request, conv_id: int):
         "tags": [{"id": t["id"], "name": t["name"], "color": t.get("color","#888")} for t in (tags or [])],
         "staff_id":      staff["id"] if staff else None,
         "staff_name":    staff.get("name", "") if staff else "",
+        "category_id":   conv.get("category_id"),
     })
 
 

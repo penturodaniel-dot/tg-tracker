@@ -314,15 +314,21 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
     if e: return e
 
     cats = db.get_categories()
-    all_campaigns = db.get_campaigns()  # [{id, name, slug, ...}, ...]
+    all_projects = db.get_projects()  # [{id, name, utm_campaigns, ...}, ...]
     alert = ""
     if msg: alert = f'<div class="alert-green">✅ {msg}</div>'
     if err: alert = f'<div class="alert-red">⚠️ {err}</div>'
 
-    # JS-данные всех кампаний для пикера
+    # Собираем все UTM slugs из проектов: {slug -> project_name}
     import json as _json
+    utm_map = {}
+    for p in all_projects:
+        for slug in (p.get("utm_campaigns") or "").split(","):
+            slug = slug.strip()
+            if slug:
+                utm_map[slug] = p["name"]
     campaigns_js = _json.dumps([
-        {"slug": c["slug"], "name": c["name"]} for c in all_campaigns
+        {"slug": slug, "name": pname} for slug, pname in utm_map.items()
     ])
 
     def _utm_picker(picker_id, current_utms_str):
@@ -374,7 +380,7 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
           <div class="acc-body" id="acc-cat-{cid}" style="display:none;padding-top:4px">
             <form method="post" action="/categories/update">
               <input type="hidden" name="cat_id" value="{cid}"/>
-              <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+              <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:10px">
                 <div class="field-group" style="flex:1;min-width:160px">
                   <div class="field-label">Название</div>
                   <input type="text" name="name" value="{cat_name}" required/>
@@ -383,13 +389,13 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
                   <div class="field-label">Цвет</div>
                   {_color_picker(cat_color)}
                 </div>
-                <div class="field-group" style="flex:2;min-width:240px">
-                  <div class="field-label">UTM кампании</div>
-                  {_utm_picker(f'cat{cid}', utms)}
-                </div>
                 <div style="display:flex;align-items:flex-end">
                   <button class="btn">💾 Сохранить</button>
                 </div>
+              </div>
+              <div class="field-group" style="width:100%">
+                <div class="field-label">UTM кампании <span style="color:var(--text3);font-weight:400">(из Проектов)</span></div>
+                {_utm_picker(f'cat{cid}', utms)}
               </div>
             </form>
           </div>
@@ -416,7 +422,7 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
       <div class="section-head"><h3>➕ Новая категория</h3></div>
       <div class="section-body">
         <form method="post" action="/categories/create">
-          <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+          <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:10px">
             <div class="field-group" style="flex:1;min-width:160px">
               <div class="field-label">Название</div>
               <input type="text" name="name" placeholder="Например: Анкеты" required/>
@@ -425,13 +431,13 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
               <div class="field-label">Цвет</div>
               {_color_picker('#6366f1')}
             </div>
-            <div class="field-group" style="flex:2;min-width:240px">
-              <div class="field-label">UTM кампании</div>
-              {_utm_picker('new', '')}
-            </div>
             <div style="display:flex;align-items:flex-end">
               <button class="btn" style="background:#22c55e;color:#fff">➕ Создать</button>
             </div>
+          </div>
+          <div class="field-group" style="width:100%">
+            <div class="field-label">UTM кампании <span style="color:var(--text3);font-weight:400">(из Проектов)</span></div>
+            {_utm_picker('new', '')}
           </div>
         </form>
       </div>

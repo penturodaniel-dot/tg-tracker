@@ -100,6 +100,7 @@ function TagDropdown({ convId, convTags, onAdded }) {
 function CategorySelect({ conv, onUpdated }) {
   const [categories, setCategories] = useState([])
   const [busy, setBusy] = useState(false)
+  const [localCatId, setLocalCatId] = useState(null) // optimistic local state
 
   useEffect(() => {
     fetchCategories()
@@ -107,23 +108,30 @@ function CategorySelect({ conv, onUpdated }) {
       .catch(() => {})
   }, [])
 
+  // Sync local state when conv changes (e.g. after poll)
+  useEffect(() => { setLocalCatId(null) }, [conv?.id])
+
   if (!categories.length) return null
+
+  const displayCatId = localCatId !== null ? localCatId : (conv.category_id || '')
 
   async function handleChange(e) {
     const val = e.target.value
     const catId = val === '' ? null : parseInt(val, 10)
+    setLocalCatId(catId || '')
     setBusy(true)
     try {
       await setConvCategory(conv.id, catId)
       onUpdated()
     } catch (err) {
+      setLocalCatId(null) // откат при ошибке
       alert('Ошибка: ' + err.message)
     } finally {
       setBusy(false)
     }
   }
 
-  const current = categories.find(c => c.id === conv.category_id)
+  const current = categories.find(c => c.id === displayCatId)
 
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
@@ -135,7 +143,7 @@ function CategorySelect({ conv, onUpdated }) {
       )}
       <select
         disabled={busy}
-        value={conv.category_id || ''}
+        value={displayCatId}
         onChange={handleChange}
         style={{
           background: 'var(--bg3)', border: '1px solid var(--border)',

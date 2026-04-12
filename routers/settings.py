@@ -402,168 +402,137 @@ async def categories_page(request: Request, msg: str = "", err: str = ""):
         </div>"""
 
     cards = "".join(_cat_card(c) for c in cats) if cats else \
-        '<div style="color:var(--text3);text-align:center;padding:32px 0">Категорий нет — создай первую ↓</div>'
+        '<div style="color:var(--text3);text-align:center;padding:32px 0">&#x041A;&#x0430;&#x0442;&#x0435;&#x0433;&#x043E;&#x0440;&#x0438;&#x0439; &#x043D;&#x0435;&#x0442; &mdash; &#x0441;&#x043E;&#x0437;&#x0434;&#x0430;&#x0439; &#x043F;&#x0435;&#x0440;&#x0432;&#x0443;&#x044E; &#x2193;</div>'
+
+    color_new = _color_picker('#6366f1')
+    picker_new = _utm_picker('new', '')
+
+    # JS вне f-string — нет нужды в двойных {{ }} и проблем с экранированием
+    js_code = (
+        "var UTM_CAMPAIGNS = " + campaigns_js + ";\n"
+        "function utmPickerInit(id){"
+        "  var v=document.getElementById('utm-val-'+id);"
+        "  if(!v)return;"
+        "  var sel=v.value?v.value.split(',').map(function(s){return s.trim();}).filter(Boolean):[];"
+        "  _utmRenderTags(id,sel);"
+        "}"
+        "function _utmGetSelected(id){"
+        "  var v=document.getElementById('utm-val-'+id);"
+        "  return v&&v.value?v.value.split(',').map(function(s){return s.trim();}).filter(Boolean):[];"
+        "}"
+        "function _utmSetSelected(id,arr){"
+        "  document.getElementById('utm-val-'+id).value=arr.join(',');"
+        "  _utmRenderTags(id,arr);"
+        "}"
+        "function _utmRenderTags(id,sel){"
+        "  var wrap=document.getElementById('utm-tags-'+id);"
+        "  if(!wrap)return;"
+        "  wrap.innerHTML='';"
+        "  if(!sel.length){wrap.innerHTML='<span style=\"color:var(--text3);font-size:.78rem\">&#x2014; не привязаны</span>';return;}"
+        "  sel.forEach(function(slug){"
+        "    var c=UTM_CAMPAIGNS.find(function(x){return x.slug===slug;});"
+        "    var label=c?c.name+' ('+slug+')':slug;"
+        "    var chip=document.createElement('span');"
+        "    chip.className='utm-tag-chip';"
+        "    chip.innerHTML=label+' <span class=\"rm\" onclick=\"utmRemove(\\''+id+'\\',\\''+slug+'\\')\">&times;</span>';"
+        "    wrap.appendChild(chip);"
+        "  });"
+        "}"
+        "function utmRemove(id,slug){"
+        "  _utmSetSelected(id,_utmGetSelected(id).filter(function(s){return s!==slug;}));"
+        "}"
+        "function utmShowDrop(id){"
+        "  utmSearch(id);"
+        "  document.getElementById('utm-drop-'+id).style.display='block';"
+        "}"
+        "function utmSearch(id){"
+        "  var q=(document.getElementById('utm-search-'+id).value||'').toLowerCase();"
+        "  var sel=_utmGetSelected(id);"
+        "  var drop=document.getElementById('utm-drop-'+id);"
+        "  var items=UTM_CAMPAIGNS.filter(function(c){return !q||c.slug.indexOf(q)!==-1||c.name.toLowerCase().indexOf(q)!==-1;});"
+        "  if(!items.length){drop.innerHTML='<div class=\"utm-drop-item\" style=\"color:var(--text3)\">&#x041D;&#x0435;&#x0442; &#x043A;&#x0430;&#x043C;&#x043F;&#x0430;&#x043D;&#x0438;&#x0439;</div>';}"
+        "  else{drop.innerHTML=items.map(function(c){"
+        "    var used=sel.indexOf(c.slug)!==-1;"
+        "    return '<div class=\"utm-drop-item'+(used?' used':'')+'\" onclick=\"utmAdd(\\''+id+'\\',\\''+c.slug+'\\')\">'"
+        "      +'<span style=\"color:var(--text3);font-size:.75rem\">'+c.slug+'</span>'"
+        "      +'<span>'+c.name+'</span>'"
+        "      +(used?'<span style=\"margin-left:auto;color:#22c55e\">&#10003;</span>':'')"
+        "      +'</div>';"
+        "  }).join('');}"
+        "  drop.style.display='block';"
+        "}"
+        "function utmAdd(id,slug){"
+        "  var sel=_utmGetSelected(id);"
+        "  if(sel.indexOf(slug)===-1)sel.push(slug);"
+        "  _utmSetSelected(id,sel);"
+        "  document.getElementById('utm-search-'+id).value='';"
+        "  document.getElementById('utm-drop-'+id).style.display='none';"
+        "}"
+        "document.addEventListener('mousedown',function(e){"
+        "  document.querySelectorAll('[id^=\"utm-drop-\"]').forEach(function(drop){"
+        "    var id=drop.id.replace('utm-drop-','');"
+        "    var s=document.getElementById('utm-search-'+id);"
+        "    if(!drop.contains(e.target)&&e.target!==s)drop.style.display='none';"
+        "  });"
+        "});"
+        "function accToggle(id){"
+        "  var b=document.getElementById(id);"
+        "  var a=document.getElementById('arrow-'+id);"
+        "  var open=b.style.display==='none';"
+        "  b.style.display=open?'block':'none';"
+        "  a.style.transform=open?'rotate(90deg)':'rotate(0deg)';"
+        "  if(open)utmPickerInit(id.replace('acc-cat-','cat'));"
+        "}"
+        "utmPickerInit('new');"
+    )
 
     content = f"""<div class="page-wrap">
-    <div class="page-title">🗂 Категории чатов</div>
+    <div class="page-title">&#128194; Категории чатов</div>
     <div class="page-sub">Разделяй чаты по направлениям и управляй доступом менеджеров</div>
     {alert}
-
     <div style="background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.2);border-radius:10px;
                 padding:12px 16px;margin-bottom:20px;font-size:.82rem;color:var(--text2);line-height:1.7">
-      💡 <b>Как работает:</b> привяжи UTM кампании к категории — чаты будут распределяться автоматически.
+      &#128161; <b>Как работает:</b> привяжи UTM кампании к категории &mdash; чаты будут распределяться автоматически.
       В карточке менеджера отметь галочками к каким категориям он имеет доступ.
       Менеджер без категорий не видит ни одного чата.
     </div>
-
     {cards}
-
     <div class="section" style="border-left:3px solid #22c55e;margin-top:16px">
-      <div class="section-head"><h3>➕ Новая категория</h3></div>
+      <div class="section-head"><h3>Новая категория</h3></div>
       <div class="section-body">
         <form method="post" action="/categories/create">
-          <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:10px">
-            <div class="field-group" style="flex:1;min-width:160px">
+          <div style="display:flex;flex-wrap:nowrap;gap:12px;align-items:flex-end;margin-bottom:10px">
+            <div class="field-group" style="flex:1;min-width:120px">
               <div class="field-label">Название</div>
               <input type="text" name="name" placeholder="Например: Анкеты" required/>
             </div>
-            <div class="field-group" style="flex:0">
+            <div class="field-group" style="flex:0;flex-shrink:0">
               <div class="field-label">Цвет</div>
-              {_color_picker('#6366f1')}
+              {color_new}
             </div>
-            <div style="display:flex;align-items:flex-end">
-              <button class="btn" style="background:#22c55e;color:#fff">➕ Создать</button>
+            <div style="flex-shrink:0;padding-top:18px">
+              <button class="btn" style="background:#22c55e;color:#fff;white-space:nowrap">+ Создать</button>
             </div>
           </div>
-          <div class="field-group" style="width:100%">
+          <div class="field-group">
             <div class="field-label">UTM кампании <span style="color:var(--text3);font-weight:400">(из Проектов)</span></div>
-            {_utm_picker('new', '')}
+            {picker_new}
           </div>
         </form>
       </div>
     </div>
     </div>
-
     <style>
     .acc-section .section-head{{display:none}}
-    .utm-tag-chip {{
-      display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
-      border-radius:20px;font-size:.76rem;background:rgba(99,102,241,.18);
-      color:#818cf8;border:1px solid rgba(99,102,241,.35);white-space:nowrap;
-    }}
-    .utm-tag-chip .rm {{
-      cursor:pointer;opacity:.6;font-size:.7rem;line-height:1
-    }}
-    .utm-tag-chip .rm:hover {{opacity:1}}
-    .utm-drop-item {{
-      padding:7px 12px;cursor:pointer;font-size:.82rem;display:flex;align-items:center;gap:8px
-    }}
-    .utm-drop-item:hover {{background:var(--bg2)}}
-    .utm-drop-item.used {{opacity:.4;pointer-events:none}}
+    .utm-tag-chip{{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;
+      font-size:.76rem;background:rgba(99,102,241,.18);color:#818cf8;border:1px solid rgba(99,102,241,.35);white-space:nowrap}}
+    .utm-tag-chip .rm{{cursor:pointer;opacity:.65;font-size:.7rem;line-height:1}}
+    .utm-tag-chip .rm:hover{{opacity:1}}
+    .utm-drop-item{{padding:7px 12px;cursor:pointer;font-size:.82rem;display:flex;align-items:center;gap:8px}}
+    .utm-drop-item:hover{{background:var(--bg2)}}
+    .utm-drop-item.used{{opacity:.4;pointer-events:none}}
     </style>
-    <script>
-    var UTM_CAMPAIGNS = {campaigns_js};
-
-    function utmPickerInit(id) {{
-      var val = document.getElementById('utm-val-' + id).value;
-      var selected = val ? val.split(',').map(function(s){{return s.trim()}}).filter(Boolean) : [];
-      _utmRenderTags(id, selected);
-    }}
-
-    function _utmGetSelected(id) {{
-      var val = document.getElementById('utm-val-' + id).value;
-      return val ? val.split(',').map(function(s){{return s.trim()}}).filter(Boolean) : [];
-    }}
-
-    function _utmSetSelected(id, arr) {{
-      document.getElementById('utm-val-' + id).value = arr.join(',');
-      _utmRenderTags(id, arr);
-    }}
-
-    function _utmRenderTags(id, selected) {{
-      var wrap = document.getElementById('utm-tags-' + id);
-      wrap.innerHTML = '';
-      selected.forEach(function(slug) {{
-        var c = UTM_CAMPAIGNS.find(function(x){{return x.slug === slug}});
-        var label = c ? c.name + ' (' + slug + ')' : slug;
-        var chip = document.createElement('span');
-        chip.className = 'utm-tag-chip';
-        chip.innerHTML = label + ' <span class="rm" data-slug="' + slug + '" onclick="utmRemove(\'' + id + '\',\'' + slug + '\')">✕</span>';
-        wrap.appendChild(chip);
-      }});
-      if (!selected.length) {{
-        wrap.innerHTML = '<span style="color:var(--text3);font-size:.78rem">Нет кампаний</span>';
-      }}
-    }}
-
-    function utmRemove(id, slug) {{
-      var sel = _utmGetSelected(id).filter(function(s){{return s !== slug}});
-      _utmSetSelected(id, sel);
-    }}
-
-    function utmShowDrop(id) {{
-      var drop = document.getElementById('utm-drop-' + id);
-      utmSearch(id);
-      drop.style.display = 'block';
-    }}
-
-    function utmSearch(id) {{
-      var q = (document.getElementById('utm-search-' + id).value || '').toLowerCase();
-      var sel = _utmGetSelected(id);
-      var drop = document.getElementById('utm-drop-' + id);
-      var items = UTM_CAMPAIGNS.filter(function(c) {{
-        return !q || c.slug.includes(q) || c.name.toLowerCase().includes(q);
-      }});
-      if (!items.length) {{
-        drop.innerHTML = '<div class="utm-drop-item" style="color:var(--text3)">Нет кампаний</div>';
-      }} else {{
-        drop.innerHTML = items.map(function(c) {{
-          var used = sel.includes(c.slug);
-          return '<div class="utm-drop-item' + (used?' used':'') + '" onclick="utmAdd(\'' + id + '\',\'' + c.slug + '\')">' +
-            '<span style="color:var(--text3);font-size:.75rem">' + c.slug + '</span>' +
-            '<span>' + c.name + '</span>' +
-            (used ? '<span style="margin-left:auto;font-size:.7rem;color:#22c55e">✓</span>' : '') +
-            '</div>';
-        }}).join('');
-      }}
-      drop.style.display = 'block';
-    }}
-
-    function utmAdd(id, slug) {{
-      var sel = _utmGetSelected(id);
-      if (!sel.includes(slug)) sel.push(slug);
-      _utmSetSelected(id, sel);
-      document.getElementById('utm-search-' + id).value = '';
-      document.getElementById('utm-drop-' + id).style.display = 'none';
-    }}
-
-    // Закрыть дропдаун при клике снаружи
-    document.addEventListener('mousedown', function(e) {{
-      document.querySelectorAll('[id^="utm-drop-"]').forEach(function(drop) {{
-        var id = drop.id.replace('utm-drop-','');
-        var search = document.getElementById('utm-search-' + id);
-        if (!drop.contains(e.target) && e.target !== search) {{
-          drop.style.display = 'none';
-        }}
-      }});
-    }});
-
-    function accToggle(id) {{
-      var b = document.getElementById(id);
-      var a = document.getElementById('arrow-' + id);
-      var open = b.style.display === 'none';
-      b.style.display = open ? 'block' : 'none';
-      a.style.transform = open ? 'rotate(90deg)' : 'rotate(0deg)';
-      if (open) {{
-        // Инициализировать пикеры внутри открытого аккордеона
-        var pickerId = id.replace('acc-cat-','cat');
-        utmPickerInit(pickerId);
-      }}
-    }}
-
-    // Инициализировать пикер новой категории сразу
-    utmPickerInit('new');
-    </script>"""
+    <script>{js_code}</script>"""
 
     return HTMLResponse(base(content, "categories", request))
 

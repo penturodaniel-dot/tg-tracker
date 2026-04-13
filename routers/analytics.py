@@ -524,28 +524,9 @@ async def analytics_staff(request: Request,
       {kpi(wa_stats.get('total_msgs', 0), 'Сообщений WA', f"{wa_stats.get('incoming',0)} вх / {wa_stats.get('outgoing',0)} исх", '#25d366')}
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div class="section">
-        <div class="section-head"><h3>📈 Новые лиды по дням</h3></div>
-        <div class="section-body">{sparkline(by_day, 'cnt', '#f97316')}</div>
-      </div>
-      <div class="section">
-        <div class="section-head"><h3>💬 Сообщения TG бот по дням</h3></div>
-        <div class="section-body">{sparkline(msg_day, 'total', '#60a5fa')}</div>
-      </div>
-      <div class="section">
-        <div class="section-head"><h3>📱 Сообщения TG аккаунт по дням</h3></div>
-        <div class="section-body">{sparkline(tga_day, 'total', '#2ca5e0')}</div>
-      </div>
-      <div class="section">
-        <div class="section-head"><h3>💚 Сообщения WA по дням</h3></div>
-        <div class="section-body">{sparkline(wa_day, 'total', '#25d366')}</div>
-      </div>
-    </div>
-
     <div class="section">
-      <div class="section-head"><h3>🎯 Воронка найма</h3></div>
-      <div class="section-body"><div style="display:flex;flex-direction:column;gap:12px;max-width:500px">{funnel_html}</div></div>
+      <div class="section-head"><h3>📱 Сообщения TG аккаунт по дням</h3></div>
+      <div class="section-body">{sparkline(tga_day, 'total', '#2ca5e0')}</div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
@@ -595,12 +576,6 @@ async def analytics_staff(request: Request,
           </div>
         </div>
       </div>
-    </div>
-
-    <div class="section">
-      <div class="section-head"><h3>👥 Активность по сотрудникам</h3></div>
-      <table><thead><tr><th>Имя</th><th>Статус</th><th>Сообщений</th><th>Последнее сообщение</th><th>Добавлен</th></tr></thead>
-      <tbody>{staff_rows}</tbody></table>
     </div>
 
     <div class="section" style="margin-top:16px">

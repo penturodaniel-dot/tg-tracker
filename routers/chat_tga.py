@@ -1064,6 +1064,20 @@ async def tg_account_webhook(request: Request):
             has_media   = data.get("has_media", False)
             media_b64   = data.get("media_base64")
             media_type  = data.get("media_type", "")
+            is_outgoing = data.get("is_outgoing", False)
+
+            # ── Исходящее сообщение (менеджер написал напрямую из Telegram) ──
+            if is_outgoing:
+                existing_conv = db.get_tg_account_conv_by_user(tg_user_id)
+                if not existing_conv:
+                    # Не наш лид — игнорируем
+                    return JSONResponse({"ok": True})
+                text = (raw_text or "").strip() or "[медиафайл]"
+                db.save_tg_account_message(existing_conv["id"], tg_user_id, "manager", text,
+                                           media_url=None, media_type=media_type, tg_msg_id=tg_msg_id)
+                db.update_tg_account_last_message(tg_user_id, text, increment_unread=False)
+                log.info(f"[TG webhook] outgoing msg saved conv={existing_conv['id']} to={tg_user_id}: {text[:50]}")
+                return JSONResponse({"ok": True})
 
             media_url = None
             if media_b64:

@@ -75,10 +75,19 @@ async def analytics_clients(request: Request,
     by_campaign = db.get_joins_by_campaign(days=days, date_from=df, date_to=dt)
     funnel      = db.get_campaign_funnel(days=days, date_from=df, date_to=dt)
     utm_src     = db.get_utm_sources(days=days, date_from=df, date_to=dt)
-    recent      = db.get_recent_joins_detailed(50, days=days, date_from=df, date_to=dt)
+    recent      = db.get_recent_joins_detailed(100, days=days, date_from=df, date_to=dt)
+    sub_quality = db.get_subscribe_quality_stats(days=days, date_from=df, date_to=dt)
 
     # Конверсия клики → подписки
     cr = round(summary["total"] / cl_summary["total"] * 100, 1) if cl_summary["total"] else 0
+
+    # Качество матчинга Subscribe
+    sq_total    = sub_quality["total"] or 1
+    sq_fbclid   = sub_quality["with_fbclid"] or 0
+    sq_fbp_only = sub_quality["fbp_only"] or 0
+    sq_utm_only = sub_quality["utm_only"] or 0
+    sq_organic  = sub_quality["organic"] or 0
+    sq_pct_good = round((sq_fbclid + sq_fbp_only) / sq_total * 100)  # % с FB данными
 
     def sparkline(data, key, color="#60a5fa"):
         if not data: return '<div style="color:var(--text3);font-size:.8rem">Нет данных</div>'
@@ -157,18 +166,36 @@ async def analytics_clients(request: Request,
         </tr>"""
     utm_rows = utm_rows or '<tr><td colspan="3"><div class="empty">Нет данных</div></td></tr>'
 
-    # Последние подписки
+    # Последние подписки с качеством матчинга
     recent_rows = ""
-    for j in recent[:30]:
+    for j in recent[:50]:
+        has_fbclid = bool(j.get("fbclid"))
+        has_fbp    = bool(j.get("fbp"))
+        has_utm    = bool(j.get("utm_campaign_tag") or j.get("utm_source"))
+        if has_fbclid and has_fbp:
+            q_label, q_color = "Отличный", "#34d399"
+        elif has_fbclid:
+            q_label, q_color = "Хороший", "#60a5fa"
+        elif has_fbp:
+            q_label, q_color = "Средний", "#f97316"
+        elif has_utm:
+            q_label, q_color = "UTM only", "#a78bfa"
+        else:
+            q_label, q_color = "Organic", "var(--text3)"
+        signals = []
+        if has_fbclid: signals.append('<span style="color:#1877f2;font-weight:700">fbclid</span>')
+        if has_fbp:    signals.append('<span style="color:#60a5fa">fbp</span>')
+        if j.get("utm_source"): signals.append(f'<span style="color:var(--text3);font-size:.7rem">{j["utm_source"]}</span>')
         src_icon = "📘" if j.get("utm_source") in ("facebook","fb") else ("🔗" if j.get("utm_source") else "🌿")
         recent_rows += f"""<tr>
             <td style="color:var(--text3);font-size:.78rem">{str(j['joined_at'])[:16].replace('T',' ')}</td>
-            <td style="font-weight:600">{j.get('channel_name','—')}</td>
+            <td style="font-weight:600;font-size:.82rem">{j.get('channel_name','—')}</td>
             <td><span class="badge" style="font-size:.7rem">{j['campaign_name']}</span></td>
-            <td title="{j.get('utm_source','') or ''}">{src_icon} {j.get('utm_source') or 'organic'}</td>
-            <td>{"✅" if j.get('fbclid') else "—"}</td>
+            <td style="font-size:.8rem">{src_icon} {j.get('utm_source') or 'organic'}</td>
+            <td style="font-size:.78rem">{' &nbsp;'.join(signals) or '<span style="color:var(--text3)">—</span>'}</td>
+            <td><span style="color:{q_color};font-weight:600;font-size:.78rem">{q_label}</span></td>
         </tr>"""
-    recent_rows = recent_rows or '<tr><td colspan="5"><div class="empty">Нет подписок за период</div></td></tr>'
+    recent_rows = recent_rows or '<tr><td colspan="6"><div class="empty">Нет подписок за период</div></td></tr>'
 
     sel_period = lambda v,l: f'<option value="{v}" {"selected" if period==v else ""}>{l}</option>'
 
@@ -228,7 +255,9 @@ async def analytics_clients(request: Request,
       {kpi(summary['total'], 'Подписок всего', f"{summary['from_ads']} из рекламы / {summary['organic']} organic")}
       {kpi(cl_summary['total'], 'Кликов /go', f"{cl_summary['from_fb']} FB · только отслеживаемые переходы")}
       {kpi(f"{cr}%", 'CR /go→подписка', 'только tracked клики', "#34d399" if cr>10 else "#f97316")}
-      {kpi(cl_summary['has_fbp'], 'С fbp cookie', 'для FB CAPI matching')}
+      {kpi(f"{sq_pct_good}%", 'Матчинг FB', f"{sq_fbclid} fbclid · {sq_fbp_only} fbp", "#34d399" if sq_pct_good>=60 else "#f97316" if sq_pct_good>=30 else "#f87171")}
+      {kpi(sq_fbclid, 'С fbclid', 'лучший матчинг', '#1877f2')}
+      {kpi(sq_organic, 'Organic / без данных', 'нет click_id', 'var(--text3)')}
       {kpi(summary['channels_active'], 'Активных каналов', '')}
       {kpi(summary['campaigns_active'], 'Кампаний', '')}
     </div>
@@ -266,10 +295,50 @@ async def analytics_clients(request: Request,
       </table>
     </div>
 
-    <div class="section">
-      <div class="section-head"><h3>⏱ Последние подписки</h3></div>
-      <table><thead><tr><th>Время</th><th>Канал</th><th>Кампания</th><th>Источник</th><th>fbclid</th></tr></thead>
-      <tbody>{recent_rows}</tbody></table>
+    <div class="section" style="margin-top:16px">
+      <div class="section-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <h3>&#x1F4CA; Качество матчинга Subscribe</h3>
+        <div style="display:flex;gap:12px;font-size:.8rem;flex-wrap:wrap">
+          <span>&#x1F535; fbclid+fbp: <b style="color:#34d399">{sub_quality['fbclid_and_fbp']}</b></span>
+          <span>&#x1F535; fbclid only: <b style="color:#60a5fa">{sq_fbclid - sub_quality['fbclid_and_fbp']}</b></span>
+          <span>&#x1F7E1; fbp only: <b style="color:#f97316">{sq_fbp_only}</b></span>
+          <span>&#x1F7E3; utm only: <b style="color:#a78bfa">{sq_utm_only}</b></span>
+          <span>&#x26AA; organic: <b style="color:var(--text3)">{sq_organic}</b></span>
+        </div>
+      </div>
+      <div style="padding:14px 18px">
+        <div style="display:flex;height:12px;border-radius:8px;overflow:hidden;gap:2px">
+          <div style="flex:{sub_quality['fbclid_and_fbp']};background:#34d399;min-width:0" title="fbclid+fbp: {sub_quality['fbclid_and_fbp']}"></div>
+          <div style="flex:{sq_fbclid - sub_quality['fbclid_and_fbp']};background:#60a5fa;min-width:0" title="fbclid: {sq_fbclid - sub_quality['fbclid_and_fbp']}"></div>
+          <div style="flex:{sq_fbp_only};background:#f97316;min-width:0" title="fbp only: {sq_fbp_only}"></div>
+          <div style="flex:{sq_utm_only};background:#a78bfa;min-width:0" title="utm only: {sq_utm_only}"></div>
+          <div style="flex:{sq_organic};background:var(--bg3);min-width:0" title="organic: {sq_organic}"></div>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:8px;font-size:.75rem;color:var(--text3);flex-wrap:wrap">
+          <span><b style="color:#34d399">&#9646;</b> fbclid+fbp — лучший матчинг</span>
+          <span><b style="color:#60a5fa">&#9646;</b> fbclid — хороший</span>
+          <span><b style="color:#f97316">&#9646;</b> fbp — браузер</span>
+          <span><b style="color:#a78bfa">&#9646;</b> utm — частичный</span>
+          <span><b style="color:var(--text3)">&#9646;</b> organic</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" style="margin-top:16px">
+      <div class="section-head"><h3>&#x23F1; Последние подписки</h3></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Время</th><th>Канал</th><th>Кампания</th><th>Источник</th><th>Данные FB</th><th>Качество</th></tr></thead>
+          <tbody>{recent_rows}</tbody>
+        </table>
+      </div>
+      <div style="padding:8px 18px;font-size:.75rem;color:var(--text3);border-top:1px solid var(--border)">
+        <b style="color:#34d399">Отличный</b> = fbclid+fbp &nbsp;
+        <b style="color:#60a5fa">Хороший</b> = fbclid &nbsp;
+        <b style="color:#f97316">Средний</b> = fbp &nbsp;
+        <b style="color:#a78bfa">UTM only</b> = только метки &nbsp;
+        <b style="color:var(--text3)">Organic</b> = нет данных
+      </div>
     </div>
     </div>"""
     return HTMLResponse(base(content + _analytics_css(), "analytics_clients", request))

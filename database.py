@@ -2063,6 +2063,26 @@ class Database:
                     GROUP BY utm_source, utm_medium ORDER BY clicks DESC LIMIT 20""", params)
                 return [dict(r) for r in cur.fetchall()]
 
+    def get_subscribe_quality_stats(self, date_from=None, date_to=None, days=30):
+        """Статистика качества матчинга для Subscribe событий (подписки на каналы)."""
+        where, params = self._date_filter("j.joined_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                    SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN ct.fbclid IS NOT NULL AND ct.fbclid != '' THEN 1 ELSE 0 END) as with_fbclid,
+                        SUM(CASE WHEN (ct.fbclid IS NULL OR ct.fbclid='') AND ct.fbp IS NOT NULL AND ct.fbp != '' THEN 1 ELSE 0 END) as fbp_only,
+                        SUM(CASE WHEN ct.fbclid IS NOT NULL AND ct.fbclid != '' AND ct.fbp IS NOT NULL AND ct.fbp != '' THEN 1 ELSE 0 END) as fbclid_and_fbp,
+                        SUM(CASE WHEN (ct.fbclid IS NULL OR ct.fbclid='') AND (ct.fbp IS NULL OR ct.fbp='') AND ct.utm_campaign IS NOT NULL THEN 1 ELSE 0 END) as utm_only,
+                        SUM(CASE WHEN ct.click_id IS NULL THEN 1 ELSE 0 END) as organic,
+                        SUM(CASE WHEN j.campaign_name != 'organic' THEN 1 ELSE 0 END) as from_ads
+                    FROM joins j
+                    LEFT JOIN click_tracking ct ON ct.click_id = j.click_id
+                    {where}
+                """, params)
+                return dict(cur.fetchone())
+
     def get_recent_joins_detailed(self, limit=30, date_from=None, date_to=None, days=30):
         where, params = self._date_filter("j.joined_at", days, date_from, date_to)
         with self._conn() as conn:

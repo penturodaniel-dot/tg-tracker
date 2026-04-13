@@ -2425,6 +2425,16 @@ class Database:
                     (conv_id,tg_user_id,sender_type,sender_name or "",content,media_url,media_type,datetime.utcnow().isoformat(),tg_msg_id))
             conn.commit()
 
+    def tga_message_exists_by_tg_msg_id(self, conv_id: int, tg_msg_id: int) -> bool:
+        """Проверяет, сохранено ли уже сообщение с данным tg_msg_id в диалоге."""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM tg_account_messages WHERE conversation_id=%s AND tg_msg_id=%s LIMIT 1",
+                    (conv_id, tg_msg_id)
+                )
+                return cur.fetchone() is not None
+
     def get_tga_message_by_id(self, msg_id):
         self._init_tg_account_tables()
         with self._conn() as conn:

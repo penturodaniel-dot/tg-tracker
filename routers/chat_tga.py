@@ -1072,6 +1072,10 @@ async def tg_account_webhook(request: Request):
                 if not existing_conv:
                     # Не наш лид — игнорируем
                     return JSONResponse({"ok": True})
+                # Дедупликация: CRM уже сохранила это сообщение через /tg_account/send
+                if tg_msg_id and db.tga_message_exists_by_tg_msg_id(existing_conv["id"], tg_msg_id):
+                    log.info(f"[TG webhook] outgoing duplicate skipped tg_msg_id={tg_msg_id}")
+                    return JSONResponse({"ok": True})
                 text = (raw_text or "").strip() or "[медиафайл]"
                 db.save_tg_account_message(existing_conv["id"], tg_user_id, "manager", text,
                                            media_url=None, media_type=media_type, tg_msg_id=tg_msg_id)

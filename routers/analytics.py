@@ -296,6 +296,7 @@ async def analytics_staff(request: Request,
     tga_stats  = db.get_tga_stats()
     funnel     = db.get_staff_funnel(date_from=df, date_to=dt)
     resp_stats = db.get_staff_response_stats(days=days, date_from=df, date_to=dt)
+    recent_leads = db.get_recent_tga_leads(limit=100, days=days, date_from=df, date_to=dt)
 
     def kpi(val, label, sub="", color="var(--accent)"):
         return f'''<div class="kpi-card">
@@ -340,6 +341,64 @@ async def analytics_staff(request: Request,
 
     # Конверсия найм
     conv_hire = funnel.get("conversion_hired", 0)
+
+    # Таблица последних лидов TGA с оценкой качества матчинга
+    def _lead_quality(r):
+        """Возвращает (label, color, details) для строки лида."""
+        has_fbclid = bool(r.get("fbclid"))
+        has_fbp    = bool(r.get("fbp"))
+        has_fbc    = bool(r.get("fbc"))
+        has_ttclid = bool(r.get("ttclid"))
+        has_phone  = bool(r.get("phone"))
+        has_utm    = bool(r.get("utm_campaign"))
+        sent       = bool(r.get("fb_event_sent"))
+
+        signals = []
+        if has_fbclid: signals.append('<span title="fbclid — клик по рекламе FB" style="color:#1877f2;font-weight:700">fbclid</span>')
+        if has_fbc:    signals.append('<span title="fbc cookie" style="color:#1877f2">fbc</span>')
+        if has_fbp:    signals.append('<span title="fbp — браузер FB" style="color:#60a5fa">fbp</span>')
+        if has_ttclid: signals.append('<span title="ttclid — клик TikTok" style="color:#f97316">tt</span>')
+        if has_phone:  signals.append('<span title="телефон" style="color:#34d399">📞</span>')
+        if has_utm:    signals.append(f'<span title="utm_campaign" style="color:var(--text3);font-size:.72rem">{r["utm_campaign"][:20]}</span>')
+
+        # Оценка качества
+        if has_fbclid or has_fbc:
+            quality, q_color = "Отличный", "#34d399"
+        elif has_fbp or has_ttclid:
+            quality, q_color = "Хороший", "#60a5fa"
+        elif has_phone or has_utm:
+            quality, q_color = "Средний", "#f97316"
+        else:
+            quality, q_color = "Слабый", "#f87171"
+
+        # Статус отправки
+        if sent:
+            sent_html = '<span style="color:#34d399;font-weight:600">✓ Отправлен</span>'
+        else:
+            sent_html = '<span style="color:#f87171">✗ Не отправлен</span>'
+
+        return quality, q_color, " &nbsp;".join(signals) or '<span style="color:var(--text3)">нет данных</span>', sent_html
+
+    leads_rows = ""
+    leads_sent   = sum(1 for r in recent_leads if r.get("fb_event_sent"))
+    leads_total  = len(recent_leads)
+    leads_good   = sum(1 for r in recent_leads if r.get("fbclid") or r.get("fbc") or r.get("fbp"))
+    for r in recent_leads:
+        quality, q_color, signals_html, sent_html = _lead_quality(r)
+        name = r.get("visitor_name") or r.get("username") or f"id{r['id']}"
+        uname = f'<a href="https://t.me/{r["username"].lstrip("@")}" target="_blank" style="color:var(--blue);font-size:.75rem">@{r["username"].lstrip("@")}</a>' if r.get("username") else ""
+        ts = str(r.get("created_at",""))[:16].replace("T"," ")
+        leads_rows += f"""<tr>
+            <td>
+              <span style="font-weight:600;font-size:.83rem">{name}</span>
+              {"<br>" + uname if uname else ""}
+            </td>
+            <td style="font-size:.8rem">{signals_html}</td>
+            <td><span style="color:{q_color};font-weight:700;font-size:.8rem">{quality}</span></td>
+            <td style="font-size:.8rem">{sent_html}</td>
+            <td style="color:var(--text3);font-size:.75rem">{ts}</td>
+        </tr>"""
+    leads_rows = leads_rows or '<tr><td colspan="5"><div class="empty">Нет лидов за период</div></td></tr>'
 
     # Таблица активности сотрудников
     staff_rows = ""
@@ -473,6 +532,38 @@ async def analytics_staff(request: Request,
       <div class="section-head"><h3>👥 Активность по сотрудникам</h3></div>
       <table><thead><tr><th>Имя</th><th>Статус</th><th>Сообщений</th><th>Последнее сообщение</th><th>Добавлен</th></tr></thead>
       <tbody>{staff_rows}</tbody></table>
+    </div>
+
+    <div class="section" style="margin-top:16px">
+      <div class="section-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <h3>📨 Последние лиды TG Аккаунт</h3>
+        <div style="display:flex;gap:16px;font-size:.8rem">
+          <span>Всего: <b style="color:var(--accent)">{leads_total}</b></span>
+          <span>Отправлено FB: <b style="color:#34d399">{leads_sent}</b></span>
+          <span>С данными FB: <b style="color:#1877f2">{leads_good}</b></span>
+          <span style="color:var(--text3)">% отправки: <b style="color:{'#34d399' if leads_total and leads_sent/leads_total>=.7 else '#f97316' if leads_total and leads_sent/leads_total>=.4 else '#f87171'}">{round(leads_sent/leads_total*100) if leads_total else 0}%</b></span>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Контакт</th>
+              <th>Данные матчинга</th>
+              <th>Качество</th>
+              <th>Лид FB</th>
+              <th>Дата</th>
+            </tr>
+          </thead>
+          <tbody>{leads_rows}</tbody>
+        </table>
+      </div>
+      <div style="padding:10px 18px;font-size:.75rem;color:var(--text3);border-top:1px solid var(--border)">
+        <b style="color:#1877f2">fbclid/fbc</b> — клик по рекламе (лучший матчинг) &nbsp;
+        <b style="color:#60a5fa">fbp</b> — браузер FB (хороший) &nbsp;
+        <b style="color:#f97316">tt</b> — TikTok клик &nbsp;
+        <b style="color:#34d399">📞</b> — телефон
+      </div>
     </div>
     </div>"""
     return HTMLResponse(base(content + _analytics_css(), "analytics_staff", request))

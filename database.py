@@ -2186,6 +2186,23 @@ class Database:
                     "fb_convs":    cnt("SELECT COUNT(*) as c FROM tg_account_conversations WHERE fbclid IS NOT NULL AND fbclid != ''"),
                 }
 
+    def get_recent_tga_leads(self, limit=50, days=30, date_from=None, date_to=None):
+        """Последние лиды из TG аккаунт чатов с данными для оценки качества матчинга."""
+        where, params = self._date_filter("created_at", days, date_from, date_to)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                    SELECT id, visitor_name, username, phone,
+                           utm_campaign, utm_source,
+                           fbclid, fbp, fbc, ttclid,
+                           fb_event_sent, created_at
+                    FROM tg_account_conversations
+                    {where}
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                """, params + [limit])
+                return [dict(r) for r in cur.fetchall()]
+
     def get_staff_funnel(self, date_from=None, date_to=None):
         """Воронка + конверсия"""
         if date_from and date_to:

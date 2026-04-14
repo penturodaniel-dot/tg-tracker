@@ -38,7 +38,6 @@ from routers.staff       import router as staff_router,     setup as staff_setup
 from routers.users_tags  import router as users_tags_router, setup as users_tags_setup
 from routers.settings    import router as settings_router,  setup as settings_setup
 from routers.channels    import router as channels_router,  setup as channels_setup
-from routers.autopost    import router as autopost_router,  setup as autopost_setup, start_scheduler as autopost_start_scheduler
 from routers.projects    import router as projects_router,  setup as projects_setup
 from routers.scripts     import router as scripts_router,   setup as scripts_setup
 
@@ -106,27 +105,7 @@ async def lifespan(app: FastAPI):
     except: pass
     await bot_manager.start_tracker_bot(db.get_setting("bot1_token"))
     await bot_manager.start_staff_bot(db.get_setting("bot2_token"))
-    await bot_manager.start_autopost_bot(db.get_setting("bot3_token") or "")
-    # Запускаем шедулер автопостинга как фоновый task
-    import asyncio as _asyncio
-    from routers.autopost import scheduler_loop as _autopost_scheduler_loop
-    async def _keep_scheduler():
-        """Перезапускает шедулер если он упал"""
-        while True:
-            try:
-                print("[Autopost] Scheduler starting...", flush=True)
-                await _autopost_scheduler_loop()
-            except _asyncio.CancelledError:
-                break
-            except Exception as ex:
-                print(f"[Autopost] Scheduler crashed: {ex}, restarting in 60s", flush=True)
-                await _asyncio.sleep(60)
-    _sched_task = _asyncio.create_task(_keep_scheduler())
-    print("[Autopost] Scheduler task created", flush=True)
     yield
-    _sched_task.cancel()
-    try: await _sched_task
-    except: pass
     await bot_manager.stop_tracker_bot()
     await bot_manager.stop_staff_bot()
 
@@ -587,8 +566,6 @@ def nav_html(active: str, request: Request) -> str:
     clients_items = (
         item("📡", "Каналы",      "channels",          "blue") +
         item("🔗", "Кампании",    "campaigns",         "blue") +
-        item("📣", "Автопостинг", "autopost",           "blue", url="/autopost") +
-        item("📝", "Шаблоны постов", "autopost_tpl",  "blue", url="/autopost/templates") +
         item("🎨", "Шаблоны",     "landings",          "blue") +
         item("📈", "Статистика",  "analytics_clients", "blue", url="/analytics/clients")
     )
@@ -927,9 +904,7 @@ settings_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, 
 app.include_router(settings_router)
 
 channels_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker, bot_manager)
-autopost_setup(db, log, require_auth, base, bot_manager=bot_manager)
 app.include_router(channels_router)
-app.include_router(autopost_router)
 
 projects_setup(db, log, require_auth, base, nav_html, _render_conv_tags_picker)
 app.include_router(projects_router)

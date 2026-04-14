@@ -8,8 +8,6 @@ const NAV_SECTIONS = [
     items: [
       { icon: '📡', label: 'Каналы',          href: '/channels',              tab: 'channels' },
       { icon: '🔗', label: 'Кампании',        href: '/campaigns',             tab: 'campaigns' },
-      { icon: '📣', label: 'Автопостинг',     href: '/autopost',              tab: 'autopost' },
-      { icon: '📝', label: 'Шаблоны постов',  href: '/autopost/templates',    tab: 'autopost_tpl' },
       { icon: '🎨', label: 'Шаблоны',         href: '/landings',              tab: 'landings' },
       { icon: '📈', label: 'Статистика',      href: '/analytics/clients',     tab: 'analytics_clients' },
     ]

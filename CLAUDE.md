@@ -138,15 +138,50 @@ Railway автоматически запускает nixpacks:
 - Дедупликация по `tg_msg_id` в таблице `tg_account_messages`
 
 ### Лендинги
-- Несколько шаблонов в `landing_templates.py`
+- Несколько шаблонов в `landing_templates.py` (для клиентов и для HR/staff)
+- Клиентский лендинг рендерится через `client_templates.py` если `landing.type == "client"`
 - Поддержка кастомных доменов через `CustomDomainMiddleware`
 - URL: `/l/{slug}` или кастомный домен → корень
+
+### Кнопки на лендингах и клик-трекинг
+- На каждом лендинге настраиваются кнопки контактов (Telegram / WhatsApp)
+- Клик на кнопку идёт через `/go-staff?ref={ref_id}` (для HR-лендингов) или эквивалентный endpoint
+- Endpoint:
+  1. Создаёт запись в таблице `staff_clicks` (сохраняет `target_url`, `target_type`, `utm_*`, `fbclid`, `fbp`, `fbc`, `ttclid`, `ttp`)
+  2. Шлёт server-side событие в Meta CAPI (Lead/Contact/Subscribe — что настроено на лендинге, поле `landings.fb_event`)
+  3. Редиректит юзера на t.me / wa.me ссылку
+- Поле `staff_clicks.target_url` — ссылка t.me или wa.me на конкретный аккаунт
+- При телеграмном клике в URL добавляется `?start=ref_{ref_id}` чтобы можно было точно сматчить когда юзер напишет
+
+### Атрибуция входящих TG-сообщений (chat_tga.py)
+Когда подключённый TG-аккаунт получает первое сообщение от нового юзера, CRM пытается найти соответствующий клик в `staff_clicks`. Логика в 3 шага:
+
+1. **По `ref_XXX` в тексте сообщения** — если юзер пришёл по `/start ref_AAA` и Telegram прислал это в первом сообщении (через `db.get_staff_click(ref_id)`).
+2. **Time-window 3 минуты** — берёт последний клик `target_type='telegram'` за 3 минуты, **отфильтрованный по target_url, ведущему именно на ПОДКЛЮЧЁННЫЙ TG-аккаунт** (через `db.get_staff_click_recent_for_account(minutes, tg_username, tg_phone)`). Подключённый аккаунт берётся из настроек `tg_account_username` и `tg_account_phone`.
+3. **По `tg_user_id`** за 30 дней (через `db.get_staff_click_by_tg_user`) — если юзер уже когда-то был привязан.
+
+После успешного матча CRM записывает `utm_*`, `fbclid`, `fbp`, `fbc` в `tg_account_conversations`, привязывает клик к `tg_user_id` (`bind_staff_click_to_tg_user`) и помечает `used=1`.
+
+> **Важно:** в шаге 2 фильтрация по target_url критична. Если её не делать (как было в старой версии), параллельные клики на лендинги других кампаний (operators_dnepr и т.п.) будут попадать в сообщения, идущие в наш аккаунт, и присваивать им чужой тег. См. фикс в коммите `03d60ee`.
 
 ### Meta CAPI matching
 Для атрибуции нужны (в порядке важности):
 1. `fbclid` → `fbc` (из URL лендинга)
 2. `_fbp` cookie (устанавливается Meta Pixel)
 3. `external_id` = sha256(telegram_user_id)
+4. IP-адрес и User-Agent (помогают делать matching, сохраняются при клике)
+
+### Ключевые таблицы
+- `clicks` — клики на клиентских лендингах (для трекинга вступлений в каналы)
+- `staff_clicks` — клики на HR/staff лендингах (для трекинга первого сообщения в TG/WA)
+- `tg_account_conversations` / `tg_account_messages` — переписка через Telethon
+- `wa_conversations` / `wa_messages` — переписка через WhatsApp
+- `conversations` — переписка через бот-аккаунт
+- `projects` — рекламные проекты (свой пиксель, токен, traffic_source, fb_event)
+- `landings` — лендинги (привязка к проекту, `fb_event`, `traffic_source`)
+- `channels`, `campaigns` — TG-каналы и рекламные кампании на них
+- `staff` — база сотрудников
+- `settings` — key/value настройки CRM
 
 ---
 

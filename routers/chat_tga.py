@@ -1133,12 +1133,19 @@ async def tg_account_webhook(request: Request):
                     if click_data:
                         log.info(f"[TG webhook] UTM by ref_code: ref={_ref_id}")
 
-                # Шаг 2: time-window 3 мин — только если Step 1 не дал результата
+                # Шаг 2: time-window 3 мин — берём только клики с target_url
+                # на ПОДКЛЮЧЁННЫЙ к CRM TG-аккаунт. Раньше брался любой свежий
+                # клик target_type='telegram', и сообщения в наш аккаунт
+                # получали тег чужой кампании (operators_dnepr и т.п.).
                 if not click_data:
-                    _tw_click = db.get_staff_click_recent_any(minutes=3, target_type="telegram")
+                    _tg_username = db.get_setting("tg_account_username", "")
+                    _tg_phone    = db.get_setting("tg_account_phone", "")
+                    _tw_click = db.get_staff_click_recent_for_account(
+                        minutes=3, tg_username=_tg_username, tg_phone=_tg_phone
+                    )
                     if _tw_click and _tw_click.get("utm_source"):
                         click_data = _tw_click
-                        log.info(f"[TG webhook] UTM by time-window src={_tw_click.get('utm_source')} utm={_tw_click.get('utm_campaign')}")
+                        log.info(f"[TG webhook] UTM by time-window src={_tw_click.get('utm_source')} utm={_tw_click.get('utm_campaign')} target={(_tw_click.get('target_url') or '')[:60]}")
 
                 # Шаг 3: матчинг по tg_user_id — только если нет свежего клика
                 if not click_data:

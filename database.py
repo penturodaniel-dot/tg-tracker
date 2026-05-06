@@ -1100,6 +1100,52 @@ class Database:
                         (cutoff,))
                 r = cur.fetchone(); return dict(r) if r else None
 
+    def get_staff_click_recent_for_account(self, minutes: int = 3,
+                                            tg_username: str = "",
+                                            tg_phone: str = ""):
+        """Ищет последний неиспользованный клик target_type='telegram' за N минут,
+        у которого target_url ведёт именно на ПОДКЛЮЧЁННЫЙ к CRM TG-аккаунт.
+
+        Это нужно чтобы time-window матчинг не хватал клики чужих кампаний
+        (например лендинга operators_dnepr, который ведёт на отдельный TG-аккаунт
+        вне CRM). Иначе сообщения от usa_ankety_fb получают тег operators_dnepr.
+        """
+        from datetime import timedelta
+        cutoff = (datetime.utcnow() - timedelta(minutes=minutes)).isoformat()
+
+        conditions = []
+        params: list = [cutoff]
+
+        uname = (tg_username or "").strip().lstrip("@").lower()
+        if uname:
+            conditions.append("LOWER(target_url) LIKE %s")
+            params.append(f"%t.me/{uname}%")
+
+        phone = (tg_phone or "").strip().lstrip("+")
+        if phone:
+            conditions.append("target_url LIKE %s")
+            params.append(f"%t.me/+{phone}%")
+            conditions.append("target_url LIKE %s")
+            params.append(f"%t.me/{phone}%")
+
+        if not conditions:
+            # Аккаунт не подключён — ничего не матчим (безопасный фолбэк)
+            return None
+
+        where_target = " OR ".join(conditions)
+        sql = (
+            "SELECT * FROM staff_clicks "
+            "WHERE used=0 AND target_type='telegram' AND created_at>=%s "
+            f"AND ({where_target}) "
+            "ORDER BY created_at DESC LIMIT 1"
+        )
+
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                r = cur.fetchone()
+                return dict(r) if r else None
+
     def get_staff_click_by_tg_user(self, tg_user_id: str, minutes: int = 1440):
         """Ищет клик привязанный к конкретному tg_user_id (за последние N минут)"""
         from datetime import timedelta

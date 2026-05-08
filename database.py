@@ -3180,6 +3180,9 @@ class Database:
                     created_at      TEXT NOT NULL,
                     UNIQUE(site_id, from_path)
                 )""")
+                # ── ALTER'ы для столбцов добавленных после первого релиза ──
+                # google_maps_url — share-ссылка из Google Maps для кнопки на странице локации
+                cur.execute("ALTER TABLE seo_locations ADD COLUMN IF NOT EXISTS google_maps_url TEXT DEFAULT ''")
                 # Индексы для быстрых LIKE / lookup
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_seo_sites_domain ON seo_sites (LOWER(domain))")
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_seo_locations_site ON seo_locations (site_id, status)")
@@ -3351,7 +3354,8 @@ class Database:
         cols = ["site_id", "slug", "city", "state", "created_at", "updated_at"]
         vals = [site_id, slug.strip(), city.strip(), state.strip(), now, now]
         for k in ("state_full", "country", "street", "address_line2", "zip",
-                  "latitude", "longitude", "title", "h1",
+                  "latitude", "longitude", "google_maps_url",
+                  "title", "h1",
                   "meta_description", "og_image", "intro_html", "services_html",
                   "about_studio_html", "faq_json", "schema_json", "hours_json",
                   "position", "status", "published_at"):
@@ -3375,6 +3379,7 @@ class Database:
         from datetime import datetime
         allowed = {"slug", "city", "state", "state_full", "country",
                    "street", "address_line2", "zip", "latitude", "longitude",
+                   "google_maps_url",
                    "title", "h1", "meta_description", "og_image",
                    "intro_html", "services_html", "about_studio_html",
                    "faq_json", "schema_json", "hours_json",

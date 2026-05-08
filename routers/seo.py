@@ -650,6 +650,7 @@ async def seo_location_edit(request: Request, site_id: int, loc_id: int):
 {_f_text("Latitude", "latitude", str(loc.get("latitude") or ""))}
 {_f_text("Longitude", "longitude", str(loc.get("longitude") or ""))}
 </div>
+{_f_text("Google Maps URL", "google_maps_url", loc.get("google_maps_url","") or "", hint="Share-ссылка с Google Maps. Открой студию на картах → Поделиться → скопируй ссылку. Например: https://maps.app.goo.gl/abc123. Карта на сайте берётся автоматически из Latitude/Longitude.")}
 <div class="seo-h2">SEO</div>
 {_f_text("Title (вкладка браузера)", "title", loc.get("title",""))}
 {_f_text("H1 (заголовок страницы)", "h1", loc.get("h1",""))}
@@ -681,6 +682,7 @@ async def seo_location_save(request: Request, site_id: int, loc_id: int):
     if err: return err
     form = await request.form()
     fields = ["slug","city","state","state_full","country","street","address_line2","zip",
+              "google_maps_url",
               "title","h1","meta_description","og_image",
               "intro_html","services_html","about_studio_html",
               "faq_json","schema_json","hours_json","status"]

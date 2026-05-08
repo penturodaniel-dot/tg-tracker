@@ -513,12 +513,57 @@ def render_seo_location(site: dict, location: dict, contacts: list,
             ", ".join(filter(None, [location.get("city"), location.get("state"), location.get("zip")])),
         ]
         addr_str = "<br>".join(_esc(p) for p in addr_parts if p)
+
+        # Кнопка "Open in Google Maps": приоритет — пользовательский URL,
+        # иначе строим из lat/long, иначе из адреса
+        gmap_url = (location.get("google_maps_url") or "").strip()
+        if not gmap_url:
+            if location.get("latitude") and location.get("longitude"):
+                gmap_url = f"https://www.google.com/maps/search/?api=1&query={location['latitude']},{location['longitude']}"
+            elif location.get("street"):
+                from urllib.parse import quote_plus as _qp
+                _q = _qp(", ".join(filter(None, [
+                    location.get("street"), location.get("city"),
+                    location.get("state"), location.get("zip")
+                ])))
+                gmap_url = f"https://www.google.com/maps/search/?api=1&query={_q}"
+
+        gmap_btn = ""
+        if gmap_url:
+            gmap_btn = (
+                f'<div style="margin-top:12px"><a href="{_esc(gmap_url)}" target="_blank" rel="noopener" class="btn btn-outline" style="font-size:.85rem;padding:8px 16px">'
+                f'{_icon_svg("map")}<span>Open in Google Maps</span></a></div>'
+            )
+
         address_html = (
             '<div class="address-card" style="margin:1.5rem 0">'
             f'<div class="ico">{_icon_svg("map")}</div>'
-            f'<div><strong>Studio Address</strong><br>{addr_str}</div>'
+            f'<div><strong>Studio Address</strong><br>{addr_str}{gmap_btn}</div>'
             '</div>'
         )
+
+        # Встроенная карта Google Maps (iframe). Берём из lat/lng если есть,
+        # иначе строим q=address. Без API key — используем publichный embed.
+        if location.get("latitude") and location.get("longitude"):
+            _embed_q = f"{location['latitude']},{location['longitude']}"
+        elif location.get("street"):
+            from urllib.parse import quote_plus as _qp
+            _embed_q = _qp(", ".join(filter(None, [
+                location.get("street"), location.get("city"),
+                location.get("state"), location.get("zip")
+            ])))
+        else:
+            _embed_q = None
+
+        if _embed_q:
+            address_html += (
+                '<div style="margin:1rem 0;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)">'
+                f'<iframe src="https://maps.google.com/maps?q={_esc(str(_embed_q))}&z=15&output=embed" '
+                'width="100%" height="320" style="border:0;display:block" '
+                'loading="lazy" referrerpolicy="no-referrer-when-downgrade" '
+                f'title="Map of {_esc(location.get("city",""))}"></iframe>'
+                '</div>'
+            )
 
     hours_html = ""
     try:

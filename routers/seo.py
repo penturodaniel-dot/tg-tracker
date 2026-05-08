@@ -1314,11 +1314,9 @@ async def _seo_preview(request: Request, site_id: int, path: str):
         # Ловим только href|action со значением ровно начинающимся со слеша
         # (не //, не http, не mailto, не tel, не #).
         html = _re.sub(r'(href|action)="/([^"]*)"', _rewrite, html)
-        return HTMLResponse(
-            content=html,
-            status_code=response.status_code,
-            headers=dict(response.headers),
-        )
+        # Не передаём headers — оригинальный Content-Length не совпадает
+        # с новым размером тела после переписывания. HTMLResponse сам пересчитает.
+        return HTMLResponse(content=html, status_code=response.status_code)
     except Exception as _rewrite_err:
         log.warning(f"[SEO preview] link rewrite skipped: {_rewrite_err}")
         return response

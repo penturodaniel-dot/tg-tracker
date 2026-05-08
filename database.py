@@ -3015,3 +3015,895 @@ class Database:
             return (datetime.utcnow() - last_dt).days
         except Exception:
             return -1
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SEO МОДУЛЬ — мульти-сайт SEO-CMS, изолирован от остального функционала.
+    # Таблицы: seo_sites / seo_locations / seo_location_contacts /
+    #          seo_pages / seo_categories / seo_authors / seo_articles /
+    #          seo_redirects.
+    # Не зависит от и не модифицирует чаты, лиды, лендинги, ботов или CAPI.
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _init_seo_tables(self):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""CREATE TABLE IF NOT EXISTS seo_sites (
+                    id              SERIAL PRIMARY KEY,
+                    name            TEXT NOT NULL,
+                    domain          TEXT NOT NULL UNIQUE,
+                    aliases         TEXT DEFAULT '',
+                    site_type       TEXT DEFAULT 'client',
+                    language        TEXT DEFAULT 'en',
+                    brand_name      TEXT DEFAULT '',
+                    tagline         TEXT DEFAULT '',
+                    logo_url        TEXT DEFAULT '',
+                    favicon_url     TEXT DEFAULT '',
+                    color_primary   TEXT DEFAULT '#7A9B76',
+                    color_secondary TEXT DEFAULT '#E8DDD0',
+                    title_suffix    TEXT DEFAULT '',
+                    default_meta_description TEXT DEFAULT '',
+                    default_og_image TEXT DEFAULT '',
+                    org_name        TEXT DEFAULT '',
+                    org_phone       TEXT DEFAULT '',
+                    org_email       TEXT DEFAULT '',
+                    org_address     TEXT DEFAULT '',
+                    ga_id           TEXT DEFAULT '',
+                    gtm_id          TEXT DEFAULT '',
+                    fb_pixel_id     TEXT DEFAULT '',
+                    footer_html     TEXT DEFAULT '',
+                    header_html     TEXT DEFAULT '',
+                    social_links    TEXT DEFAULT '',
+                    status          TEXT DEFAULT 'draft',
+                    created_at      TEXT NOT NULL,
+                    updated_at      TEXT NOT NULL
+                )""")
+                cur.execute("""CREATE TABLE IF NOT EXISTS seo_locations (
+                    id              SERIAL PRIMARY KEY,
+                    site_id         INTEGER NOT NULL,
+                    slug            TEXT NOT NULL,
+                    city            TEXT NOT NULL,
+                    state           TEXT NOT NULL,
+                    state_full      TEXT DEFAULT '',
+                    country         TEXT DEFAULT 'US',
+                    street          TEXT DEFAULT '',
+                    address_line2   TEXT DEFAULT '',
+                    zip             TEXT DEFAULT '',
+                    latitude        DOUBLE PRECISION,
+                    longitude       DOUBLE PRECISION,
+                    title           TEXT DEFAULT '',
+                    h1              TEXT DEFAULT '',
+                    meta_description TEXT DEFAULT '',
+                    og_image        TEXT DEFAULT '',
+                    intro_html      TEXT DEFAULT '',
+                    services_html   TEXT DEFAULT '',
+                    about_studio_html TEXT DEFAULT '',
+                    faq_json        TEXT DEFAULT '[]',
+                    schema_json     TEXT DEFAULT '',
+                    hours_json      TEXT DEFAULT '',
+                    position        INTEGER DEFAULT 0,
+                    status          TEXT DEFAULT 'draft',
+                    published_at    TEXT,
+                    created_at      TEXT NOT NULL,
+                    updated_at      TEXT NOT NULL,
+                    UNIQUE(site_id, slug)
+                )""")
+                cur.execute("""CREATE TABLE IF NOT EXISTS seo_location_contacts (
+                    id              SERIAL PRIMARY KEY,
+                    location_id     INTEGER NOT NULL,
+                    contact_type    TEXT NOT NULL,
+                    label           TEXT DEFAULT '',
+                    value           TEXT NOT NULL,
+                    display_value   TEXT DEFAULT '',
+                    is_primary      INTEGER DEFAULT 0,
+                    position        INTEGER DEFAULT 0,
+                    is_active       INTEGER DEFAULT 1,
+                    created_at      TEXT NOT NULL
+                )""")
+                cur.execute("""CREATE TABLE IF NOT EXISTS seo_pages (
+                    id              SERIAL PRIMARY KEY,
+                    site_id         INTEGER NOT NULL,
+                    slug            TEXT NOT NULL,
+                    page_type       TEXT DEFAULT 'static',
+                    title           TEXT DEFAULT '',
+                    h1              TEXT DEFAULT '',
+                    meta_description TEXT DEFAULT '',
+                    og_image        TEXT DEFAULT '',
+                    canonical_url   TEXT DEFAULT '',
+                    content_html    TEXT DEFAULT '',
+                    schema_json     TEXT DEFAULT '',
+                    noindex         INTEGER DEFAULT 0,
+                    position        INTEGER DEFAULT 0,
+                    show_in_menu    INTEGER DEFAULT 0,
+                    menu_label      TEXT DEFAULT '',
+                    status          TEXT DEFAULT 'draft',
+                    published_at    TEXT,
+                    created_at      TEXT NOT NULL,
+                    updated_at      TEXT NOT NULL,
+                    UNIQUE(site_id, slug)
+                )""")
+                cur.execute("""CREATE TABLE IF NOT EXISTS seo_categories (
+                    id              SERIAL PRIMARY KEY,
+                    site_id         INTEGER NOT NULL,
+                    slug            TEXT NOT NULL,
+                    name            TEXT NOT NULL,
+                    description     TEXT DEFAULT '',
+                    meta_description TEXT DEFAULT '',
+                    og_image        TEXT DEFAULT '',
+                    position        INTEGER DEFAULT 0,
+                    created_at      TEXT NOT NULL,
+                    UNIQUE(site_id, slug)
+                )""")
+                cur.execute("""CREATE TABLE IF NOT EXISTS seo_authors (
+                    id              SERIAL PRIMARY KEY,
+                    site_id         INTEGER NOT NULL,
+                    slug            TEXT NOT NULL,
+                    name            TEXT NOT NULL,
+                    bio_html        TEXT DEFAULT '',
+                    avatar_url      TEXT DEFAULT '',
+                    credentials     TEXT DEFAULT '',
+                    social_links    TEXT DEFAULT '',
+                    created_at      TEXT NOT NULL,
+                    UNIQUE(site_id, slug)
+                )""")
+                cur.execute("""CREATE TABLE IF NOT EXISTS seo_articles (
+                    id              SERIAL PRIMARY KEY,
+                    site_id         INTEGER NOT NULL,
+                    category_id     INTEGER,
+                    author_id       INTEGER,
+                    slug            TEXT NOT NULL,
+                    title           TEXT DEFAULT '',
+                    h1              TEXT DEFAULT '',
+                    meta_description TEXT DEFAULT '',
+                    og_image        TEXT DEFAULT '',
+                    canonical_url   TEXT DEFAULT '',
+                    excerpt         TEXT DEFAULT '',
+                    content_html    TEXT DEFAULT '',
+                    schema_json     TEXT DEFAULT '',
+                    tags            TEXT DEFAULT '',
+                    noindex         INTEGER DEFAULT 0,
+                    is_pillar       INTEGER DEFAULT 0,
+                    view_count      INTEGER DEFAULT 0,
+                    status          TEXT DEFAULT 'draft',
+                    published_at    TEXT,
+                    created_at      TEXT NOT NULL,
+                    updated_at      TEXT NOT NULL,
+                    UNIQUE(site_id, slug)
+                )""")
+                cur.execute("""CREATE TABLE IF NOT EXISTS seo_redirects (
+                    id              SERIAL PRIMARY KEY,
+                    site_id         INTEGER NOT NULL,
+                    from_path       TEXT NOT NULL,
+                    to_path         TEXT NOT NULL,
+                    status_code     INTEGER DEFAULT 301,
+                    hits            INTEGER DEFAULT 0,
+                    last_hit_at     TEXT,
+                    created_at      TEXT NOT NULL,
+                    UNIQUE(site_id, from_path)
+                )""")
+                # Индексы для быстрых LIKE / lookup
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_seo_sites_domain ON seo_sites (LOWER(domain))")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_seo_locations_site ON seo_locations (site_id, status)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_seo_pages_site ON seo_pages (site_id, status)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_seo_articles_site ON seo_articles (site_id, status, published_at DESC)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_seo_loc_contacts ON seo_location_contacts (location_id, is_active)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_seo_redirects_site_from ON seo_redirects (site_id, from_path)")
+            conn.commit()
+
+    # ── seo_sites ────────────────────────────────────────────────────────────
+    def get_seo_sites(self) -> list:
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM seo_sites ORDER BY id")
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_seo_site(self, site_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM seo_sites WHERE id=%s", (site_id,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def get_seo_site_by_domain(self, domain: str):
+        """Ищет SEO-сайт по домену (точное совпадение, регистр-независимо).
+        Используется в CustomDomainMiddleware: если совпало — рендерим SEO,
+        иначе фолбэк в существующую логику лендингов."""
+        if not domain:
+            return None
+        self._init_seo_tables()
+        d = domain.strip().lower()
+        if d.startswith("www."):
+            d = d[4:]
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM seo_sites WHERE LOWER(domain)=%s LIMIT 1",
+                    (d,)
+                )
+                r = cur.fetchone()
+                if r:
+                    return dict(r)
+                # Поиск среди алиасов (csv)
+                cur.execute(
+                    "SELECT * FROM seo_sites WHERE aliases <> ''"
+                )
+                for row in cur.fetchall():
+                    aliases = [a.strip().lower().lstrip("www.") for a in (row.get("aliases") or "").split(",") if a.strip()]
+                    if d in aliases:
+                        return dict(row)
+                return None
+
+    def create_seo_site(self, name: str, domain: str, **kwargs) -> int:
+        self._init_seo_tables()
+        from datetime import datetime
+        now = datetime.utcnow().isoformat()
+        cols = ["name", "domain", "created_at", "updated_at"]
+        vals = [name.strip(), domain.strip().lower(), now, now]
+        for k in ("aliases", "site_type", "language", "brand_name", "tagline",
+                  "logo_url", "favicon_url", "color_primary", "color_secondary",
+                  "title_suffix", "default_meta_description", "default_og_image",
+                  "org_name", "org_phone", "org_email", "org_address",
+                  "ga_id", "gtm_id", "fb_pixel_id",
+                  "footer_html", "header_html", "social_links", "status"):
+            if k in kwargs:
+                cols.append(k)
+                vals.append(kwargs[k])
+        ph = ",".join(["%s"] * len(cols))
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"INSERT INTO seo_sites ({','.join(cols)}) VALUES ({ph}) RETURNING id",
+                    vals
+                )
+                new_id = cur.fetchone()["id"]
+            conn.commit()
+            return new_id
+
+    def update_seo_site(self, site_id: int, **kwargs):
+        if not kwargs:
+            return
+        from datetime import datetime
+        allowed = {"name", "domain", "aliases", "site_type", "language",
+                   "brand_name", "tagline", "logo_url", "favicon_url",
+                   "color_primary", "color_secondary", "title_suffix",
+                   "default_meta_description", "default_og_image",
+                   "org_name", "org_phone", "org_email", "org_address",
+                   "ga_id", "gtm_id", "fb_pixel_id",
+                   "footer_html", "header_html", "social_links", "status"}
+        fields, vals = [], []
+        for k, v in kwargs.items():
+            if k in allowed:
+                fields.append(f"{k}=%s")
+                vals.append(v)
+        if not fields:
+            return
+        fields.append("updated_at=%s")
+        vals.append(datetime.utcnow().isoformat())
+        vals.append(site_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"UPDATE seo_sites SET {', '.join(fields)} WHERE id=%s",
+                    vals
+                )
+            conn.commit()
+
+    def delete_seo_site(self, site_id: int):
+        """Удаляет сайт и весь его контент (каскадно)."""
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""DELETE FROM seo_location_contacts
+                    WHERE location_id IN (SELECT id FROM seo_locations WHERE site_id=%s)""",
+                    (site_id,))
+                cur.execute("DELETE FROM seo_locations WHERE site_id=%s", (site_id,))
+                cur.execute("DELETE FROM seo_pages WHERE site_id=%s", (site_id,))
+                cur.execute("DELETE FROM seo_articles WHERE site_id=%s", (site_id,))
+                cur.execute("DELETE FROM seo_categories WHERE site_id=%s", (site_id,))
+                cur.execute("DELETE FROM seo_authors WHERE site_id=%s", (site_id,))
+                cur.execute("DELETE FROM seo_redirects WHERE site_id=%s", (site_id,))
+                cur.execute("DELETE FROM seo_sites WHERE id=%s", (site_id,))
+            conn.commit()
+
+    # ── seo_locations ────────────────────────────────────────────────────────
+    def get_seo_locations(self, site_id: int, status: str = None) -> list:
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if status:
+                    cur.execute(
+                        "SELECT * FROM seo_locations WHERE site_id=%s AND status=%s "
+                        "ORDER BY position, city",
+                        (site_id, status)
+                    )
+                else:
+                    cur.execute(
+                        "SELECT * FROM seo_locations WHERE site_id=%s "
+                        "ORDER BY position, city",
+                        (site_id,)
+                    )
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_seo_location(self, location_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM seo_locations WHERE id=%s", (location_id,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def get_seo_location_by_slug(self, site_id: int, slug: str):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM seo_locations WHERE site_id=%s AND slug=%s",
+                    (site_id, slug)
+                )
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def create_seo_location(self, site_id: int, slug: str, city: str, state: str, **kwargs) -> int:
+        self._init_seo_tables()
+        from datetime import datetime
+        now = datetime.utcnow().isoformat()
+        cols = ["site_id", "slug", "city", "state", "created_at", "updated_at"]
+        vals = [site_id, slug.strip(), city.strip(), state.strip(), now, now]
+        for k in ("state_full", "country", "street", "address_line2", "zip",
+                  "latitude", "longitude", "title", "h1",
+                  "meta_description", "og_image", "intro_html", "services_html",
+                  "about_studio_html", "faq_json", "schema_json", "hours_json",
+                  "position", "status", "published_at"):
+            if k in kwargs:
+                cols.append(k)
+                vals.append(kwargs[k])
+        ph = ",".join(["%s"] * len(cols))
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"INSERT INTO seo_locations ({','.join(cols)}) VALUES ({ph}) RETURNING id",
+                    vals
+                )
+                new_id = cur.fetchone()["id"]
+            conn.commit()
+            return new_id
+
+    def update_seo_location(self, location_id: int, **kwargs):
+        if not kwargs:
+            return
+        from datetime import datetime
+        allowed = {"slug", "city", "state", "state_full", "country",
+                   "street", "address_line2", "zip", "latitude", "longitude",
+                   "title", "h1", "meta_description", "og_image",
+                   "intro_html", "services_html", "about_studio_html",
+                   "faq_json", "schema_json", "hours_json",
+                   "position", "status", "published_at"}
+        fields, vals = [], []
+        for k, v in kwargs.items():
+            if k in allowed:
+                fields.append(f"{k}=%s")
+                vals.append(v)
+        if not fields:
+            return
+        fields.append("updated_at=%s")
+        vals.append(datetime.utcnow().isoformat())
+        vals.append(location_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"UPDATE seo_locations SET {', '.join(fields)} WHERE id=%s",
+                    vals
+                )
+            conn.commit()
+
+    def delete_seo_location(self, location_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM seo_location_contacts WHERE location_id=%s", (location_id,))
+                cur.execute("DELETE FROM seo_locations WHERE id=%s", (location_id,))
+            conn.commit()
+
+    # ── seo_location_contacts ────────────────────────────────────────────────
+    def get_seo_location_contacts(self, location_id: int, only_active: bool = True) -> list:
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if only_active:
+                    cur.execute(
+                        "SELECT * FROM seo_location_contacts "
+                        "WHERE location_id=%s AND is_active=1 "
+                        "ORDER BY is_primary DESC, position, id",
+                        (location_id,)
+                    )
+                else:
+                    cur.execute(
+                        "SELECT * FROM seo_location_contacts WHERE location_id=%s "
+                        "ORDER BY is_primary DESC, position, id",
+                        (location_id,)
+                    )
+                return [dict(r) for r in cur.fetchall()]
+
+    def add_seo_location_contact(self, location_id: int, contact_type: str,
+                                  value: str, label: str = "",
+                                  display_value: str = "",
+                                  is_primary: int = 0,
+                                  position: int = 0) -> int:
+        self._init_seo_tables()
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO seo_location_contacts
+                       (location_id, contact_type, label, value, display_value,
+                        is_primary, position, created_at)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                    (location_id, contact_type.strip().lower(), label.strip(),
+                     value.strip(), display_value.strip(),
+                     int(is_primary), int(position), datetime.utcnow().isoformat())
+                )
+                new_id = cur.fetchone()["id"]
+            conn.commit()
+            return new_id
+
+    def update_seo_location_contact(self, contact_id: int, **kwargs):
+        if not kwargs:
+            return
+        allowed = {"contact_type", "label", "value", "display_value",
+                   "is_primary", "position", "is_active"}
+        fields, vals = [], []
+        for k, v in kwargs.items():
+            if k in allowed:
+                fields.append(f"{k}=%s")
+                vals.append(v)
+        if not fields:
+            return
+        vals.append(contact_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"UPDATE seo_location_contacts SET {', '.join(fields)} WHERE id=%s",
+                    vals
+                )
+            conn.commit()
+
+    def delete_seo_location_contact(self, contact_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM seo_location_contacts WHERE id=%s", (contact_id,))
+            conn.commit()
+
+    # ── seo_pages ────────────────────────────────────────────────────────────
+    def get_seo_pages(self, site_id: int, status: str = None) -> list:
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                if status:
+                    cur.execute(
+                        "SELECT * FROM seo_pages WHERE site_id=%s AND status=%s "
+                        "ORDER BY position, id",
+                        (site_id, status)
+                    )
+                else:
+                    cur.execute(
+                        "SELECT * FROM seo_pages WHERE site_id=%s ORDER BY position, id",
+                        (site_id,)
+                    )
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_seo_page(self, page_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM seo_pages WHERE id=%s", (page_id,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def get_seo_page_by_slug(self, site_id: int, slug: str):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM seo_pages WHERE site_id=%s AND slug=%s",
+                    (site_id, slug)
+                )
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def create_seo_page(self, site_id: int, slug: str, **kwargs) -> int:
+        self._init_seo_tables()
+        from datetime import datetime
+        now = datetime.utcnow().isoformat()
+        cols = ["site_id", "slug", "created_at", "updated_at"]
+        vals = [site_id, slug.strip(), now, now]
+        for k in ("page_type", "title", "h1", "meta_description", "og_image",
+                  "canonical_url", "content_html", "schema_json",
+                  "noindex", "position", "show_in_menu", "menu_label",
+                  "status", "published_at"):
+            if k in kwargs:
+                cols.append(k)
+                vals.append(kwargs[k])
+        ph = ",".join(["%s"] * len(cols))
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"INSERT INTO seo_pages ({','.join(cols)}) VALUES ({ph}) RETURNING id",
+                    vals
+                )
+                new_id = cur.fetchone()["id"]
+            conn.commit()
+            return new_id
+
+    def update_seo_page(self, page_id: int, **kwargs):
+        if not kwargs:
+            return
+        from datetime import datetime
+        allowed = {"slug", "page_type", "title", "h1", "meta_description",
+                   "og_image", "canonical_url", "content_html", "schema_json",
+                   "noindex", "position", "show_in_menu", "menu_label",
+                   "status", "published_at"}
+        fields, vals = [], []
+        for k, v in kwargs.items():
+            if k in allowed:
+                fields.append(f"{k}=%s")
+                vals.append(v)
+        if not fields:
+            return
+        fields.append("updated_at=%s")
+        vals.append(datetime.utcnow().isoformat())
+        vals.append(page_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"UPDATE seo_pages SET {', '.join(fields)} WHERE id=%s",
+                    vals
+                )
+            conn.commit()
+
+    def delete_seo_page(self, page_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM seo_pages WHERE id=%s", (page_id,))
+            conn.commit()
+
+    # ── seo_categories ───────────────────────────────────────────────────────
+    def get_seo_categories(self, site_id: int) -> list:
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM seo_categories WHERE site_id=%s ORDER BY position, name",
+                    (site_id,)
+                )
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_seo_category(self, cat_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM seo_categories WHERE id=%s", (cat_id,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def get_seo_category_by_slug(self, site_id: int, slug: str):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM seo_categories WHERE site_id=%s AND slug=%s",
+                    (site_id, slug)
+                )
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def create_seo_category(self, site_id: int, slug: str, name: str, **kwargs) -> int:
+        self._init_seo_tables()
+        from datetime import datetime
+        cols = ["site_id", "slug", "name", "created_at"]
+        vals = [site_id, slug.strip(), name.strip(), datetime.utcnow().isoformat()]
+        for k in ("description", "meta_description", "og_image", "position"):
+            if k in kwargs:
+                cols.append(k)
+                vals.append(kwargs[k])
+        ph = ",".join(["%s"] * len(cols))
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"INSERT INTO seo_categories ({','.join(cols)}) VALUES ({ph}) RETURNING id",
+                    vals
+                )
+                new_id = cur.fetchone()["id"]
+            conn.commit()
+            return new_id
+
+    def update_seo_category(self, cat_id: int, **kwargs):
+        if not kwargs:
+            return
+        allowed = {"slug", "name", "description", "meta_description", "og_image", "position"}
+        fields, vals = [], []
+        for k, v in kwargs.items():
+            if k in allowed:
+                fields.append(f"{k}=%s")
+                vals.append(v)
+        if not fields:
+            return
+        vals.append(cat_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"UPDATE seo_categories SET {', '.join(fields)} WHERE id=%s",
+                    vals
+                )
+            conn.commit()
+
+    def delete_seo_category(self, cat_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE seo_articles SET category_id=NULL WHERE category_id=%s", (cat_id,))
+                cur.execute("DELETE FROM seo_categories WHERE id=%s", (cat_id,))
+            conn.commit()
+
+    # ── seo_authors ──────────────────────────────────────────────────────────
+    def get_seo_authors(self, site_id: int) -> list:
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM seo_authors WHERE site_id=%s ORDER BY name",
+                    (site_id,)
+                )
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_seo_author(self, author_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM seo_authors WHERE id=%s", (author_id,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def create_seo_author(self, site_id: int, slug: str, name: str, **kwargs) -> int:
+        self._init_seo_tables()
+        from datetime import datetime
+        cols = ["site_id", "slug", "name", "created_at"]
+        vals = [site_id, slug.strip(), name.strip(), datetime.utcnow().isoformat()]
+        for k in ("bio_html", "avatar_url", "credentials", "social_links"):
+            if k in kwargs:
+                cols.append(k)
+                vals.append(kwargs[k])
+        ph = ",".join(["%s"] * len(cols))
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"INSERT INTO seo_authors ({','.join(cols)}) VALUES ({ph}) RETURNING id",
+                    vals
+                )
+                new_id = cur.fetchone()["id"]
+            conn.commit()
+            return new_id
+
+    def update_seo_author(self, author_id: int, **kwargs):
+        if not kwargs:
+            return
+        allowed = {"slug", "name", "bio_html", "avatar_url", "credentials", "social_links"}
+        fields, vals = [], []
+        for k, v in kwargs.items():
+            if k in allowed:
+                fields.append(f"{k}=%s")
+                vals.append(v)
+        if not fields:
+            return
+        vals.append(author_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"UPDATE seo_authors SET {', '.join(fields)} WHERE id=%s",
+                    vals
+                )
+            conn.commit()
+
+    def delete_seo_author(self, author_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE seo_articles SET author_id=NULL WHERE author_id=%s", (author_id,))
+                cur.execute("DELETE FROM seo_authors WHERE id=%s", (author_id,))
+            conn.commit()
+
+    # ── seo_articles ─────────────────────────────────────────────────────────
+    def get_seo_articles(self, site_id: int, status: str = None,
+                         category_id: int = None, limit: int = None,
+                         offset: int = 0) -> list:
+        self._init_seo_tables()
+        sql = "SELECT * FROM seo_articles WHERE site_id=%s"
+        params: list = [site_id]
+        if status:
+            sql += " AND status=%s"
+            params.append(status)
+        if category_id is not None:
+            sql += " AND category_id=%s"
+            params.append(category_id)
+        sql += " ORDER BY COALESCE(published_at, created_at) DESC"
+        if limit:
+            sql += " LIMIT %s OFFSET %s"
+            params.append(limit)
+            params.append(offset)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_seo_article(self, article_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM seo_articles WHERE id=%s", (article_id,))
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def get_seo_article_by_slug(self, site_id: int, slug: str):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM seo_articles WHERE site_id=%s AND slug=%s",
+                    (site_id, slug)
+                )
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def create_seo_article(self, site_id: int, slug: str, title: str, **kwargs) -> int:
+        self._init_seo_tables()
+        from datetime import datetime
+        now = datetime.utcnow().isoformat()
+        cols = ["site_id", "slug", "title", "created_at", "updated_at"]
+        vals = [site_id, slug.strip(), title.strip(), now, now]
+        for k in ("category_id", "author_id", "h1", "meta_description",
+                  "og_image", "canonical_url", "excerpt", "content_html",
+                  "schema_json", "tags", "noindex", "is_pillar",
+                  "status", "published_at"):
+            if k in kwargs:
+                cols.append(k)
+                vals.append(kwargs[k])
+        ph = ",".join(["%s"] * len(cols))
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"INSERT INTO seo_articles ({','.join(cols)}) VALUES ({ph}) RETURNING id",
+                    vals
+                )
+                new_id = cur.fetchone()["id"]
+            conn.commit()
+            return new_id
+
+    def update_seo_article(self, article_id: int, **kwargs):
+        if not kwargs:
+            return
+        from datetime import datetime
+        allowed = {"slug", "category_id", "author_id", "title", "h1",
+                   "meta_description", "og_image", "canonical_url",
+                   "excerpt", "content_html", "schema_json", "tags",
+                   "noindex", "is_pillar", "status", "published_at"}
+        fields, vals = [], []
+        for k, v in kwargs.items():
+            if k in allowed:
+                fields.append(f"{k}=%s")
+                vals.append(v)
+        if not fields:
+            return
+        fields.append("updated_at=%s")
+        vals.append(datetime.utcnow().isoformat())
+        vals.append(article_id)
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"UPDATE seo_articles SET {', '.join(fields)} WHERE id=%s",
+                    vals
+                )
+            conn.commit()
+
+    def delete_seo_article(self, article_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM seo_articles WHERE id=%s", (article_id,))
+            conn.commit()
+
+    def increment_seo_article_views(self, article_id: int):
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE seo_articles SET view_count=view_count+1 WHERE id=%s",
+                    (article_id,)
+                )
+            conn.commit()
+
+    # ── seo_redirects ────────────────────────────────────────────────────────
+    def get_seo_redirects(self, site_id: int) -> list:
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM seo_redirects WHERE site_id=%s ORDER BY id",
+                    (site_id,)
+                )
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_seo_redirect(self, site_id: int, from_path: str):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM seo_redirects WHERE site_id=%s AND from_path=%s",
+                    (site_id, from_path)
+                )
+                r = cur.fetchone()
+                return dict(r) if r else None
+
+    def create_seo_redirect(self, site_id: int, from_path: str,
+                             to_path: str, status_code: int = 301) -> int:
+        self._init_seo_tables()
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO seo_redirects
+                       (site_id, from_path, to_path, status_code, created_at)
+                       VALUES (%s,%s,%s,%s,%s)
+                       ON CONFLICT (site_id, from_path) DO UPDATE
+                       SET to_path=EXCLUDED.to_path, status_code=EXCLUDED.status_code
+                       RETURNING id""",
+                    (site_id, from_path.strip(), to_path.strip(),
+                     int(status_code), datetime.utcnow().isoformat())
+                )
+                new_id = cur.fetchone()["id"]
+            conn.commit()
+            return new_id
+
+    def delete_seo_redirect(self, redirect_id: int):
+        self._init_seo_tables()
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM seo_redirects WHERE id=%s", (redirect_id,))
+            conn.commit()
+
+    def log_seo_redirect_hit(self, redirect_id: int):
+        from datetime import datetime
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE seo_redirects SET hits=hits+1, last_hit_at=%s WHERE id=%s",
+                    (datetime.utcnow().isoformat(), redirect_id)
+                )
+            conn.commit()
+
+    # ── Хелперы для публичного рендера ───────────────────────────────────────
+    def get_seo_published_articles(self, site_id: int, limit: int = 20, offset: int = 0) -> list:
+        return self.get_seo_articles(site_id, status="published", limit=limit, offset=offset)
+
+    def get_seo_sitemap_urls(self, site_id: int) -> list:
+        """Список URL'ов для sitemap.xml. Только опубликованный контент."""
+        urls = []
+        for p in self.get_seo_pages(site_id, status="published"):
+            urls.append({
+                "loc": "/" + (p.get("slug") or "").lstrip("/"),
+                "lastmod": p.get("published_at") or p.get("updated_at"),
+                "type": "page",
+            })
+        for loc in self.get_seo_locations(site_id, status="published"):
+            urls.append({
+                "loc": "/" + (loc.get("slug") or "").lstrip("/"),
+                "lastmod": loc.get("published_at") or loc.get("updated_at"),
+                "type": "location",
+            })
+        for art in self.get_seo_articles(site_id, status="published"):
+            urls.append({
+                "loc": "/blog/" + (art.get("slug") or "").lstrip("/"),
+                "lastmod": art.get("published_at") or art.get("updated_at"),
+                "type": "article",
+            })
+        return urls

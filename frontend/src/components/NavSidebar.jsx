@@ -26,6 +26,14 @@ const NAV_SECTIONS = [
     ]
   },
   {
+    id: 'seo',
+    label: 'SEO',
+    adminOnly: true,
+    items: [
+      { icon: '🌍', label: 'Сайты',         href: '/seo' },
+    ]
+  },
+  {
     id: 'settings',
     label: 'Настройки',
     adminOnly: true,

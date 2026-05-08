@@ -132,6 +132,26 @@ class CustomDomainMiddleware(BaseHTTPMiddleware):
         if not host or any(host.endswith(s) for s in self._SYSTEM):
             return await call_next(request)
 
+        # ── НОВОЕ: SEO-сайт по домену ────────────────────────────────────────
+        # Если домен зарегистрирован в seo_sites и сайт live — отдаём весь
+        # запрос новому диспетчеру. Все ошибки внутри ловятся самим
+        # dispatch_seo_request → middleware никогда не падает из-за SEO-багов.
+        # Если домена нет в seo_sites или сайт draft — фолбэк ниже на
+        # существующую логику лендингов (без изменений).
+        try:
+            seo_site = db.get_seo_site_by_domain(host)
+        except Exception as _seo_err:
+            log.warning(f"[CustomDomain] seo lookup error for host={host}: {_seo_err}")
+            seo_site = None
+        if seo_site and seo_site.get("status") == "live":
+            try:
+                from routers.seo import dispatch_seo_request as _seo_dispatch
+                return await _seo_dispatch(request, seo_site)
+            except Exception as _seo_disp_err:
+                log.error(f"[CustomDomain] seo dispatch error host={host} path={request.url.path}: {_seo_disp_err}")
+                # Фолбэк к существующей логике если SEO-диспетчер упал
+        # ── КОНЕЦ нового блока ───────────────────────────────────────────────
+
         path = request.url.path
 
         # На корневом пути "/" — ищем лендинг по домену

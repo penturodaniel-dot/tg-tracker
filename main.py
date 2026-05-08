@@ -565,9 +565,11 @@ def nav_html(active: str, request: Request) -> str:
     clients_pages  = ["channels","campaigns","landings","analytics_clients"]
     staff_pages    = ["tg_account_chat","wa_chat","staff","scripts","landings_staff","analytics_staff"]
     settings_pages = ["tags","users","projects","settings"]
+    seo_pages      = ["seo"]
     is_clients  = active in clients_pages or (active and any(active.startswith(p) for p in clients_pages))
     is_staff    = active in staff_pages   or (active and any(active.startswith(p) for p in staff_pages))
     is_settings = active in settings_pages
+    is_seo      = active in seo_pages or (active and active.startswith("seo"))
 
     # Аккордеон-секция
     def accordion(section_id, icon, title, color, items_html, open_by_default=False):
@@ -603,6 +605,11 @@ def nav_html(active: str, request: Request) -> str:
         item("📊", "Статистика",  "analytics_staff",  "orange", url="/analytics/staff")
     )
 
+    # Блок SEO (только admin)
+    seo_items = ""
+    if role == "admin":
+        seo_items = item("🌍", "Сайты", "seo", "blue", url="/seo")
+
     # Блок Настройки (только admin)
     settings_items = ""
     if role == "admin":
@@ -630,6 +637,7 @@ def nav_html(active: str, request: Request) -> str:
       {accordion("clients",  "📋", "Клиенты",     "blue",   clients_items,  open_by_default=is_clients) if show_clients else ""}
       <div class="nav-divider"></div>
       {accordion("staff",    "👥", "Сотрудники",  "orange", staff_items,    open_by_default=True)}
+      {'<div class="nav-divider"></div>' + accordion("seo", "🌍", "SEO", "blue", seo_items, open_by_default=is_seo) if role == "admin" and seo_items else ''}
       {'<div class="nav-divider"></div>' + accordion("settings", "⚙️", "Настройки", "blue", settings_items, open_by_default=is_settings) if role == "admin" and settings_items else ''}
 
       <div class="sidebar-footer">

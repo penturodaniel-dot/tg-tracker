@@ -40,6 +40,7 @@ from routers.settings    import router as settings_router,  setup as settings_se
 from routers.channels    import router as channels_router,  setup as channels_setup
 from routers.projects    import router as projects_router,  setup as projects_setup
 from routers.scripts     import router as scripts_router,   setup as scripts_setup
+from routers.seo         import router as seo_router,        setup as seo_setup
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -929,6 +930,11 @@ tga_setup(
     _tiktok_capi=tiktok_capi,
 )
 app.include_router(tga_router)
+
+# SEO модуль — изолированный мульти-сайт SEO CMS.
+# Админка под /seo/*. Публичный рендер — через CustomDomainMiddleware (Коммит 4).
+seo_setup(db, log, require_auth, base, nav_html, app_url=APP_URL)
+app.include_router(seo_router)
 
 # ── React TG-чат: статические assets ─────────────────────────────────────────
 from fastapi.staticfiles import StaticFiles as _StaticFiles

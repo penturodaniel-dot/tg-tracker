@@ -1,0 +1,600 @@
+{
+  "_README": "RelaxTouch (relaxtouchtoday.com) — стартовый контент. Импортируй через /seo/sites/{id}/import. Status у локаций и страниц = draft, чтобы ты мог проверить превью перед публикацией. Адреса (street/zip/lat/lng) и контакты добавишь руками в админке.",
+
+  "site_settings": {
+    "brand_name": "RelaxTouch",
+    "tagline": "Premium Wellness Massage Studios Across the United States",
+    "title_suffix": " | RelaxTouch",
+    "default_meta_description": "Premium wellness massage studios in 15 U.S. cities. Swedish, deep tissue, hot stone, sports recovery and prenatal massage by licensed therapists. Open 9 AM to midnight, every day.",
+    "default_og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+    "color_primary": "#7A9B76",
+    "color_secondary": "#E8DDD0",
+    "language": "en",
+    "site_type": "client",
+    "org_name": "RelaxTouch",
+    "org_address": "United States",
+    "social_links": "{}"
+  },
+
+  "categories": [
+    {
+      "slug": "massage-techniques",
+      "name": "Massage Techniques",
+      "description": "Deep dives into the modalities our therapists practice — Swedish, deep tissue, hot stone, sports, prenatal and beyond.",
+      "meta_description": "Learn about Swedish, deep tissue, hot stone, sports recovery, and prenatal massage from RelaxTouch's licensed therapists.",
+      "position": 10
+    },
+    {
+      "slug": "wellness-self-care",
+      "name": "Wellness & Self-Care",
+      "description": "Evidence-based perspectives on rest, stress, sleep, and the small rituals that compound into a calmer life.",
+      "meta_description": "Wellness and self-care guides from RelaxTouch — stress relief, sleep, mindfulness, and sustainable rituals.",
+      "position": 20
+    },
+    {
+      "slug": "recovery-performance",
+      "name": "Recovery & Performance",
+      "description": "Massage and bodywork for athletes, frequent flyers, and anyone whose body has to keep showing up.",
+      "meta_description": "Recovery and performance massage guides — for athletes, runners, cyclists, and active professionals.",
+      "position": 30
+    },
+    {
+      "slug": "city-guides",
+      "name": "City Guides",
+      "description": "Where to recover, decompress and find calm in the cities we call home.",
+      "meta_description": "Wellness city guides from RelaxTouch — finding calm and recovery in your city.",
+      "position": 40
+    }
+  ],
+
+  "authors": [
+    {
+      "slug": "editorial-team",
+      "name": "RelaxTouch Editorial Team",
+      "credentials": "Licensed Massage Therapists & Wellness Editors",
+      "bio_html": "<p>The RelaxTouch Editorial Team is a small group of licensed massage therapists and wellness editors who write, fact-check and review every guide on this site. We draw on decades of combined hands-on practice and a small library of peer-reviewed bodywork research. If you spot an error or have a topic you'd like us to cover, we'd love to hear from you.</p>",
+      "social_links": "{}"
+    }
+  ],
+
+  "pages": [
+    {
+      "slug": "about",
+      "page_type": "about",
+      "title": "About RelaxTouch",
+      "h1": "About RelaxTouch",
+      "meta_description": "RelaxTouch operates premium wellness massage studios in 15 U.S. cities, staffed by licensed therapists and built around a single idea: real recovery, in a beautiful room.",
+      "show_in_menu": 1,
+      "menu_label": "About",
+      "position": 10,
+      "status": "published",
+      "content_html": "<p class=\"lead\">RelaxTouch is a small network of premium wellness massage studios designed for one thing: to give your body — and your nervous system — a quiet hour back.</p><p>We started with a simple observation. Most massage in the United States falls into two camps: the chain spa — fast, fluorescent, forgettable — or the medical clinic — clinical, fluorescent, also forgettable. Both have their place. Neither is what most adults actually want.</p><p>What people seem to want is a beautiful room, soft light, a therapist who listens, and an hour where nothing is asked of them. So that's what we build. Each RelaxTouch studio is small by design — a few rooms, heated linens, a curated soundscape, and a team of licensed therapists who chose this work because they're good at it.</p><h2>Our therapists</h2><p>Every massage at RelaxTouch is performed by a licensed massage therapist. Our team practices Swedish, deep tissue, hot stone, sports recovery, prenatal and full-body relaxation work — and most of our therapists hold certifications in two or three modalities, so we can match the body in front of us, not the technique we happened to learn.</p><h2>Our studios</h2><p>You'll find us in fifteen U.S. cities, from Brooklyn and Arlington to Phoenix, Austin and the Bay Area. Each location is independent in feel — chosen for the neighborhood, designed around its light — but every studio shares the same standards: cleanliness, discretion, premium oils and linens, and a calendar built so you're never rushed in or rushed out.</p><h2>Open late, open every day</h2><p>We're open 9:00 AM to midnight, seven days a week. Most of the people we serve don't have nine-to-five lives, and we don't think recovery should have nine-to-five hours either.</p><h2>Have a question?</h2><p>The fastest way to reach a particular studio is the contact line on its page. For everything else, our central inbox is on the <a href=\"/contact\">contact page</a>.</p>"
+    },
+    {
+      "slug": "contact",
+      "page_type": "contact",
+      "title": "Contact RelaxTouch",
+      "h1": "Contact",
+      "meta_description": "Reach RelaxTouch — find direct contacts for each studio location, or the central inbox for general inquiries, press, and partnerships.",
+      "show_in_menu": 1,
+      "menu_label": "Contact",
+      "position": 20,
+      "status": "published",
+      "content_html": "<p class=\"lead\">For booking, the fastest path is the contact line on each studio's location page — calls and messages go straight to the studio.</p><h2>For everything else</h2><p>For press, partnerships, vendor inquiries or general feedback, you can reach our central team at <a href=\"mailto:hello@relaxtouchtoday.com\">hello@relaxtouchtoday.com</a>.</p><h2>Find a studio</h2><p>We're in fifteen U.S. cities. <a href=\"/\">Find your nearest RelaxTouch studio →</a></p><h2>A note on response times</h2><p>Our studio teams respond within business hours (9 AM – midnight, daily). Central inbox replies typically come within one business day, sometimes two during peak weeks. If your message is time-sensitive — a same-day appointment, for example — please contact the studio directly.</p>"
+    },
+    {
+      "slug": "privacy",
+      "page_type": "privacy",
+      "title": "Privacy Policy",
+      "h1": "Privacy Policy",
+      "meta_description": "How RelaxTouch handles personal information you share with us — what we collect, why, and your rights.",
+      "show_in_menu": 0,
+      "noindex": 0,
+      "status": "published",
+      "content_html": "<p><em>Last updated: this policy was last revised when this site launched.</em></p><p>This Privacy Policy explains how RelaxTouch (\"we,\" \"our,\" \"us\") collects, uses and shares information about you when you visit relaxtouchtoday.com (the \"Site\") or contact one of our studios.</p><h2>Information we collect</h2><p><strong>Information you give us.</strong> When you contact a studio or send us a message, you may share your name, phone number, email address, and the contents of your message. When you book a session in person, you may share information about your health, allergies, or pregnancy that helps a therapist work safely.</p><p><strong>Information collected automatically.</strong> When you visit the Site, our hosting provider and analytics tools may log standard request information — IP address, browser type, the page you visited, and the page that referred you. We use this in aggregate to understand which content is helpful.</p><p><strong>Cookies.</strong> The Site uses a small number of cookies for analytics and basic functionality. You can disable cookies in your browser at any time without losing access to the Site.</p><h2>How we use information</h2><p>We use the information you give us to respond to your inquiries, schedule and deliver your massage, and improve the Site. We do not sell your information to third parties.</p><h2>Sharing</h2><p>We share information only with service providers who help us run the business — for example, our hosting provider and analytics tool — and only as needed for them to do that work. If we are ever legally required to disclose information, we will do so and notify you where the law allows.</p><h2>Your rights</h2><p>You can ask us what information we hold about you, ask us to correct it, or ask us to delete it. Email <a href=\"mailto:privacy@relaxtouchtoday.com\">privacy@relaxtouchtoday.com</a> and we'll respond as quickly as we can — typically within 30 days.</p><h2>Children</h2><p>The Site is not intended for children under 13 and we do not knowingly collect information from children under 13.</p><h2>Changes</h2><p>If this policy changes, we'll update the date at the top and post the new version here.</p><h2>Contact</h2><p>Questions about this policy: <a href=\"mailto:privacy@relaxtouchtoday.com\">privacy@relaxtouchtoday.com</a>.</p>"
+    },
+    {
+      "slug": "terms",
+      "page_type": "terms",
+      "title": "Terms of Service",
+      "h1": "Terms of Service",
+      "meta_description": "The terms that govern your use of relaxtouchtoday.com and our studio services.",
+      "show_in_menu": 0,
+      "noindex": 0,
+      "status": "published",
+      "content_html": "<p><em>Last updated: this document was last revised when this site launched.</em></p><p>By using relaxtouchtoday.com (the \"Site\") and our studio services, you agree to these Terms of Service. Please read them.</p><h2>The service</h2><p>RelaxTouch operates wellness massage studios at the locations listed on this Site. All massage services are performed by licensed massage therapists.</p><h2>Bookings and cancellations</h2><p>Sessions are booked directly with each studio. We ask that you give at least 24 hours' notice for cancellation or rescheduling. Late cancellations and no-shows may be charged the full session fee at the studio's discretion.</p><h2>Health and safety</h2><p>For your safety and the safety of our therapists, please disclose any medical conditions, recent surgeries, pregnancy, allergies (especially to nut oils), or injuries before your session. Massage is not appropriate for certain conditions; if you're unsure, ask a physician first.</p><h2>Conduct</h2><p>RelaxTouch provides therapeutic and wellness massage only. Inappropriate behavior of any kind will result in immediate termination of the session, charge of the full fee, and a permanent ban from all RelaxTouch studios. Our therapists are professionals; they will be treated as such.</p><h2>Pricing</h2><p>Prices listed on this Site reflect standard sessions: 15 minutes from $140, 30 minutes from $200, 60 minutes from $230. Add-ons and specialty modalities may be priced separately at each studio.</p><h2>Site content</h2><p>Articles and other content on this Site are for general information only and are not medical advice. Always consult a qualified medical professional for medical concerns.</p><h2>Liability</h2><p>To the fullest extent permitted by law, RelaxTouch is not liable for indirect, incidental or consequential damages arising from your use of the Site or the services. Nothing in these Terms limits liability for negligence causing personal injury where that limitation would be unlawful.</p><h2>Changes</h2><p>We may update these Terms from time to time. The \"last updated\" date above reflects the most recent revision.</p><h2>Contact</h2><p>Questions: <a href=\"mailto:hello@relaxtouchtoday.com\">hello@relaxtouchtoday.com</a>.</p>"
+    }
+  ],
+
+  "_locations_note": "Все 15 локаций ниже. Hours: 9 AM to midnight, daily. Цены: 15min $140 / 30min $200 / 60min $230. Status: draft. После импорта — в админке проставь street/zip/lat/lng/телефон + status=published.",
+
+  "locations": [
+    {
+      "slug": "los-angeles-ca",
+      "city": "Los Angeles",
+      "state": "CA",
+      "state_full": "California",
+      "country": "US",
+      "title": "Premium Wellness Massage in Los Angeles, CA",
+      "h1": "Wellness Massage in Los Angeles",
+      "meta_description": "Premium massage studio in Los Angeles, CA. Swedish, deep tissue, hot stone, sports and prenatal massage by licensed therapists. Open 9 AM to midnight, daily.",
+      "og_image": "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Step into a quiet room in the middle of one of the loudest cities in the world. <strong>RelaxTouch Los Angeles</strong> is a small, intentionally restrained wellness massage studio for people who want their hour back — clean, discreet, and unhurried.</p><p>Our Los Angeles therapists are licensed and selected for skill first. Whether you're stiff from a flight into LAX, sore from a hike up Runyon, or just trying to get out of your own head for sixty minutes, the work meets you where you are.</p><p>Open every day from <strong>9:00 AM to midnight</strong>. Late sessions, early sessions, and the gap between meetings — all at the same standard.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute massage — $230.</strong> Our most-booked session. Long enough for full-body work or deep focus on a problem area.</li><li><strong>30-minute massage — $200.</strong> Targeted bodywork: neck and shoulders, back, or legs and feet.</li><li><strong>15-minute massage — $140.</strong> Quick reset between meetings or before a flight.</li></ul><h3>Modalities</h3><p>Each is performed by a licensed therapist trained specifically in that style.</p><ul><li><strong>Swedish massage</strong> — long, flowing strokes for full-body relaxation. The classic, and our most-requested.</li><li><strong>Deep tissue massage</strong> — slower, firmer pressure for chronic tension and muscle adhesions.</li><li><strong>Hot stone therapy</strong> — basalt stones placed and used to work warmth into deep muscle. Particularly good in winter.</li><li><strong>Sports recovery massage</strong> — for runners, cyclists, lifters and anyone training hard.</li><li><strong>Prenatal massage</strong> — performed by therapists certified in pregnancy work, in supported side-lying position.</li><li><strong>Full-body relaxation</strong> — our gentlest session, designed purely for nervous-system reset.</li></ul>",
+      "about_studio_html": "<p>The Los Angeles studio is small by design — a handful of rooms, soft warm light, heated linens and the kind of silence you can actually rest inside. We use premium organic oils (with a fragrance-free option), Egyptian-cotton sheets warmed before each session, and a soundscape curated for the room rather than streamed from a free playlist.</p><p>Discretion matters here. Sessions are spaced so you'll never run into the next guest, parking is easy, and the entrance is calm — not a fluorescent spa lobby. Most of our regulars work in entertainment, finance or tech and value the same thing: privacy, quality of work, and a therapist who actually listens.</p><p>If it's your first visit, plan to arrive ten minutes early to fill out a brief intake. Our therapist will ask about pressure preferences, problem areas, and anything to avoid (recent injuries, surgeries, allergies). The session ends with two minutes of stillness — most people remember that part most.</p>",
+      "faq_json": [
+        {"q": "How early should I arrive for my first appointment?", "a": "Ten minutes is plenty. We use that time for a brief intake — pressure preference, problem areas, anything to avoid — and to get you settled into the room."},
+        {"q": "What should I wear?", "a": "You'll undress to your level of comfort and lie under heated linens. Your therapist will only uncover the area being worked on at any moment. Many guests prefer to keep underwear on; that's fine."},
+        {"q": "Do I need to book in advance?", "a": "Same-day bookings are often possible, especially mid-day. Evenings, weekends and holidays book up — a day or two ahead is safer."},
+        {"q": "What if I have a specific area of pain?", "a": "Tell us when you book and tell the therapist again at intake. We'll plan the session around it — sometimes that means staying on one area for the full hour."},
+        {"q": "Do you offer couples massage?", "a": "Some sessions can be booked as side-by-side in our larger room. Ask the studio when booking."},
+        {"q": "How often should I come?", "a": "For chronic tension, weekly to bi-weekly initially. For maintenance, every three to four weeks. For pure relaxation, whenever your week needs it."},
+        {"q": "Do you offer gift cards?", "a": "Yes. Ask the studio directly — we send digital cards by email."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 10,
+      "status": "draft"
+    },
+    {
+      "slug": "costa-mesa-ca",
+      "city": "Costa Mesa",
+      "state": "CA",
+      "state_full": "California",
+      "country": "US",
+      "title": "Premium Wellness Massage in Costa Mesa, CA",
+      "h1": "Wellness Massage in Costa Mesa",
+      "meta_description": "Premium massage studio in Costa Mesa, Orange County. Swedish, deep tissue, hot stone, sports and prenatal massage by licensed therapists. Open 9 AM to midnight, daily.",
+      "og_image": "https://images.unsplash.com/photo-1591343395082-e120087004b4?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Five minutes from South Coast Plaza and ten from PCH, <strong>RelaxTouch Costa Mesa</strong> is a small wellness massage studio built for the rhythm of Orange County — early gym sessions, long workdays, late dinners, and the body that has to keep up with all of it.</p><p>Our therapists are licensed and chosen for skill. Sessions are unhurried by design, and the studio is small enough that you'll never feel processed.</p><p>Open every day, <strong>9:00 AM to midnight</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute massage — $230.</strong> Our most-booked session. Full-body work or focused attention on a problem area.</li><li><strong>30-minute massage — $200.</strong> Targeted bodywork — neck and shoulders, back, or legs.</li><li><strong>15-minute massage — $140.</strong> Quick reset between meetings or before flying out of John Wayne.</li></ul><h3>Modalities</h3><ul><li><strong>Swedish massage</strong> — long, flowing strokes for full-body relaxation.</li><li><strong>Deep tissue massage</strong> — slower, firmer pressure for chronic tension.</li><li><strong>Hot stone therapy</strong> — basalt stones, deep warmth, particularly good after long flights.</li><li><strong>Sports recovery massage</strong> — for runners, surfers, golfers, lifters.</li><li><strong>Prenatal massage</strong> — performed by certified prenatal therapists in supported side-lying position.</li><li><strong>Full-body relaxation</strong> — gentle, nervous-system reset.</li></ul>",
+      "about_studio_html": "<p>The Costa Mesa studio is small and quiet by design — soft warm light, heated linens, premium organic oils (with a fragrance-free option), and a soundscape that doesn't feel like a free playlist. Parking is easy, the entrance is discreet, and sessions are spaced so you'll never run into the next guest.</p><p>Plan to arrive ten minutes early on your first visit for a brief intake. Tell us about pressure preference, problem areas, and anything to avoid — recent injuries, surgeries, or allergies. The session ends with two minutes of stillness, which most guests remember most.</p>",
+      "faq_json": [
+        {"q": "How early should I arrive?", "a": "Ten minutes for first-time guests; five for repeat visits."},
+        {"q": "What should I wear?", "a": "You'll undress to your level of comfort under heated linens. Your therapist only uncovers the area being worked on. Many guests prefer to keep underwear on."},
+        {"q": "Do I need to book in advance?", "a": "Same-day bookings are often possible mid-day. Evenings and weekends fill up — a day ahead is safer."},
+        {"q": "What if I have a specific area of pain?", "a": "Tell us when you book and remind the therapist at intake. We'll plan the session around it."},
+        {"q": "How often should I come?", "a": "Weekly to bi-weekly for chronic tension; every three to four weeks for maintenance."},
+        {"q": "Do you offer gift cards?", "a": "Yes — digital cards by email. Ask the studio."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 20,
+      "status": "draft"
+    },
+    {
+      "slug": "san-francisco-ca",
+      "city": "San Francisco",
+      "state": "CA",
+      "state_full": "California",
+      "country": "US",
+      "title": "Premium Wellness Massage in San Francisco, CA",
+      "h1": "Wellness Massage in San Francisco",
+      "meta_description": "Premium massage studio in San Francisco. Swedish, deep tissue, hot stone, sports and prenatal massage by licensed therapists. Open 9 AM to midnight, daily.",
+      "og_image": "https://images.unsplash.com/photo-1519823551278-64ac92734fb1?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>San Francisco runs on screens and stairs, and most bodies arrive at the end of the day quietly braced for the next one. <strong>RelaxTouch San Francisco</strong> is a small wellness massage studio built around the opposite premise — that an hour of real stillness, in a beautiful room, is the most underrated tool in the city.</p><p>Our therapists are licensed and skilled across modalities. Sessions are unhurried, the room is quiet, and the standard does not move depending on how busy the day is.</p><p>Open every day, <strong>9:00 AM to midnight</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute massage — $230.</strong></li><li><strong>30-minute massage — $200.</strong></li><li><strong>15-minute massage — $140.</strong></li></ul><h3>Modalities</h3><ul><li><strong>Swedish massage</strong> — long flowing strokes for full-body relaxation.</li><li><strong>Deep tissue massage</strong> — slower, firmer pressure for chronic tension and muscle adhesions, common in posture-heavy desk workers.</li><li><strong>Hot stone therapy</strong> — basalt stones, deep warmth, especially welcome through SF's cold months.</li><li><strong>Sports recovery massage</strong> — for runners, climbers, cyclists.</li><li><strong>Prenatal massage</strong> — performed by certified prenatal therapists in side-lying position.</li><li><strong>Full-body relaxation</strong> — gentle, nervous-system reset.</li></ul>",
+      "about_studio_html": "<p>The San Francisco studio is small, warm and quiet — heated linens, premium organic oils, soft light and a soundscape curated for the room. We're easy to reach by car or transit and we keep the schedule spaced so you'll never overlap with the next guest.</p><p>Arrive ten minutes early on your first visit for a brief intake — pressure preference, problem areas, anything to avoid (recent injuries, surgeries, allergies). The therapist plans the session from there. Sessions end with two minutes of stillness; most guests remember that part most.</p>",
+      "faq_json": [
+        {"q": "How early should I arrive?", "a": "Ten minutes for first-time guests; five for repeat visits."},
+        {"q": "What should I wear?", "a": "Undress to your level of comfort under heated linens. The therapist only uncovers the area being worked on."},
+        {"q": "Do I need to book in advance?", "a": "Mid-day same-day bookings are often possible. Evenings and weekends — a day or two ahead is safer."},
+        {"q": "What if I have neck and shoulder pain from a desk?", "a": "Mention it at intake — for many SF guests this is the entire session, and that's perfectly fine."},
+        {"q": "How often should I come?", "a": "Weekly to bi-weekly for chronic tension; every three to four weeks for maintenance."},
+        {"q": "Do you offer gift cards?", "a": "Yes — digital cards by email. Ask the studio."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 30,
+      "status": "draft"
+    },
+    {
+      "slug": "newark-ca",
+      "city": "Newark",
+      "state": "CA",
+      "state_full": "California",
+      "country": "US",
+      "title": "Premium Wellness Massage in Newark, CA",
+      "h1": "Wellness Massage in Newark",
+      "meta_description": "Premium massage studio in Newark, CA — convenient to Fremont, Union City and the Bay's east side. Open 9 AM to midnight, daily.",
+      "og_image": "https://images.unsplash.com/photo-1600334129128-685c5582fd35?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>The east bay's pace doesn't slow down for anyone. <strong>RelaxTouch Newark</strong> is a small wellness massage studio convenient to Fremont, Union City and the corridor between them — built for people whose schedules don't sync with most spas.</p><p>Licensed therapists, unhurried sessions, premium oils and heated linens. Open <strong>9 AM to midnight, every day</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute massage — $230.</strong></li><li><strong>30-minute massage — $200.</strong></li><li><strong>15-minute massage — $140.</strong></li></ul><h3>Modalities</h3><ul><li><strong>Swedish</strong> — full-body relaxation.</li><li><strong>Deep tissue</strong> — for chronic tension and posture-heavy days.</li><li><strong>Hot stone</strong> — deep warmth into the muscle.</li><li><strong>Sports recovery</strong> — for active bodies.</li><li><strong>Prenatal</strong> — by certified prenatal therapists.</li><li><strong>Full-body relaxation</strong> — gentle, nervous-system reset.</li></ul>",
+      "about_studio_html": "<p>Small studio, soft light, heated linens. We keep the schedule spaced so you'll never feel processed, and parking is easy. Arrive ten minutes early on your first visit for a brief intake.</p>",
+      "faq_json": [
+        {"q": "How early should I arrive?", "a": "Ten minutes first time; five after."},
+        {"q": "What should I wear?", "a": "Undress to your level of comfort under heated linens."},
+        {"q": "Same-day bookings?", "a": "Often possible mid-day. Evenings book up — a day ahead is safer."},
+        {"q": "How often should I come?", "a": "Weekly for chronic tension; monthly for maintenance."},
+        {"q": "Gift cards?", "a": "Yes, digital, by email."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 40,
+      "status": "draft"
+    },
+    {
+      "slug": "menlo-park-ca",
+      "city": "Menlo Park",
+      "state": "CA",
+      "state_full": "California",
+      "country": "US",
+      "title": "Premium Wellness Massage in Menlo Park, CA",
+      "h1": "Wellness Massage in Menlo Park",
+      "meta_description": "Premium massage studio on the Sand Hill corridor in Menlo Park. Swedish, deep tissue, hot stone, sports and prenatal massage by licensed therapists. Open 9 AM to midnight.",
+      "og_image": "https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Menlo Park's pace is built for people who treat their attention as a finite resource. <strong>RelaxTouch Menlo Park</strong> is a small wellness massage studio designed for the same idea applied to the body — an hour spent intentionally, not optimized.</p><p>Licensed therapists, premium oils, heated linens, no music piped in from a public playlist. Open <strong>9 AM to midnight, daily</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230.</strong></li><li><strong>30-minute — $200.</strong></li><li><strong>15-minute — $140.</strong></li></ul><h3>Modalities</h3><ul><li>Swedish · Deep tissue · Hot stone · Sports recovery · Prenatal · Full-body relaxation.</li></ul><p>Each modality is performed by a therapist licensed and trained specifically in that style.</p>",
+      "about_studio_html": "<p>Small studio, warm light, heated linens, premium organic oils with a fragrance-free option. Discreet entrance and parking, sessions spaced so you'll never overlap with the next guest. First visit: arrive ten minutes early for a brief intake.</p>",
+      "faq_json": [
+        {"q": "How early should I arrive?", "a": "Ten minutes first visit, five thereafter."},
+        {"q": "What should I wear?", "a": "Undress to your level of comfort under heated linens; therapist only uncovers the area being worked on."},
+        {"q": "Booking in advance?", "a": "Mid-day same-day is often possible. Evenings and weekends — a day ahead."},
+        {"q": "Travel often?", "a": "Hot stone or 30-minute focused work on neck and shoulders is the most-requested combination after long flights."},
+        {"q": "How often should I come?", "a": "Bi-weekly for chronic tension; monthly for maintenance."},
+        {"q": "Gift cards?", "a": "Digital, by email — ask the studio."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 50,
+      "status": "draft"
+    },
+    {
+      "slug": "carlsbad-ca",
+      "city": "Carlsbad",
+      "state": "CA",
+      "state_full": "California",
+      "country": "US",
+      "title": "Premium Wellness Massage in Carlsbad, CA",
+      "h1": "Wellness Massage in Carlsbad",
+      "meta_description": "Premium coastal massage studio in Carlsbad, North County San Diego. Open 9 AM to midnight, daily. Licensed therapists, premium oils, heated linens.",
+      "og_image": "https://images.unsplash.com/photo-1620733723572-11c53f73a416?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Coastal North County has a rhythm — surf, work, family, sleep — and most spas were not built for it. <strong>RelaxTouch Carlsbad</strong> is a small wellness massage studio built for that rhythm: licensed therapists, unhurried sessions, and hours that include the times you actually have free.</p><p>Open <strong>9 AM to midnight, every day</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200 · 15-minute — $140.</strong></li></ul><h3>Modalities</h3><ul><li>Swedish · Deep tissue · Hot stone · Sports recovery (popular with surfers and runners) · Prenatal · Full-body relaxation.</li></ul>",
+      "about_studio_html": "<p>Small studio, warm light, heated linens, premium organic oils. Parking is easy and the entrance is discreet. First visit: arrive ten minutes early for a brief intake. Sessions end with two minutes of stillness.</p>",
+      "faq_json": [
+        {"q": "Sore from surfing?", "a": "Tell the therapist at intake — sports recovery work on shoulders, lats and lower back is the most-requested treatment here."},
+        {"q": "How early should I arrive?", "a": "Ten minutes first visit, five thereafter."},
+        {"q": "Same-day booking?", "a": "Often possible mid-day; evenings book up faster."},
+        {"q": "How often should I come?", "a": "Weekly to bi-weekly for active bodies; monthly for maintenance."},
+        {"q": "Gift cards?", "a": "Digital, by email."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 60,
+      "status": "draft"
+    },
+    {
+      "slug": "riverside-ca",
+      "city": "Riverside",
+      "state": "CA",
+      "state_full": "California",
+      "country": "US",
+      "title": "Premium Wellness Massage in Riverside, CA",
+      "h1": "Wellness Massage in Riverside",
+      "meta_description": "Premium massage studio in Riverside, Inland Empire. Swedish, deep tissue, hot stone, sports and prenatal massage. Open 9 AM to midnight, daily.",
+      "og_image": "https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Long commutes, long heat, long days. <strong>RelaxTouch Riverside</strong> is a small wellness massage studio built for the Inland Empire's reality — a quiet, well-conditioned room and a licensed therapist whose only job for the next hour is your nervous system.</p><p>Open <strong>9 AM to midnight, every day</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200 · 15-minute — $140.</strong></li></ul><h3>Modalities</h3><ul><li>Swedish · Deep tissue · Hot stone · Sports recovery · Prenatal · Full-body relaxation.</li></ul>",
+      "about_studio_html": "<p>Small, cool, quiet. Heated linens, premium organic oils, soft light. Easy parking. First visit: arrive ten minutes early for a brief intake.</p>",
+      "faq_json": [
+        {"q": "Stiff from a long commute?", "a": "Most-requested combination here is 60 minutes Swedish with focused work on the lower back and hips."},
+        {"q": "What should I wear?", "a": "Undress to your level of comfort under heated linens."},
+        {"q": "Same-day booking?", "a": "Often available mid-day; evenings book up."},
+        {"q": "How often?", "a": "Weekly to bi-weekly for chronic tension; monthly for maintenance."},
+        {"q": "Gift cards?", "a": "Digital, by email."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 70,
+      "status": "draft"
+    },
+    {
+      "slug": "arlington-va",
+      "city": "Arlington",
+      "state": "VA",
+      "state_full": "Virginia",
+      "country": "US",
+      "title": "Premium Wellness Massage in Arlington, VA",
+      "h1": "Wellness Massage in Arlington",
+      "meta_description": "Premium massage studio in Arlington, VA — minutes from the Pentagon and Rosslyn. Open 9 AM to midnight, daily. Licensed therapists, premium oils, heated linens.",
+      "og_image": "https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Arlington's pace is the pace of the people running it — early starts, classified calendars, late returns home. <strong>RelaxTouch Arlington</strong> is a small wellness massage studio built for that pace: licensed therapists, discreet rooms, and hours that fit the way you actually live.</p><p>Open <strong>9 AM to midnight, every day</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200 · 15-minute — $140.</strong></li></ul><h3>Modalities</h3><ul><li>Swedish · Deep tissue · Hot stone · Sports recovery · Prenatal · Full-body relaxation — each performed by a licensed therapist trained in that modality.</li></ul>",
+      "about_studio_html": "<p>Small, quiet, warm. Heated linens, premium organic oils with a fragrance-free option. Discreet entrance, easy parking. Sessions are spaced so you'll never overlap with the next guest. First visit: arrive ten minutes early for a brief intake.</p>",
+      "faq_json": [
+        {"q": "How early should I arrive?", "a": "Ten minutes first time; five thereafter."},
+        {"q": "What should I wear?", "a": "Undress to your level of comfort under heated linens."},
+        {"q": "Same-day booking?", "a": "Often possible mid-day; evenings and weekends fill up."},
+        {"q": "Frequent flyer?", "a": "Hot stone work or focused 30-minute sessions on the neck and lower back are the most-requested treatments after long flights."},
+        {"q": "How often?", "a": "Weekly to bi-weekly for chronic tension; monthly for maintenance."},
+        {"q": "Gift cards?", "a": "Digital, by email."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 80,
+      "status": "draft"
+    },
+    {
+      "slug": "chicago-il",
+      "city": "Chicago",
+      "state": "IL",
+      "state_full": "Illinois",
+      "country": "US",
+      "title": "Premium Wellness Massage in Chicago, IL",
+      "h1": "Wellness Massage in Chicago",
+      "meta_description": "Premium massage studio in Chicago. Swedish, deep tissue, hot stone, sports and prenatal massage by licensed therapists. Open 9 AM to midnight, daily.",
+      "og_image": "https://images.unsplash.com/photo-1487014679447-9f8336841d58?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Chicago doesn't apologize for any of its weather, and it's hard on a body. <strong>RelaxTouch Chicago</strong> is a small wellness massage studio built around the months your shoulders spend braced against the cold — heated rooms, heated linens, and licensed therapists trained to actually move warmth into the muscle.</p><p>Open <strong>9 AM to midnight, every day</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200 · 15-minute — $140.</strong></li></ul><h3>Modalities</h3><ul><li>Swedish · Deep tissue · Hot stone (especially good in winter) · Sports recovery · Prenatal · Full-body relaxation.</li></ul>",
+      "about_studio_html": "<p>Small studio, warm light, heated linens, premium organic oils. Discreet entrance, sessions spaced so you'll never overlap with the next guest. First visit: arrive ten minutes early for a brief intake.</p>",
+      "faq_json": [
+        {"q": "Cold-weather body?", "a": "Hot stone is our most-booked modality between November and March — basalt stones placed and used to drive warmth deep into the muscle."},
+        {"q": "How early should I arrive?", "a": "Ten minutes first visit, five thereafter."},
+        {"q": "Same-day booking?", "a": "Often possible mid-day; evenings and weekends — a day ahead."},
+        {"q": "How often?", "a": "Weekly to bi-weekly for chronic tension; monthly for maintenance."},
+        {"q": "Gift cards?", "a": "Digital, by email."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 90,
+      "status": "draft"
+    },
+    {
+      "slug": "houston-tx",
+      "city": "Houston",
+      "state": "TX",
+      "state_full": "Texas",
+      "country": "US",
+      "title": "Premium Wellness Massage in Houston, TX",
+      "h1": "Wellness Massage in Houston",
+      "meta_description": "Premium massage studio in Houston. Swedish, deep tissue, hot stone, sports and prenatal massage by licensed therapists. Open 9 AM to midnight, daily.",
+      "og_image": "https://images.unsplash.com/photo-1633293376691-4dd2f7d80a47?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Houston runs hard. Energy industry hours, humid heat, traffic that doesn't care about your evening plans. <strong>RelaxTouch Houston</strong> is a small wellness massage studio built for that schedule — quiet rooms, late hours, and licensed therapists whose only job for the next hour is your body.</p><p>Open <strong>9 AM to midnight, every day</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200 · 15-minute — $140.</strong></li></ul><h3>Modalities</h3><ul><li>Swedish · Deep tissue · Hot stone · Sports recovery · Prenatal · Full-body relaxation.</li></ul>",
+      "about_studio_html": "<p>Cool, quiet, dim. Heated linens, premium organic oils with a fragrance-free option. Easy parking. Sessions are spaced so you'll never overlap with the next guest. First visit: arrive ten minutes early for a brief intake.</p>",
+      "faq_json": [
+        {"q": "How early should I arrive?", "a": "Ten minutes first visit, five thereafter."},
+        {"q": "What should I wear?", "a": "Undress to your level of comfort under heated linens."},
+        {"q": "Same-day booking?", "a": "Often possible mid-day; evenings book up."},
+        {"q": "Frequent flyer?", "a": "Sports recovery or hot stone is the most-requested combination after long flights."},
+        {"q": "How often?", "a": "Weekly to bi-weekly for chronic tension; monthly for maintenance."},
+        {"q": "Gift cards?", "a": "Digital, by email."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 100,
+      "status": "draft"
+    },
+    {
+      "slug": "denver-co",
+      "city": "Denver",
+      "state": "CO",
+      "state_full": "Colorado",
+      "country": "US",
+      "title": "Premium Wellness Massage in Denver, CO",
+      "h1": "Wellness Massage in Denver",
+      "meta_description": "Premium massage studio in Denver — built for altitude, hikes, and an active lifestyle. Open 9 AM to midnight, daily.",
+      "og_image": "https://images.unsplash.com/photo-1551601651-2a8555f1a136?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Mile-high air, cold mornings, mountain weekends. Denver bodies tend to be active bodies, and active bodies have particular needs. <strong>RelaxTouch Denver</strong> is a small wellness massage studio built for those needs — sports recovery, deep tissue, and the long Swedish session your legs will thank you for after a hike.</p><p>Open <strong>9 AM to midnight, every day</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200 · 15-minute — $140.</strong></li></ul><h3>Modalities</h3><ul><li>Swedish · Deep tissue · Hot stone · Sports recovery (especially popular here) · Prenatal · Full-body relaxation.</li></ul>",
+      "about_studio_html": "<p>Small, warm, quiet. Heated linens, premium organic oils. Easy parking. First visit: arrive ten minutes early for a brief intake — and tell us if you're a few days into altitude, we'll adjust the work.</p>",
+      "faq_json": [
+        {"q": "Sore from a hike or ride?", "a": "Sports recovery and deep tissue on legs and lower back are the most-requested combination here."},
+        {"q": "Visiting from sea level?", "a": "Hydrate well before your session — altitude shifts how the body responds to massage."},
+        {"q": "Same-day booking?", "a": "Mid-day usually works; weekends fill up."},
+        {"q": "How often?", "a": "Weekly to bi-weekly for active bodies; monthly for maintenance."},
+        {"q": "Gift cards?", "a": "Digital, by email."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 110,
+      "status": "draft"
+    },
+    {
+      "slug": "sacramento-ca",
+      "city": "Sacramento",
+      "state": "CA",
+      "state_full": "California",
+      "country": "US",
+      "title": "Premium Wellness Massage in Sacramento, CA",
+      "h1": "Wellness Massage in Sacramento",
+      "meta_description": "Premium massage studio in Sacramento. Swedish, deep tissue, hot stone, sports and prenatal massage. Open 9 AM to midnight, daily.",
+      "og_image": "https://images.unsplash.com/photo-1611073615452-4889ea4f00bd?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Capitol hours, dry summers, long commutes off the I-5 corridor. <strong>RelaxTouch Sacramento</strong> is a small wellness massage studio built for the rhythm of the city — licensed therapists, unhurried sessions, and hours that include the parts of the day you actually have free.</p><p>Open <strong>9 AM to midnight, every day</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200 · 15-minute — $140.</strong></li></ul><h3>Modalities</h3><ul><li>Swedish · Deep tissue · Hot stone · Sports recovery · Prenatal · Full-body relaxation.</li></ul>",
+      "about_studio_html": "<p>Small studio, warm light, heated linens. Easy parking, discreet entrance. First visit: arrive ten minutes early for a brief intake.</p>",
+      "faq_json": [
+        {"q": "How early should I arrive?", "a": "Ten minutes first visit, five thereafter."},
+        {"q": "What should I wear?", "a": "Undress to your level of comfort under heated linens."},
+        {"q": "Same-day?", "a": "Mid-day often works; evenings book up."},
+        {"q": "How often?", "a": "Weekly to bi-weekly for chronic tension; monthly for maintenance."},
+        {"q": "Gift cards?", "a": "Digital, by email."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 120,
+      "status": "draft"
+    },
+    {
+      "slug": "brooklyn-ny",
+      "city": "Brooklyn",
+      "state": "NY",
+      "state_full": "New York",
+      "country": "US",
+      "title": "Premium Wellness Massage in Brooklyn, NY",
+      "h1": "Wellness Massage in Brooklyn",
+      "meta_description": "Premium massage studio in Brooklyn — built for the pace of New York. Swedish, deep tissue, hot stone, sports and prenatal massage. Open 9 AM to midnight, daily.",
+      "og_image": "https://images.unsplash.com/photo-1495395308942-eaa8e8e3a4ae?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Brooklyn doesn't slow down for a body. Subway stairs, walking miles, the kind of week that ends with you not entirely sure what day it is. <strong>RelaxTouch Brooklyn</strong> is a small wellness massage studio designed for that — a quiet, beautiful room and a therapist whose only job for the next hour is to give your nervous system a break.</p><p>Open <strong>9 AM to midnight, every day</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200 · 15-minute — $140.</strong></li></ul><h3>Modalities</h3><ul><li>Swedish · Deep tissue · Hot stone · Sports recovery · Prenatal · Full-body relaxation — performed by licensed therapists trained specifically in that modality.</li></ul>",
+      "about_studio_html": "<p>Small, soft-lit, quiet. Heated linens, premium organic oils with a fragrance-free option. Sessions are spaced so you'll never overlap with the next guest. First visit: arrive ten minutes early for a brief intake.</p>",
+      "faq_json": [
+        {"q": "Sore from walking the city?", "a": "Most-requested combination here is 60 minutes Swedish with focused work on calves, lower back and neck."},
+        {"q": "Late session okay?", "a": "Yes — we book up to 11 PM and the session itself can run until midnight."},
+        {"q": "Same-day booking?", "a": "Mid-day often works; evenings fill up — a day ahead is safer."},
+        {"q": "How often?", "a": "Weekly to bi-weekly for chronic tension; monthly for maintenance."},
+        {"q": "Gift cards?", "a": "Digital, by email."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 130,
+      "status": "draft"
+    },
+    {
+      "slug": "phoenix-az",
+      "city": "Phoenix",
+      "state": "AZ",
+      "state_full": "Arizona",
+      "country": "US",
+      "title": "Premium Wellness Massage in Phoenix, AZ",
+      "h1": "Wellness Massage in Phoenix",
+      "meta_description": "Premium massage studio in Phoenix. Swedish, deep tissue, hot stone, sports and prenatal massage by licensed therapists. Open 9 AM to midnight, daily.",
+      "og_image": "https://images.unsplash.com/photo-1610021684557-90c4ea1bef72?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Desert summers are hard on a body, golf is harder. <strong>RelaxTouch Phoenix</strong> is a small wellness massage studio built for the climate and the lifestyle — cool quiet rooms, licensed therapists, and treatments tuned for the way bodies actually move here.</p><p>Open <strong>9 AM to midnight, every day</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200 · 15-minute — $140.</strong></li></ul><h3>Modalities</h3><ul><li>Swedish · Deep tissue · Hot stone · Sports recovery (popular with golfers) · Prenatal · Full-body relaxation.</li></ul>",
+      "about_studio_html": "<p>Cool, dim, quiet. Heated linens, premium organic oils. Easy parking, discreet entrance. First visit: arrive ten minutes early for a brief intake.</p>",
+      "faq_json": [
+        {"q": "Sore after golf?", "a": "Sports recovery on rotational muscles — obliques, lats, shoulders and hips — is the most-requested treatment here."},
+        {"q": "Hydrate before?", "a": "Always, especially in summer. Massage moves fluids; bodies that arrive dehydrated don't enjoy it as much."},
+        {"q": "Same-day?", "a": "Often possible mid-day; evenings fill up."},
+        {"q": "How often?", "a": "Weekly to bi-weekly for active bodies; monthly for maintenance."},
+        {"q": "Gift cards?", "a": "Digital, by email."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 140,
+      "status": "draft"
+    },
+    {
+      "slug": "austin-tx",
+      "city": "Austin",
+      "state": "TX",
+      "state_full": "Texas",
+      "country": "US",
+      "title": "Premium Wellness Massage in Austin, TX",
+      "h1": "Wellness Massage in Austin",
+      "meta_description": "Premium massage studio in Austin. Swedish, deep tissue, hot stone, sports and prenatal massage by licensed therapists. Open 9 AM to midnight, daily.",
+      "og_image": "https://images.unsplash.com/photo-1604505761090-aaeac0e3da8e?w=1200&h=630&fit=crop&q=80",
+      "intro_html": "<p>Austin moves on its own time — late mornings, late nights, weekends that turn into Mondays. <strong>RelaxTouch Austin</strong> is a small wellness massage studio built for the city's rhythm: licensed therapists, unhurried sessions, and hours that fit a life with shows, conferences and 6 AM runs.</p><p>Open <strong>9 AM to midnight, every day</strong>.</p>",
+      "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200 · 15-minute — $140.</strong></li></ul><h3>Modalities</h3><ul><li>Swedish · Deep tissue · Hot stone · Sports recovery · Prenatal · Full-body relaxation.</li></ul>",
+      "about_studio_html": "<p>Small, warm, quiet. Heated linens, premium organic oils, fragrance-free option available. Sessions spaced so you'll never overlap with the next guest. First visit: arrive ten minutes early for a brief intake.</p>",
+      "faq_json": [
+        {"q": "Just got off a flight?", "a": "Hot stone or 30-minute focused work on neck and lower back is the most-requested combination after travel."},
+        {"q": "Sore from a run on the trail?", "a": "Sports recovery on legs and hips — that's the most common ask from runners here."},
+        {"q": "Late session?", "a": "Yes, we book up to 11 PM."},
+        {"q": "How often?", "a": "Weekly to bi-weekly for chronic tension; monthly for maintenance."},
+        {"q": "Gift cards?", "a": "Digital, by email."}
+      ],
+      "hours_json": [
+        {"day": "Monday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Tuesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Wednesday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Thursday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Friday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Saturday", "open": "9:00 AM", "close": "12:00 AM"},
+        {"day": "Sunday", "open": "9:00 AM", "close": "12:00 AM"}
+      ],
+      "position": 150,
+      "status": "draft"
+    }
+  ]
+}

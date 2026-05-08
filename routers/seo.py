@@ -313,6 +313,7 @@ def _site_subnav(site_id: int, active: str) -> str:
         ("categories","Рубрики",          f"/seo/sites/{site_id}/categories"),
         ("authors",   "Авторы",           f"/seo/sites/{site_id}/authors"),
         ("redirects", "Редиректы",        f"/seo/sites/{site_id}/redirects"),
+        ("import",    "📥 Импорт JSON",   f"/seo/sites/{site_id}/import"),
         ("preview",   "Превью",           f"/seo/preview/{site_id}/"),
     ]
     out = '<div class="seo-tabs">'
@@ -1280,3 +1281,205 @@ async def _seo_preview(request: Request, site_id: int, path: str):
     site, e = _site_or_404(site_id)
     if e: return e
     return await dispatch_seo_request(request, site, preview=True, preview_path=path)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# BULK IMPORT — заливка контента из JSON одним кликом
+# ════════════════════════════════════════════════════════════════════════════
+
+@router.get("/seo/sites/{site_id}/import", response_class=HTMLResponse)
+async def seo_import_form(request: Request, site_id: int):
+    user, err = _admin_check(request)
+    if err: return err
+    site, e = _site_or_404(site_id)
+    if e: return e
+    content = f'''
+<div class="seo-h1">{_esc(site.get("name") or "")}</div>
+{_site_subnav(site_id, "settings")}
+<div class="seo-card" style="margin-top:18px">
+<div class="seo-h2">Bulk-import: залить контент из JSON</div>
+<p style="color:var(--text2);font-size:.88rem;margin-bottom:12px">
+Вставь JSON ниже. Поддерживаемые секции: <code>site_settings</code>, <code>categories</code>,
+<code>authors</code>, <code>locations</code>, <code>pages</code>, <code>articles</code>.
+Каждая — массив объектов (кроме site_settings — это объект).
+</p>
+<p style="color:var(--text3);font-size:.78rem;margin-bottom:12px">
+По умолчанию существующие записи (по slug) <b>пропускаются</b>. Включи галку чтобы перезаписывать.
+</p>
+<form class="seo-form" method="post" action="/seo/sites/{site_id}/import">
+<div class="field"><label>JSON</label><textarea name="json_data" rows="22" placeholder='{{"site_settings":{{"brand_name":"..."}},"locations":[...]}}' required></textarea></div>
+<div class="field"><label class="checkbox"><input type="checkbox" name="update_existing" value="1"> Перезаписывать существующие (по slug)</label></div>
+<button class="seo-btn">Импортировать</button>
+<a href="/seo/sites/{site_id}" class="seo-btn secondary">Отмена</a>
+</form>
+</div>
+'''
+    return HTMLResponse(_layout(content, request, breadcrumb=f'<a href="/seo/sites/{site_id}">{_esc(site.get("name") or "")}</a> / Import'))
+
+
+@router.post("/seo/sites/{site_id}/import")
+async def seo_import_run(request: Request, site_id: int,
+                          json_data: str = Form(...),
+                          update_existing: str = Form("")):
+    user, err = _admin_check(request)
+    if err: return err
+    site, e = _site_or_404(site_id)
+    if e: return e
+
+    try:
+        data = _json.loads(json_data)
+    except Exception as ex:
+        return _redirect_to(f"/seo/sites/{site_id}/import", err=f"Невалидный JSON: {ex}")
+
+    update = bool(update_existing)
+    counts = {"settings": 0, "cats": 0, "authors": 0, "locs": 0,
+              "pages": 0, "arts": 0, "skipped": 0, "errors": []}
+
+    try:
+        # 1. Site settings
+        if isinstance(data.get("site_settings"), dict):
+            try:
+                _db.update_seo_site(site_id, **data["site_settings"])
+                counts["settings"] = 1
+            except Exception as ex:
+                counts["errors"].append(f"site_settings: {ex}")
+
+        # 2. Categories (slug → id мапим для articles)
+        cat_slug_to_id = {c["slug"]: c["id"] for c in _db.get_seo_categories(site_id)}
+        for c in (data.get("categories") or []):
+            slug = (c.get("slug") or "").strip()
+            if not slug: continue
+            try:
+                if slug in cat_slug_to_id:
+                    if update:
+                        _db.update_seo_category(cat_slug_to_id[slug],
+                            **{k: v for k, v in c.items() if k != "slug"})
+                        counts["cats"] += 1
+                    else:
+                        counts["skipped"] += 1
+                else:
+                    new_id = _db.create_seo_category(
+                        site_id, slug=slug, name=c.get("name", slug),
+                        **{k: v for k, v in c.items() if k not in ("slug", "name")}
+                    )
+                    cat_slug_to_id[slug] = new_id
+                    counts["cats"] += 1
+            except Exception as ex:
+                counts["errors"].append(f"category {slug}: {ex}")
+
+        # 3. Authors
+        author_slug_to_id = {a["slug"]: a["id"] for a in _db.get_seo_authors(site_id)}
+        for a in (data.get("authors") or []):
+            slug = (a.get("slug") or "").strip()
+            if not slug: continue
+            try:
+                if slug in author_slug_to_id:
+                    if update:
+                        _db.update_seo_author(author_slug_to_id[slug],
+                            **{k: v for k, v in a.items() if k != "slug"})
+                        counts["authors"] += 1
+                    else:
+                        counts["skipped"] += 1
+                else:
+                    new_id = _db.create_seo_author(
+                        site_id, slug=slug, name=a.get("name", slug),
+                        **{k: v for k, v in a.items() if k not in ("slug", "name")}
+                    )
+                    author_slug_to_id[slug] = new_id
+                    counts["authors"] += 1
+            except Exception as ex:
+                counts["errors"].append(f"author {slug}: {ex}")
+
+        # 4. Locations
+        existing_loc = {l["slug"]: l["id"] for l in _db.get_seo_locations(site_id)}
+        for loc in (data.get("locations") or []):
+            slug = (loc.get("slug") or "").strip()
+            if not slug: continue
+            try:
+                payload = {k: v for k, v in loc.items() if k != "slug"}
+                if "faq_json" in payload and not isinstance(payload["faq_json"], str):
+                    payload["faq_json"] = _json.dumps(payload["faq_json"], ensure_ascii=False)
+                if "hours_json" in payload and not isinstance(payload["hours_json"], str):
+                    payload["hours_json"] = _json.dumps(payload["hours_json"], ensure_ascii=False)
+                if slug in existing_loc:
+                    if update:
+                        _db.update_seo_location(existing_loc[slug], **payload)
+                        counts["locs"] += 1
+                    else:
+                        counts["skipped"] += 1
+                else:
+                    _db.create_seo_location(
+                        site_id, slug=slug,
+                        city=loc.get("city", ""), state=loc.get("state", ""),
+                        **{k: v for k, v in payload.items() if k not in ("city", "state")}
+                    )
+                    counts["locs"] += 1
+            except Exception as ex:
+                counts["errors"].append(f"location {slug}: {ex}")
+
+        # 5. Pages
+        existing_pages = {p["slug"]: p["id"] for p in _db.get_seo_pages(site_id)}
+        for p in (data.get("pages") or []):
+            slug = (p.get("slug") or "").strip()
+            if not slug: continue
+            try:
+                payload = {k: v for k, v in p.items() if k != "slug"}
+                if slug in existing_pages:
+                    if update:
+                        _db.update_seo_page(existing_pages[slug], **payload)
+                        counts["pages"] += 1
+                    else:
+                        counts["skipped"] += 1
+                else:
+                    _db.create_seo_page(site_id, slug=slug, **payload)
+                    counts["pages"] += 1
+            except Exception as ex:
+                counts["errors"].append(f"page {slug}: {ex}")
+
+        # 6. Articles (резолвим category_slug / author_slug → id)
+        existing_arts = {a["slug"]: a["id"] for a in _db.get_seo_articles(site_id)}
+        for art in (data.get("articles") or []):
+            slug = (art.get("slug") or "").strip()
+            if not slug: continue
+            try:
+                payload = dict(art)
+                payload.pop("slug", None)
+                # Резолв slug → id
+                cs = payload.pop("category_slug", None)
+                if cs and cs in cat_slug_to_id:
+                    payload["category_id"] = cat_slug_to_id[cs]
+                au = payload.pop("author_slug", None)
+                if au and au in author_slug_to_id:
+                    payload["author_id"] = author_slug_to_id[au]
+                if slug in existing_arts:
+                    if update:
+                        _db.update_seo_article(existing_arts[slug], **payload)
+                        counts["arts"] += 1
+                    else:
+                        counts["skipped"] += 1
+                else:
+                    title = payload.pop("title", slug)
+                    _db.create_seo_article(site_id, slug=slug, title=title, **payload)
+                    counts["arts"] += 1
+            except Exception as ex:
+                counts["errors"].append(f"article {slug}: {ex}")
+
+    except Exception as ex:
+        log.error(f"[SEO] import fatal: {ex}", exc_info=True)
+        return _redirect_to(f"/seo/sites/{site_id}/import", err=f"Fatal: {ex}")
+
+    # Сборка отчёта
+    msg_parts = []
+    if counts["settings"]: msg_parts.append("настройки сайта")
+    if counts["cats"]:    msg_parts.append(f"рубрики: {counts['cats']}")
+    if counts["authors"]: msg_parts.append(f"авторы: {counts['authors']}")
+    if counts["locs"]:    msg_parts.append(f"локации: {counts['locs']}")
+    if counts["pages"]:   msg_parts.append(f"страницы: {counts['pages']}")
+    if counts["arts"]:    msg_parts.append(f"статьи: {counts['arts']}")
+    if counts["skipped"]: msg_parts.append(f"пропущено: {counts['skipped']}")
+    summary = "Импорт: " + (", ".join(msg_parts) if msg_parts else "ничего не залилось")
+    if counts["errors"]:
+        first_err = counts["errors"][0][:120]
+        return _redirect_to(f"/seo/sites/{site_id}/import",
+                            err=f"{summary}. Ошибок: {len(counts['errors'])}. Первая: {first_err}")
+    return _redirect_to(f"/seo/sites/{site_id}", msg=summary)

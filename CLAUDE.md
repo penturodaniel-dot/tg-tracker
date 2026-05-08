@@ -2,8 +2,14 @@
 
 ## Что это за проект
 
-CRM-система для отслеживания лидов и общения с клиентами через Telegram и WhatsApp.
-Основные задачи: трекинг вступлений в TG-каналы → Meta/TikTok Conversions API, управление перепиской в TG-аккаунте и WA, аналитика по лидам и сотрудникам.
+CRM-система для отслеживания лидов и общения с клиентами через Telegram и WhatsApp,
+плюс мульти-сайтовая SEO-CMS для продвижения контентных проектов в Google.
+
+Основные задачи:
+- Трекинг вступлений в TG-каналы → Meta / TikTok Conversions API
+- Управление перепиской в подключённом TG-аккаунте (Telethon) и WhatsApp
+- Аналитика по лидам и сотрудникам
+- **SEO-модуль:** мульти-сайт CMS под кастомные домены — лендинги по городам, статьи, статические страницы, sitemap, Schema.org, контакты на локацию (TG / phone / WA / email)
 
 ---
 
@@ -49,7 +55,8 @@ CLOUDINARY_API_SECRET
 ## Структура файлов
 
 ```
-main.py                  # FastAPI app, lifespan, auth, лендинги, роутинг
+main.py                  # FastAPI app, lifespan, auth, лендинги, роутинг,
+                          #   CustomDomainMiddleware (SEO + landings)
 database.py              # Класс Database — все SQL-запросы, in-memory TTL кэш
 bot_manager.py           # BOT1 (Трекер) + BOT2 (Уведомления) — aiogram
 meta_capi.py             # Meta Conversions API — send_subscribe_event()
@@ -57,6 +64,8 @@ tiktok_capi.py           # TikTok CAPI
 cloudinary_upload.py     # Загрузка медиа на Cloudinary
 client_templates.py      # HTML-шаблоны клиентских страниц
 landing_templates.py     # HTML-шаблоны лендингов (несколько вариантов)
+seo_templates.py         # HTML/XML-рендереры публичных страниц SEO-сайтов
+                          #   (главная, локация, статья, sitemap, robots, 404)
 
 routers/
   chat_tga.py            # TG Аккаунт чат (переписка через Telethon-сервис)
@@ -69,14 +78,23 @@ routers/
   scripts.py             # Скрипты продаж
   users_tags.py          # Пользователи CRM, теги, права доступа
   settings.py            # Настройки CRM (боты, пиксели, безопасность)
+  seo.py                 # SEO-модуль: dispatch_seo_request (для middleware)
+                          #   + админка под /seo/* (CRUD сайтов / локаций /
+                          #   страниц / статей / контактов / редиректов)
+                          #   + bulk JSON import + admin preview
 
 frontend/
   src/
-    components/NavSidebar.jsx   # Боковое меню
+    components/NavSidebar.jsx   # Боковое меню (включая пункт SEO)
     ...                         # Остальные React-компоненты
   dist/                  # Скомпилированный бандл — КОММИТИТСЯ В GIT
   package.json
   vite.config.js
+
+docs/
+  seo-content/
+    relaxtouchtoday-bootstrap.json  # Стартовый контент для SEO-сайтов
+                                     # (для импорта через /seo/sites/{id}/import)
 ```
 
 ---
@@ -171,7 +189,55 @@ Railway автоматически запускает nixpacks:
 3. `external_id` = sha256(telegram_user_id)
 4. IP-адрес и User-Agent (помогают делать matching, сохраняются при клике)
 
+### SEO-модуль (мульти-сайт CMS)
+
+Полностью изолированный модуль. **НЕ зависит** и **не модифицирует** существующую логику чатов, лидов, лендингов, ботов или CAPI.
+
+**Архитектура:**
+- 8 таблиц с префиксом `seo_`: `seo_sites`, `seo_locations`, `seo_location_contacts`, `seo_pages`, `seo_categories`, `seo_authors`, `seo_articles`, `seo_redirects`. Lazy init через `_init_seo_tables()`.
+- Каждый сайт — независимая конфигурация: домен, язык, бренд, палитра, GA, FB Pixel, Schema.org Organization, кастомный header/footer HTML.
+- Status сайта: `draft` (виден только в админ-preview) или `live` (отдаётся публично на своём домене).
+
+**Маршрутизация (CustomDomainMiddleware в `main.py`):**
+1. Системный домен (`*.railway.app`, `localhost`) → передача дальше по обычной логике CRM.
+2. Кастомный домен есть в `seo_sites` И `status='live'` → `dispatch_seo_request(request, site)` из `routers/seo.py`. Все ошибки внутри ловятся → middleware никогда не падает из-за SEO-багов.
+3. Иначе → фолбэк на существующую логику лендингов (без изменений).
+
+**Публичный рендер (`seo_templates.py`):**
+- Полная SEO-обвязка: `<title>`, meta description, canonical, Open Graph, Twitter Card, Schema.org JSON-LD (`Organization`, `WebSite`, `LocalBusiness` + `HealthAndBeautyBusiness`, `Article`)
+- `sitemap.xml` и `robots.txt` генерируются автоматически на каждый сайт
+- Inline CSS с подстановкой палитры через `__PRIMARY__` / `__SECONDARY__` (через `.replace()`, НЕ `%`-formatting — в CSS есть `100%` который ломает % syntax)
+- Google Fonts (Inter + Playfair Display) с `font-display: swap`
+- Mobile-responsive
+- Контакт-кнопки: `tel:`, `mailto:`, `t.me/`, `wa.me/`, `sms:` + inline SVG-иконки
+
+**Маршруты публичные** (на SEO-домене):
+- `/` — главная (locations grid + recent articles)
+- `/blog` — индекс статей
+- `/blog/category/<slug>` — статьи рубрики
+- `/blog/<slug>` — статья
+- `/<slug>` — локация (приоритет) или статическая страница
+- `/sitemap.xml` / `/robots.txt`
+
+**Админка** (на CRM-домене, под `/seo/*`):
+- `/seo` — список сайтов
+- `/seo/sites/{id}` — настройки (брендинг, домен, палитра, GA, status)
+- `/seo/sites/{id}/locations` — города (CRUD), на каждой — адрес, координаты, FAQ JSON, hours JSON, контакты
+- `/seo/sites/{id}/pages` — статические (about, contact, privacy, terms, services)
+- `/seo/sites/{id}/articles` — блог (категория, автор, content_html, pillar-флаг, view counter)
+- `/seo/sites/{id}/categories` / `/authors` / `/redirects`
+- `/seo/sites/{id}/import` — **bulk-import JSON** (целая `site_settings` + категории + локации + страницы + статьи одним кликом). По умолчанию пропускает существующие slug; галка перезаписывает.
+- `/seo/preview/{id}/{path:path}` — admin-preview, **обходит фильтр `status='live'/published'`** чтобы можно было смотреть черновики. Внутри переписывает root-relative ссылки в preview-prefix чтобы навигация осталась внутри `/seo/preview/{id}/...`. **Важно:** при rewrite не переносить старые headers — `Content-Length` стухнет → пустая страница. Использовать `HTMLResponse(content=html, status_code=...)` без `headers=...`.
+
+**Доступ к админке:** только role=`admin`. Manager → 403.
+
+**Sidebar:** пункт «SEO → Сайты» добавлен в обе версии (React `NavSidebar.jsx` для TG-чатов и HTML `nav_html()` для всех остальных страниц).
+
+**Стартовый контент:** `docs/seo-content/relaxtouch-bootstrap.json` — 1 site_settings + 4 categories + 1 author + 4 static pages + 15 location pages для `relaxtouchtoday.com`. Импортируется через `/seo/sites/{id}/import`.
+
 ### Ключевые таблицы
+
+**Существующие (CRM core):**
 - `clicks` — клики на клиентских лендингах (для трекинга вступлений в каналы)
 - `staff_clicks` — клики на HR/staff лендингах (для трекинга первого сообщения в TG/WA)
 - `tg_account_conversations` / `tg_account_messages` — переписка через Telethon
@@ -183,6 +249,15 @@ Railway автоматически запускает nixpacks:
 - `staff` — база сотрудников
 - `settings` — key/value настройки CRM
 
+**SEO-модуль:**
+- `seo_sites` — сайты (домен, язык, брендинг, status)
+- `seo_locations` — города на сайте (адрес, координаты, FAQ, hours)
+- `seo_location_contacts` — телефоны / TG / WA / email на локацию (тип, value, is_primary)
+- `seo_pages` — статические страницы (about, contact, privacy, terms, services)
+- `seo_articles` — блог (slug → category, author, content_html, view_count)
+- `seo_categories` / `seo_authors`
+- `seo_redirects` — 301/302 редиректы с трекингом hits
+
 ---
 
 ## Права доступа (tab IDs)
@@ -193,7 +268,15 @@ tg_account_chat, wa_chat                # Чаты
 staff, staff_bonuses, scripts           # Сотрудники
 landings_staff, analytics_staff         # HR
 analytics_clients                       # Аналитика клиентов
+seo                                     # SEO-модуль (admin-only)
+tags, users, projects, settings         # Настройки (admin-only)
 ```
+
+> Боковая навигация описана в **двух местах**:
+> - `frontend/src/components/NavSidebar.jsx` — React-сайдбар (виден только в TG-чатах, кэшируется в `frontend/dist/`)
+> - `main.py` функция `nav_html()` — HTML-сайдбар (виден на всех остальных страницах)
+>
+> При добавлении нового пункта меню **нужно править оба файла** + ребилдить React: `cd frontend && npm run build && git add frontend/dist/`.
 
 ---
 

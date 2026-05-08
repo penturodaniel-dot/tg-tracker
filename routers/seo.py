@@ -17,10 +17,11 @@ import logging
 from html import escape as _esc
 from urllib.parse import unquote
 
-from fastapi import APIRouter, Request, Form
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi import APIRouter, Request, Form, UploadFile, File
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response, JSONResponse
 
 import seo_templates as tpl
+import cloudinary_upload as _cloud
 
 log = logging.getLogger(__name__)
 
@@ -290,7 +291,57 @@ _ADMIN_CSS = """<style>
 .seo-color-pair{display:flex;gap:8px}
 .seo-color-pair input[type=text]{flex:1}
 .seo-color-pair input[type=color]{width:42px;padding:0;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer}
-</style>"""
+.seo-img-row{display:flex;gap:8px;align-items:stretch}
+.seo-img-row input{flex:1;min-width:0}
+.seo-img-preview{margin-top:8px;min-height:0}
+.seo-img-preview img{max-width:240px;max-height:120px;border:1px solid var(--border);border-radius:6px;display:block;object-fit:cover}
+.seo-uploading{opacity:.5;pointer-events:none}
+</style>
+<script>
+function seoUpdImgPreview(name, url){
+  var prev=document.getElementById('seo-prev-'+name);
+  if(!prev) return;
+  if(url && url.trim()){
+    prev.innerHTML='<img src="'+url+'" alt="preview" loading="lazy" onerror="this.style.display=\\'none\\'">';
+  } else {
+    prev.innerHTML='';
+  }
+}
+async function seoUploadImage(inputName){
+  var inp=document.querySelector('input[name="'+inputName+'"]');
+  if(!inp) return;
+  var fi=document.createElement('input');
+  fi.type='file';
+  fi.accept='image/*';
+  fi.onchange=async function(e){
+    var file=e.target.files[0];
+    if(!file) return;
+    if(file.size>10*1024*1024){alert('Файл слишком большой. Максимум 10 MB.');return;}
+    var oldVal=inp.value;
+    inp.value='Загрузка...';
+    inp.classList.add('seo-uploading');
+    try{
+      var fd=new FormData();
+      fd.append('file', file);
+      var res=await fetch('/seo/upload',{method:'POST',body:fd});
+      var data=await res.json();
+      if(data.url){
+        inp.value=data.url;
+        seoUpdImgPreview(inputName, data.url);
+      } else {
+        inp.value=oldVal;
+        alert('Ошибка загрузки: '+(data.error||'неизвестно'));
+      }
+    } catch(err){
+      inp.value=oldVal;
+      alert('Ошибка: '+err.message);
+    } finally {
+      inp.classList.remove('seo-uploading');
+    }
+  };
+  fi.click();
+}
+</script>"""
 
 
 def _flash(request: Request) -> str:
@@ -370,6 +421,34 @@ def _f_color(label, name, value):
             f'<input type="text" name="{name}" value="{_esc(val)}">'
             f'<input type="color" value="{_esc(val)}" oninput="this.previousElementSibling.value=this.value">'
             f'</div></div>')
+
+
+def _f_image_url(label, name, value="", *, hint=""):
+    """Поле для URL картинки + кнопка «Загрузить» + превью.
+    Загруженный файл уходит в Cloudinary через /seo/upload, URL подставляется
+    в input автоматически.
+    """
+    val = value or ""
+    h = f'<div class="hint">{_esc(hint)}</div>' if hint else ""
+    preview_inner = ""
+    if val:
+        preview_inner = (
+            f'<img src="{_esc(val)}" alt="preview" loading="lazy" '
+            f'onerror="this.style.display=\'none\'">'
+        )
+    return (
+        f'<div class="field"><label>{_esc(label)}</label>'
+        f'<div class="seo-img-row">'
+        f'<input type="text" name="{name}" value="{_esc(val)}" '
+        f'placeholder="https://... или нажми «Загрузить» →" '
+        f'oninput="seoUpdImgPreview(\'{name}\', this.value)">'
+        f'<button type="button" class="seo-btn sm secondary" '
+        f'onclick="seoUploadImage(\'{name}\')">📤 Загрузить</button>'
+        f'</div>'
+        f'<div class="seo-img-preview" id="seo-prev-{name}">{preview_inner}</div>'
+        f'{h}'
+        f'</div>'
+    )
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -458,8 +537,8 @@ async def seo_site_edit(request: Request, site_id: int):
         _f_text("Brand name", "brand_name", site.get("brand_name", "")) +
         _f_text("Tagline", "tagline", site.get("tagline", ""), hint="Короткий слоган под H1")
     ) + (
-        _f_text("Logo URL", "logo_url", site.get("logo_url", "")) +
-        _f_text("Favicon URL", "favicon_url", site.get("favicon_url", ""))
+        _f_image_url("Logo URL", "logo_url", site.get("logo_url", "")) +
+        _f_image_url("Favicon URL", "favicon_url", site.get("favicon_url", ""))
     ) + (
         _f_color("Основной цвет", "color_primary", site.get("color_primary", "#7A9B76")) +
         _f_color("Акцентный цвет", "color_secondary", site.get("color_secondary", "#E8DDD0"))
@@ -468,7 +547,7 @@ async def seo_site_edit(request: Request, site_id: int):
     ) + (
         _f_textarea("Default meta description", "default_meta_description", site.get("default_meta_description", ""), rows=2, hint="Используется на страницах где не задан свой description")
     ) + (
-        _f_text("Default OG image URL", "default_og_image", site.get("default_og_image", ""))
+        _f_image_url("Default OG image URL", "default_og_image", site.get("default_og_image", ""))
     ) + "<div class='seo-h2'>Организация (для Schema.org)</div>" + "<div class='seo-grid seo-grid-2'>" + (
         _f_text("Юрлицо", "org_name", site.get("org_name", ""), hint="Например: RelaxTouch LLC") +
         _f_text("Phone", "org_phone", site.get("org_phone", ""))
@@ -655,7 +734,7 @@ async def seo_location_edit(request: Request, site_id: int, loc_id: int):
 {_f_text("Title (вкладка браузера)", "title", loc.get("title",""))}
 {_f_text("H1 (заголовок страницы)", "h1", loc.get("h1",""))}
 {_f_textarea("Meta description", "meta_description", loc.get("meta_description",""), rows=2)}
-{_f_text("OG image URL", "og_image", loc.get("og_image",""))}
+{_f_image_url("OG image URL", "og_image", loc.get("og_image",""))}
 <div class="seo-h2">Контент</div>
 {_f_textarea("Intro HTML (под H1)", "intro_html", loc.get("intro_html",""), rows=5)}
 {_f_textarea("Services HTML", "services_html", loc.get("services_html",""), rows=6)}
@@ -820,7 +899,7 @@ async def seo_page_edit(request: Request, site_id: int, page_id: int):
 {_f_text("Title", "title", page.get("title",""))}
 {_f_text("H1", "h1", page.get("h1",""))}
 {_f_textarea("Meta description", "meta_description", page.get("meta_description",""), rows=2)}
-{_f_text("OG image URL", "og_image", page.get("og_image",""))}
+{_f_image_url("OG image URL", "og_image", page.get("og_image",""))}
 {_f_text("Canonical URL (опц.)", "canonical_url", page.get("canonical_url",""))}
 {_f_textarea("Content HTML", "content_html", page.get("content_html",""), rows=14, hint="Произвольный HTML — параграфы, заголовки, списки, картинки.")}
 {_f_textarea("Schema.org JSON-LD (опц.)", "schema_json", page.get("schema_json",""), rows=4)}
@@ -969,7 +1048,7 @@ async def seo_article_edit(request: Request, site_id: int, art_id: int):
 {_f_text("H1", "h1", art.get("h1",""))}
 {_f_textarea("Excerpt (короткое описание для карточек)", "excerpt", art.get("excerpt",""), rows=3)}
 {_f_textarea("Meta description (для Google)", "meta_description", art.get("meta_description",""), rows=2)}
-{_f_text("OG image URL", "og_image", art.get("og_image",""))}
+{_f_image_url("OG image URL", "og_image", art.get("og_image",""))}
 {_f_text("Canonical URL (опц.)", "canonical_url", art.get("canonical_url",""))}
 {_f_text("Tags (через запятую)", "tags", art.get("tags",""))}
 {_f_textarea("Content HTML", "content_html", art.get("content_html",""), rows=24, hint="Произвольный HTML с заголовками H2/H3, параграфами, списками, картинками. Один H1 ставится автоматически.")}
@@ -1166,7 +1245,7 @@ async def seo_author_edit(request: Request, site_id: int, auth_id: int):
 {_f_text("Slug", "slug", a.get("slug",""), required=True)}
 </div>
 {_f_text("Credentials (LMT, NCBTMB и т.п.)", "credentials", a.get("credentials",""))}
-{_f_text("Avatar URL", "avatar_url", a.get("avatar_url",""))}
+{_f_image_url("Avatar URL", "avatar_url", a.get("avatar_url",""))}
 {_f_textarea("Bio (HTML)", "bio_html", a.get("bio_html",""), rows=8)}
 {_f_textarea("Social links (JSON)", "social_links", a.get("social_links",""), rows=3)}
 <button class="seo-btn">Сохранить</button>
@@ -1260,6 +1339,33 @@ async def seo_red_delete(request: Request, site_id: int, red_id: int):
     if err: return err
     _db.delete_seo_redirect(red_id)
     return _redirect_to(f"/seo/sites/{site_id}/redirects", msg="Удалено")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# IMAGE UPLOAD — общий загрузчик для всех SEO-форм через Cloudinary
+# ════════════════════════════════════════════════════════════════════════════
+
+@router.post("/seo/upload")
+async def seo_upload_image(request: Request, file: UploadFile = File(...)):
+    """Загружает один файл в Cloudinary и возвращает {url}.
+    Используется кнопкой «Загрузить» в админ-формах."""
+    user, err = _admin_check(request)
+    if err:
+        return JSONResponse({"error": "auth required"}, status_code=403)
+    try:
+        ctype = (file.content_type or "").lower()
+        if not ctype.startswith("image/"):
+            return JSONResponse({"error": "only images are supported"}, status_code=400)
+        data = await file.read()
+        if len(data) > 10 * 1024 * 1024:
+            return JSONResponse({"error": "file too large (max 10MB)"}, status_code=400)
+        url = await _cloud.upload_bytes(data, resource_type="image", folder="seo")
+        if not url:
+            return JSONResponse({"error": "cloudinary upload failed (check credentials)"}, status_code=500)
+        return JSONResponse({"url": url})
+    except Exception as e:
+        log.error(f"[SEO] upload error: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ════════════════════════════════════════════════════════════════════════════

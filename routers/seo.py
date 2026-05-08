@@ -1280,7 +1280,48 @@ async def _seo_preview(request: Request, site_id: int, path: str):
     if err: return err
     site, e = _site_or_404(site_id)
     if e: return e
-    return await dispatch_seo_request(request, site, preview=True, preview_path=path)
+    response = await dispatch_seo_request(request, site, preview=True, preview_path=path)
+
+    # Переписываем root-relative ссылки в preview-префикс чтобы клики
+    # внутри превью оставались внутри /seo/preview/{id}/.
+    # На боевом домене (live) этот код не выполняется — там обычные ссылки.
+    try:
+        media_type = (getattr(response, "media_type", "") or "").lower()
+        if "html" not in media_type and not isinstance(response, HTMLResponse):
+            return response
+        body = getattr(response, "body", b"")
+        if not body:
+            return response
+        try:
+            html = body.decode("utf-8")
+        except Exception:
+            return response
+
+        import re as _re
+        prefix = f"/seo/preview/{site_id}"
+
+        def _rewrite(m):
+            attr = m.group(1)
+            inner = m.group(2)  # содержимое после слеша, без ведущего /
+            # Не трогаем если уже preview-префикс или абсолютный путь к админке
+            if inner.startswith("seo/") or inner == "seo":
+                return m.group(0)
+            # Корень "/"
+            if inner == "":
+                return f'{attr}="{prefix}/"'
+            return f'{attr}="{prefix}/{inner}"'
+
+        # Ловим только href|action со значением ровно начинающимся со слеша
+        # (не //, не http, не mailto, не tel, не #).
+        html = _re.sub(r'(href|action)="/([^"]*)"', _rewrite, html)
+        return HTMLResponse(
+            content=html,
+            status_code=response.status_code,
+            headers=dict(response.headers),
+        )
+    except Exception as _rewrite_err:
+        log.warning(f"[SEO preview] link rewrite skipped: {_rewrite_err}")
+        return response
 
 
 # ════════════════════════════════════════════════════════════════════════════

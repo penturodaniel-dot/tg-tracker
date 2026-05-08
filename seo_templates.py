@@ -12,6 +12,7 @@ SEO-модуль: чистые HTML-рендереры публичных стр
 """
 import html as _html
 import json as _json
+import re as _re
 from datetime import datetime
 
 
@@ -707,6 +708,109 @@ def render_seo_blog_index(site: dict, articles: list, categories: list = None,
     return head + header + body + _render_footer(site)
 
 
+# ── Авто-перелинковка между статьями ────────────────────────────────────────
+# Карта (slug → ключевые фразы для линкования). Длинные фразы первыми чтобы
+# при поиске они совпали раньше своих коротких вариантов. Дополняй по мере
+# написания новых статей.
+_INTERNAL_LINK_MAP = [
+    ("swedish-vs-deep-tissue-massage", [
+        "Swedish vs deep tissue massage",
+        "Swedish vs deep tissue",
+        "deep tissue massage",
+        "Swedish massage",
+    ]),
+    ("how-often-should-you-get-a-massage", [
+        "how often should you get a massage",
+        "how often you should get a massage",
+        "massage frequency",
+    ]),
+    ("what-to-expect-at-your-first-massage", [
+        "what to expect at your first massage",
+        "your first massage",
+        "first massage",
+    ]),
+    ("science-backed-benefits-of-massage", [
+        "science-backed benefits of regular massage",
+        "benefits of regular massage",
+        "benefits of massage therapy",
+    ]),
+    ("hot-stone-massage-complete-guide", [
+        "hot stone massage",
+        "hot stone therapy",
+    ]),
+    ("massage-for-lower-back-pain", [
+        "massage for lower back pain",
+        "chronic low back pain",
+        "low back pain",
+        "lower back pain",
+    ]),
+    ("tipping-for-massage-etiquette-guide", [
+        "tipping for massage",
+        "tipping etiquette",
+    ]),
+    ("sports-massage-for-runners", [
+        "sports massage for runners",
+        "massage for runners",
+    ]),
+    ("how-to-choose-a-massage-therapist", [
+        "how to choose a massage therapist",
+        "choose a massage therapist",
+        "choosing a massage therapist",
+        "find a massage therapist",
+    ]),
+    ("prenatal-massage-trimester-guide", [
+        "prenatal massage",
+        "pregnancy massage",
+    ]),
+]
+
+
+def _auto_link_internal_articles(html: str, current_slug: str = "") -> str:
+    """Вставляет ссылки на другие статьи в content_html.
+
+    Стратегия:
+    - Никогда не линкуем на саму статью (current_slug)
+    - Не трогаем текст внутри <a>, <h1-6>, <code>, <pre> (там уже что-то есть)
+    - Только ПЕРВОЕ вхождение фразы → одна ссылка на target
+    - Word-boundary матчинг (Swedish-massage в одно слово не матчится)
+    - Регистронезависимо, но сохраняет оригинальный регистр в линке
+    """
+    if not html:
+        return html
+
+    # Защищённые регионы (внутри них не линкуем)
+    protect_pattern = _re.compile(
+        r'(<a\s[^>]*?>.*?</a>|<h[1-6][^>]*>.*?</h[1-6]>|<code[^>]*>.*?</code>|<pre[^>]*>.*?</pre>)',
+        _re.IGNORECASE | _re.DOTALL,
+    )
+    parts = protect_pattern.split(html)
+    # parts[0] / parts[2] / parts[4] ... — обычный текст (можно линковать)
+    # parts[1] / parts[3] / parts[5] ... — защищённые регионы (не трогаем)
+
+    linked_slugs = set()
+    for target_slug, keywords in _INTERNAL_LINK_MAP:
+        if target_slug == current_slug or target_slug in linked_slugs:
+            continue
+        for i in range(0, len(parts), 2):
+            if target_slug in linked_slugs:
+                break
+            text = parts[i]
+            for kw in keywords:
+                regex = _re.compile(
+                    r'(?<![\w-])(' + _re.escape(kw) + r')(?![\w-])',
+                    _re.IGNORECASE,
+                )
+                m = regex.search(text)
+                if m:
+                    matched = m.group(1)
+                    replacement = f'<a href="/blog/{target_slug}">{matched}</a>'
+                    parts[i] = text[:m.start()] + replacement + text[m.end():]
+                    linked_slugs.add(target_slug)
+                    break
+
+    return "".join(parts)
+
+
 def render_seo_article(site: dict, article: dict, author: dict = None,
                         category: dict = None, related: list = None,
                         menu_pages: list = None) -> str:
@@ -796,10 +900,17 @@ def render_seo_article(site: dict, article: dict, author: dict = None,
             '</div></section>'
         )
 
+    # Авто-перелинковка между статьями: вставляем ссылки на родственные
+    # материалы прямо в тело статьи (первое вхождение каждой фразы).
+    linked_content = _auto_link_internal_articles(
+        article.get("content_html") or "",
+        current_slug=article.get("slug", ""),
+    )
+
     body = (
         '<section><div class="container-narrow">'
         f'{breadcrumbs}<h1>{_esc(h1)}</h1>{meta}{cover}'
-        f'<div class="prose">{article.get("content_html") or ""}</div>'
+        f'<div class="prose">{linked_content}</div>'
         f'{tags_html}{author_block}'
         '</div></section>'
         f'{related_html}'

@@ -93,8 +93,11 @@ frontend/
 
 docs/
   seo-content/
-    relaxtouchtoday-bootstrap.json  # Стартовый контент для SEO-сайтов
-                                     # (для импорта через /seo/sites/{id}/import)
+    relaxtouch-bootstrap.json          # site_settings + categories + authors
+                                        # + 4 static pages + 15 locations
+    relaxtouch-articles-batch-1.json   # 5 статей, ~6,400 слов
+    relaxtouch-articles-batch-2.json   # 5 статей, ~5,800 слов
+    # (импорт через /seo/sites/{id}/import; slug-based upsert)
 ```
 
 ---
@@ -210,6 +213,8 @@ Railway автоматически запускает nixpacks:
 - Google Fonts (Inter + Playfair Display) с `font-display: swap`
 - Mobile-responsive
 - Контакт-кнопки: `tel:`, `mailto:`, `t.me/`, `wa.me/`, `sms:` + inline SVG-иконки
+- **Локации**: встроенный Google Maps iframe (без API-ключа, через `maps.google.com/maps?q=lat,lng&output=embed`) + кнопка «Open in Google Maps» (приоритет — пользовательский `google_maps_url`, иначе строится из координат)
+- **Статьи**: автоматическая внутренняя перелинковка через `_auto_link_internal_articles()` — карта `_INTERNAL_LINK_MAP` (slug → варианты ключевых фраз) ищется в `content_html`, первое вхождение каждой фразы заменяется ссылкой на `/blog/{slug}`. Защищены `<a>`, `<h1-6>`, `<code>`, `<pre>`. Один линк на target slug на статью. Не линкует сам в себя.
 
 **Маршруты публичные** (на SEO-домене):
 - `/` — главная (locations grid + recent articles)
@@ -222,18 +227,26 @@ Railway автоматически запускает nixpacks:
 **Админка** (на CRM-домене, под `/seo/*`):
 - `/seo` — список сайтов
 - `/seo/sites/{id}` — настройки (брендинг, домен, палитра, GA, status)
-- `/seo/sites/{id}/locations` — города (CRUD), на каждой — адрес, координаты, FAQ JSON, hours JSON, контакты
+- `/seo/sites/{id}/locations` — города (CRUD), на каждой — адрес, координаты, **`google_maps_url`** (share-ссылка), FAQ JSON, hours JSON, контакты
 - `/seo/sites/{id}/pages` — статические (about, contact, privacy, terms, services)
 - `/seo/sites/{id}/articles` — блог (категория, автор, content_html, pillar-флаг, view counter)
 - `/seo/sites/{id}/categories` / `/authors` / `/redirects`
 - `/seo/sites/{id}/import` — **bulk-import JSON** (целая `site_settings` + категории + локации + страницы + статьи одним кликом). По умолчанию пропускает существующие slug; галка перезаписывает.
 - `/seo/preview/{id}/{path:path}` — admin-preview, **обходит фильтр `status='live'/published'`** чтобы можно было смотреть черновики. Внутри переписывает root-relative ссылки в preview-prefix чтобы навигация осталась внутри `/seo/preview/{id}/...`. **Важно:** при rewrite не переносить старые headers — `Content-Length` стухнет → пустая страница. Использовать `HTMLResponse(content=html, status_code=...)` без `headers=...`.
+- `/seo/upload` (POST, multipart) — **загрузчик картинок** через Cloudinary. Принимает `file`, проверяет content-type=`image/*`, max 10 MB, заливает в папку `seo/`, возвращает `{url}`. Используется кнопкой «Загрузить» в админ-формах через JS (`seoUploadImage`). Альтернатива ручному копированию URL — особенно полезно потому что часть внешних CDN (Unsplash и т.д.) хотлинк-блочат.
+
+**Image fields в формах:** все поля картинок (`logo_url`, `favicon_url`, `default_og_image`, `og_image` на location/page/article, `avatar_url` на author) рендерятся через хелпер `_f_image_url()` — URL-инпут + кнопка «📤 Загрузить» + live-превью thumbnail. JS-handlers (`seoUpdImgPreview`, `seoUploadImage`) встроены в `_ADMIN_CSS` (constant в routers/seo.py — содержит `<style>` + `<script>`).
 
 **Доступ к админке:** только role=`admin`. Manager → 403.
 
 **Sidebar:** пункт «SEO → Сайты» добавлен в обе версии (React `NavSidebar.jsx` для TG-чатов и HTML `nav_html()` для всех остальных страниц).
 
-**Стартовый контент:** `docs/seo-content/relaxtouch-bootstrap.json` — 1 site_settings + 4 categories + 1 author + 4 static pages + 15 location pages для `relaxtouchtoday.com`. Импортируется через `/seo/sites/{id}/import`.
+**Стартовый контент в репозитории:**
+- `docs/seo-content/relaxtouch-bootstrap.json` — 1 site_settings + 4 categories + 1 author + 4 static pages + 15 location pages для `relaxtouchtoday.com`
+- `docs/seo-content/relaxtouch-articles-batch-1.json` — 5 pillar-статей (~6,400 слов): Swedish vs Deep Tissue, How Often, First Massage, Science-Backed Benefits, Hot Stone
+- `docs/seo-content/relaxtouch-articles-batch-2.json` — 5 статей (~5,800 слов): Lower Back Pain, Tipping Etiquette, Sports Massage Runners, How to Choose a Therapist, Prenatal Trimester Guide
+
+Все импортируются через `/seo/sites/{id}/import`. Slug-based upsert (skip-existing по умолчанию, галка для перезаписи).
 
 ### Ключевые таблицы
 
@@ -250,11 +263,11 @@ Railway автоматически запускает nixpacks:
 - `settings` — key/value настройки CRM
 
 **SEO-модуль:**
-- `seo_sites` — сайты (домен, язык, брендинг, status)
-- `seo_locations` — города на сайте (адрес, координаты, FAQ, hours)
-- `seo_location_contacts` — телефоны / TG / WA / email на локацию (тип, value, is_primary)
+- `seo_sites` — сайты (домен, язык, брендинг, GA/Pixel, header/footer HTML, status)
+- `seo_locations` — города на сайте (адрес, lat/lng, **`google_maps_url`**, FAQ JSON, hours JSON). Колонка `google_maps_url` добавлена через `ALTER TABLE IF NOT EXISTS` в `_init_seo_tables()`.
+- `seo_location_contacts` — телефоны / TG / WA / email на локацию (contact_type, value, is_primary, is_active)
 - `seo_pages` — статические страницы (about, contact, privacy, terms, services)
-- `seo_articles` — блог (slug → category, author, content_html, view_count)
+- `seo_articles` — блог (slug → category_id, author_id, content_html, is_pillar, view_count)
 - `seo_categories` / `seo_authors`
 - `seo_redirects` — 301/302 редиректы с трекингом hits
 

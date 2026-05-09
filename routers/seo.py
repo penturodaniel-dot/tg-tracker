@@ -132,6 +132,34 @@ async def dispatch_seo_request(request: Request, site: dict, *,
         if is_jobs:
             import seo_templates_jobs as tpl_jobs
 
+        # Инжектим в site dict список локаций для футера (default-шаблон
+        # рендерит 4-ю колонку «Our Locations» если они есть). Только
+        # published. Берём primary phone каждой локации одним запросом
+        # на каждую (мало локаций обычно).
+        try:
+            footer_locs = []
+            for _loc in _db.get_seo_locations(site["id"], status="published")[:8]:
+                _contacts = _db.get_seo_location_contacts(_loc["id"], only_active=True)
+                _primary_phone = ""
+                for _c in _contacts:
+                    if (_c.get("contact_type") or "").lower() == "phone" and _c.get("is_primary"):
+                        _primary_phone = _c.get("display_value") or _c.get("value") or ""
+                        break
+                if not _primary_phone:
+                    for _c in _contacts:
+                        if (_c.get("contact_type") or "").lower() == "phone":
+                            _primary_phone = _c.get("display_value") or _c.get("value") or ""
+                            break
+                footer_locs.append({
+                    "slug": _loc.get("slug", ""),
+                    "city": _loc.get("city", ""),
+                    "state": _loc.get("state", ""),
+                    "primary_phone": _primary_phone,
+                })
+            site["_footer_locations"] = footer_locs
+        except Exception:
+            site["_footer_locations"] = []
+
         # Language-фильтр для листингов: на мульти-язычных сайтах
         # каждая статья импортирована с tags='ru'/'ua'/'en'. В блог-индексе
         # и на главной показываем только статьи с языком сайта (фильтр по tag).
@@ -213,6 +241,34 @@ async def dispatch_seo_request(request: Request, site: dict, *,
                 html = tpl.render_seo_article(site, article, author=author,
                                                 category=category, related=related,
                                                 menu_pages=menu_pages)
+            return HTMLResponse(html)
+
+        # Site search: /search?q=...
+        if path == "/search":
+            q = (request.query_params.get("q") or "").strip()
+            results = []
+            if q:
+                # Простой LIKE поиск по title / excerpt / content_html
+                # на статьях со статусом published и фильтром по языку
+                all_articles = _db.get_seo_articles(
+                    site["id"], status=list_status, tag_filter=articles_tag
+                )
+                q_lower = q.lower()
+                for a in all_articles:
+                    haystack = " ".join([
+                        (a.get("title") or "").lower(),
+                        (a.get("h1") or "").lower(),
+                        (a.get("excerpt") or "").lower(),
+                        (a.get("meta_description") or "").lower(),
+                        (a.get("content_html") or "").lower(),
+                    ])
+                    if q_lower in haystack:
+                        results.append(a)
+                results = results[:30]
+            if is_jobs:
+                html = tpl_jobs.render_seo_search_jobs(site, q, results)
+            else:
+                html = tpl.render_seo_search(site, q, results, menu_pages)
             return HTMLResponse(html)
 
         # Произвольный slug — может быть локацией или страницей

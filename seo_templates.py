@@ -513,6 +513,10 @@ def _render_header(site: dict, menu_pages: list = None) -> str:
 
 
 def _render_footer(site: dict) -> str:
+    """Footer для default-шаблона. Если site["_footer_locations"] задан
+    (диспатчер инжектирует список dict'ов с городами + primary phone),
+    рендерится 4-я колонка «Our Locations» — до 8 городов с прямой
+    ссылкой и телефоном."""
     brand = site.get("brand_name") or site.get("name") or ""
     org_name = site.get("org_name") or brand
     year = datetime.utcnow().year
@@ -526,7 +530,33 @@ def _render_footer(site: dict) -> str:
     tagline = site.get("tagline") or ""
     phone = site.get("org_phone") or ""
     email = site.get("org_email") or ""
+
+    # Колонка локаций (опц.) — диспатчер передаёт через site["_footer_locations"]
+    locations = site.get("_footer_locations") or []
+    locations_col = ""
+    cols_count = 3
+    if locations:
+        cols_count = 4
+        loc_items = ""
+        for loc in locations[:8]:
+            slug = (loc.get("slug") or "").lstrip("/")
+            label = f"{loc.get('city','')}, {loc.get('state','')}".strip(", ")
+            primary_phone = loc.get("primary_phone") or ""
+            phone_html = f'<div style="font-size:.78rem;color:#A9A39A">{_esc(primary_phone)}</div>' if primary_phone else ""
+            loc_items += (
+                f'<li style="margin-bottom:10px"><a href="/{_esc(slug)}" style="font-size:.92rem;font-weight:600">{_esc(label)}</a>'
+                f'{phone_html}</li>'
+            )
+        locations_col = (
+            '<div><h4 style="color:#fff;font-size:1rem;margin-bottom:12px">Our Locations</h4>'
+            f'<ul style="list-style:none;padding:0;margin:0">{loc_items}</ul></div>'
+        )
+
+    grid_template = "repeat(4,1fr)" if cols_count == 4 else "repeat(3,1fr)"
+    grid_style = f'<style>footer.site-footer .columns{{grid-template-columns:{grid_template}}}@media(max-width:900px){{footer.site-footer .columns{{grid-template-columns:repeat(2,1fr)}}}}@media(max-width:600px){{footer.site-footer .columns{{grid-template-columns:1fr}}}}</style>' if cols_count == 4 else ""
+
     return (
+        f'{grid_style}'
         '<footer class="site-footer"><div class="container">'
         '<div class="columns">'
         f'<div><h3 style="color:#fff;font-size:1.2rem;margin-bottom:12px">{_esc(brand)}</h3>'
@@ -537,6 +567,7 @@ def _render_footer(site: dict) -> str:
         '<p style="font-size:.9rem;line-height:1.8">'
         '<a href="/about">About</a><br><a href="/contact">Contact</a><br>'
         '<a href="/privacy">Privacy Policy</a><br><a href="/terms">Terms of Service</a></p></div>'
+        f'{locations_col}'
         '</div>'
         f'<div class="copy">© {year} {_esc(org_name)}. All rights reserved.</div>'
         '</div></footer></body></html>'
@@ -1160,6 +1191,56 @@ def render_404(site: dict, menu_pages: list = None) -> str:
         '<p style="font-size:1.15rem;color:var(--muted);margin-bottom:2rem">'
         "The page you're looking for could not be found.</p>"
         '<a href="/" class="btn btn-primary">Back to Home</a>'
+        '</div></section>'
+    )
+    return head + header + body + _render_team_section(site) + _render_footer(site)
+
+
+def render_seo_search(site: dict, query: str, results: list,
+                       menu_pages: list = None) -> str:
+    """Страница результатов поиска по сайту. Простой LIKE-поиск
+    результатов в админке диспатчера, рендер здесь.
+    Search-страницы должны быть noindex (Google не индексирует
+    результаты поиска по сайту)."""
+    title = (f"Search: {query}" if query else "Search") + " · " + (site.get("brand_name") or site.get("name") or "")
+    head = _render_head(site, title=title,
+                         description="Search results",
+                         noindex=True)
+    header = _render_header(site, menu_pages or [])
+
+    form_html = (
+        '<form method="get" action="/search" style="margin:0 0 2rem;display:flex;gap:8px">'
+        f'<input type="text" name="q" value="{_esc(query)}" placeholder="Search articles..." '
+        'style="flex:1;padding:14px 18px;border:1px solid var(--border);border-radius:999px;font-size:1rem">'
+        '<button type="submit" class="btn btn-primary">Search</button>'
+        '</form>'
+    )
+
+    cards_html = ""
+    for art in results:
+        art_url = "/blog/" + (art.get("slug") or "").lstrip("/")
+        excerpt = (art.get("excerpt") or art.get("meta_description") or "")[:200]
+        cards_html += (
+            '<article style="padding:20px 0;border-bottom:1px solid var(--border)">'
+            f'<h3 style="margin:0 0 6px"><a href="{_esc(art_url)}">{_esc(art.get("title", ""))}</a></h3>'
+            f'<p style="color:var(--muted);font-size:.95rem;margin:0">{_esc(excerpt)}</p>'
+            '</article>'
+        )
+    if not cards_html:
+        if query:
+            cards_html = f'<p style="color:var(--muted);text-align:center;padding:32px">No results for "<strong>{_esc(query)}</strong>".</p>'
+        else:
+            cards_html = '<p style="color:var(--muted);text-align:center;padding:32px">Type a query above to search.</p>'
+
+    summary = ""
+    if query:
+        summary = f'<div style="color:var(--muted);font-size:.92rem;margin-bottom:12px">Found {len(results)} result(s) for "<strong>{_esc(query)}</strong>"</div>'
+
+    body = (
+        '<section><div class="container-narrow">'
+        '<div class="breadcrumbs"><a href="/">Home</a> / Search</div>'
+        '<h1>Search</h1>'
+        f'{form_html}{summary}{cards_html}'
         '</div></section>'
     )
     return head + header + body + _render_team_section(site) + _render_footer(site)

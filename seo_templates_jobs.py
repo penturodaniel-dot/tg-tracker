@@ -343,7 +343,9 @@ def _build_jobs_css(site: dict) -> str:
 def _render_jobs_head(site: dict, *, title: str, description: str = "",
                        canonical: str = "", og_image: str = "",
                        og_type: str = "website", schema_jsons=None,
-                       extra_head: str = "") -> str:
+                       extra_head: str = "", noindex: bool = False) -> str:
+    if noindex:
+        extra_head = '<meta name="robots" content="noindex, nofollow">' + (extra_head or "")
     title_full = title + (site.get("title_suffix") or "")
     desc = description or site.get("default_meta_description") or ""
     image = og_image or site.get("default_og_image") or ""
@@ -1008,6 +1010,66 @@ def render_seo_404_jobs(site: dict) -> str:
         '<h1 style="font-size:5rem">404</h1>'
         '<p style="font-size:1.2rem;color:var(--muted);margin-bottom:2rem">Страница не найдена.</p>'
         '<a href="/" class="btn btn-primary">На главную</a>'
+        '</div></section>'
+    )
+    return head + header + body + _render_team_section(site) + _render_jobs_footer(site)
+
+
+def render_seo_search_jobs(site: dict, query: str, results: list) -> str:
+    """Поиск по сайту в jobs-стиле."""
+    lang = site.get("language") or "ru"
+    labels = {
+        "ru": {"title": "Поиск", "ph": "Искать в статьях...", "btn": "Найти",
+               "noq": "Введите запрос выше для поиска.", "found": "Найдено", "for": "по запросу"},
+        "ua": {"title": "Пошук", "ph": "Шукати в статтях...", "btn": "Знайти",
+               "noq": "Введіть запит вище для пошуку.", "found": "Знайдено", "for": "за запитом"},
+        "en": {"title": "Search", "ph": "Search articles...", "btn": "Search",
+               "noq": "Type a query above to search.", "found": "Found", "for": "for"},
+    }.get(lang, {"title": "Search", "ph": "Search...", "btn": "Search",
+                 "noq": "Type a query above to search.", "found": "Found", "for": "for"})
+
+    title_full = labels["title"] + (": " + query if query else "")
+    head = _render_jobs_head(site, title=title_full,
+                              description=labels["title"], og_type="website",
+                              noindex=True)
+    header = _render_jobs_header(site)
+
+    form_html = (
+        '<form method="get" action="/search" style="margin:0 0 2rem;display:flex;gap:8px;max-width:640px;margin-left:auto;margin-right:auto">'
+        '<input type="text" name="q" value="' + _esc(query) + '" placeholder="' + _esc(labels["ph"]) + '" '
+        'style="flex:1;padding:14px 22px;border:1px solid var(--border);border-radius:999px;font-size:1rem;font-family:inherit">'
+        '<button type="submit" class="btn btn-primary">' + _esc(labels["btn"]) + '</button>'
+        '</form>'
+    )
+
+    cards = ""
+    for art in results:
+        art_url = "/blog/" + (art.get("slug") or "").lstrip("/")
+        excerpt = (art.get("excerpt") or art.get("meta_description") or "")[:200]
+        cards += (
+            '<article style="background:#fff;border-radius:16px;padding:20px;margin-bottom:12px;box-shadow:var(--shadow-card)">'
+            '<h3 style="margin:0 0 6px;font-size:1.1rem">'
+            '<a href="' + _esc(art_url) + '">' + _esc(art.get("title", "")) + '</a></h3>'
+            '<p style="color:var(--muted);font-size:.95rem;margin:0">' + _esc(excerpt) + '</p>'
+            '</article>'
+        )
+    if not cards:
+        if query:
+            cards = '<p style="color:var(--muted);text-align:center;padding:32px">' + labels["found"] + ' 0 — "' + _esc(query) + '"</p>'
+        else:
+            cards = '<p style="color:var(--muted);text-align:center;padding:32px">' + labels["noq"] + '</p>'
+
+    summary = ""
+    if query:
+        summary = '<p style="color:var(--muted);font-size:.92rem;text-align:center;margin-bottom:12px">' + labels["found"] + ': ' + str(len(results)) + ' ' + labels["for"] + ' "<strong>' + _esc(query) + '</strong>"</p>'
+
+    body = (
+        '<section class="hero"><div class="container">'
+        '<div class="section-title-wrap"><h1>' + _esc(labels["title"]) + '</h1></div>'
+        + form_html + summary +
+        '</div></section>'
+        '<section><div class="container" style="max-width:760px">'
+        + cards +
         '</div></section>'
     )
     return head + header + body + _render_team_section(site) + _render_jobs_footer(site)

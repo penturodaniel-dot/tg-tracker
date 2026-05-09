@@ -618,6 +618,8 @@ async def seo_site_edit(request: Request, site_id: int):
         _f_text("FB Pixel ID", "fb_pixel_id", site.get("fb_pixel_id", ""))
     ) + "</div>" + "<div class='seo-h2'>Соцсети (JSON)</div>" + (
         _f_textarea("social_links", "social_links", site.get("social_links", ""), rows=3, hint='Например: {"instagram":"https://instagram.com/...", "facebook":"https://facebook.com/..."}')
+    ) + "<div class='seo-h2'>Our Team — блок «Команда»</div>" + (
+        _f_textarea("Team HTML (рендерится перед футером на ВСЕХ страницах)", "team_html", site.get("team_html", ""), rows=10, hint='Произвольный HTML — заголовок, фото команды, имена, описания. Один раз заполнил — отображается везде (главная, блог, статья, локация, страницы). Пример: &lt;h2&gt;Our Team&lt;/h2&gt;&lt;div class=&quot;grid grid-3&quot;&gt;&lt;div class=&quot;card&quot;&gt;&lt;img src=&quot;...&quot;&gt;&lt;h3&gt;Anna&lt;/h3&gt;&lt;p&gt;LMT, 8 years experience&lt;/p&gt;&lt;/div&gt;...&lt;/div&gt;')
     ) + "<div class='seo-h2'>Кастомный HTML</div>" + (
         _f_textarea("Header HTML (внутри <header>)", "header_html", site.get("header_html", ""), rows=4)
     ) + (
@@ -639,7 +641,7 @@ async def seo_site_save(request: Request, site_id: int):
               "title_suffix", "default_meta_description", "default_og_image",
               "org_name", "org_phone", "org_email", "org_address",
               "ga_id", "gtm_id", "fb_pixel_id",
-              "social_links", "header_html", "footer_html",
+              "social_links", "header_html", "footer_html", "team_html",
               "template", "hero_image_url", "secondary_image_url",
               "telegram_url", "whatsapp_url"]
     payload = {k: (form.get(k) or "").strip() for k in fields if k in form}

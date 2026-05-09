@@ -23,7 +23,7 @@ from datetime import datetime
 
 from seo_templates import (
     _esc, _site_url, _adjust_color, _schema_organization,
-    _schema_website,
+    _schema_website, _render_team_section, _optimize_img_url,
 )
 
 
@@ -545,7 +545,7 @@ def render_seo_home_jobs(site: dict, page: dict, articles: list = None) -> str:
             f'<div class="hero-image-wrap">'
             f'<div class="glow"></div>'
             f'<div class="circle"></div>'
-            f'<img class="person" src="{_esc(site["hero_image_url"])}" alt="{_esc(_t(site, "hero.title"))}" />'
+            f'<img loading="lazy" class="person" src="{_esc(site["hero_image_url"])}" alt="{_esc(_t(site, "hero.title"))}" />'
             f'<div class="hero-badge">⭐ {_esc(_t(site, "hero.spa"))}</div>'
             f'</div>'
         )
@@ -724,7 +724,7 @@ def render_seo_home_jobs(site: dict, page: dict, articles: list = None) -> str:
             '</div></section>'
         )
 
-    return head + header + hero + about + benefits + req + how + offers + blog_html + cta + _render_jobs_footer(site)
+    return head + header + hero + about + benefits + req + how + offers + blog_html + cta + _render_team_section(site) + _render_jobs_footer(site)
 
 
 # ── Внутренние страницы в jobs стиле ────────────────────────────────────────
@@ -800,7 +800,7 @@ def render_seo_article_jobs(site: dict, article: dict, author: dict = None,
     cover = ""
     if article.get("og_image"):
         cover = (
-            '<img src="' + _esc(article["og_image"]) + '" alt="' + _esc(title) +
+            '<img loading="lazy" src="' + _esc(article["og_image"]) + '" alt="' + _esc(title) +
             '" style="width:100%;border-radius:24px;margin:1rem 0 2.5rem;box-shadow:var(--shadow-card)">'
         )
 
@@ -818,7 +818,7 @@ def render_seo_article_jobs(site: dict, article: dict, author: dict = None,
         avatar = ""
         if author.get("avatar_url"):
             avatar = (
-                '<img src="' + _esc(author["avatar_url"]) +
+                '<img loading="lazy" src="' + _esc(author["avatar_url"]) +
                 '" alt="' + _esc(author.get("name") or "") +
                 '" style="width:64px;height:64px;border-radius:50%;flex-shrink:0">'
             )
@@ -886,7 +886,7 @@ def render_seo_article_jobs(site: dict, article: dict, author: dict = None,
         '</div></div></section>'
     )
 
-    return head + header + body + cta + _render_jobs_footer(site)
+    return head + header + body + cta + _render_team_section(site) + _render_jobs_footer(site)
 
 
 def render_seo_blog_index_jobs(site: dict, articles: list, categories: list = None,
@@ -955,7 +955,7 @@ def render_seo_blog_index_jobs(site: dict, articles: list, categories: list = No
         '</div></section>'
     )
 
-    return head + header + body + _render_jobs_footer(site)
+    return head + header + body + _render_team_section(site) + _render_jobs_footer(site)
 
 
 def render_seo_page_jobs(site: dict, page: dict) -> str:
@@ -994,7 +994,7 @@ def render_seo_page_jobs(site: dict, page: dict) -> str:
         '</div></section>'
     )
 
-    return head + header + body + _render_jobs_footer(site)
+    return head + header + body + _render_team_section(site) + _render_jobs_footer(site)
 
 
 def render_seo_404_jobs(site: dict) -> str:
@@ -1010,4 +1010,4 @@ def render_seo_404_jobs(site: dict) -> str:
         '<a href="/" class="btn btn-primary">На главную</a>'
         '</div></section>'
     )
-    return head + header + body + _render_jobs_footer(site)
+    return head + header + body + _render_team_section(site) + _render_jobs_footer(site)

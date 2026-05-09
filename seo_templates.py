@@ -24,6 +24,32 @@ def _esc(s) -> str:
     return _html.escape(str(s), quote=True)
 
 
+def _optimize_img_url(url: str) -> str:
+    """Если URL — Cloudinary CDN, инжектим transform `f_auto,q_auto`
+    (auto-WebP/AVIF + автоматическая оптимизация качества).
+    Не-Cloudinary URLы возвращает как есть."""
+    if not url or "res.cloudinary.com" not in url or "/upload/" not in url:
+        return url
+    if "/upload/f_auto" in url or "/upload/q_auto" in url:
+        return url
+    return url.replace("/upload/", "/upload/f_auto,q_auto/", 1)
+
+
+def _render_team_section(site: dict) -> str:
+    """Универсальный «Our Team» блок. Берёт team_html из настроек сайта.
+    Если поле пустое — ничего не рендерит. Используется на всех страницах
+    перед футером — задаётся 1 раз, видно везде."""
+    team_html = (site.get("team_html") or "").strip()
+    if not team_html:
+        return ""
+    return (
+        '<section style="padding:56px 0;background:var(--surface,#FDF7FB)">'
+        '<div class="container">'
+        f'{team_html}'
+        '</div></section>'
+    )
+
+
 def _site_url(site: dict, path: str = "/") -> str:
     domain = (site.get("domain") or "").strip().lower()
     if domain.startswith("www."):
@@ -587,7 +613,7 @@ def render_seo_home(site: dict, locations: list, articles: list,
             '</div></section>'
         )
 
-    return head + header + hero + locations_section + articles_section + _render_footer(site)
+    return head + header + hero + locations_section + articles_section + _render_team_section(site) + _render_footer(site)
 
 
 def render_seo_location(site: dict, location: dict, contacts: list,
@@ -762,7 +788,7 @@ def render_seo_location(site: dict, location: dict, contacts: list,
         '</div></section>'
     )
 
-    return head + header + hero + services_html + about_studio + faqs_html + _render_footer(site)
+    return head + header + hero + services_html + about_studio + faqs_html + _render_team_section(site) + _render_footer(site)
 
 
 def render_seo_page(site: dict, page: dict, menu_pages: list = None) -> str:
@@ -794,7 +820,7 @@ def render_seo_page(site: dict, page: dict, menu_pages: list = None) -> str:
         f'<div class="prose">{page.get("content_html") or ""}</div>'
         '</div></section>'
     )
-    return head + header + body + _render_footer(site)
+    return head + header + body + _render_team_section(site) + _render_footer(site)
 
 
 def render_seo_blog_index(site: dict, articles: list, categories: list = None,
@@ -852,7 +878,7 @@ def render_seo_blog_index(site: dict, articles: list, categories: list = None,
         f'<div class="grid grid-3">{cards}</div>'
         '</div></section>'
     )
-    return head + header + body + _render_footer(site)
+    return head + header + body + _render_team_section(site) + _render_footer(site)
 
 
 # ── Авто-перелинковка между статьями ────────────────────────────────────────
@@ -1011,7 +1037,7 @@ def render_seo_article(site: dict, article: dict, author: dict = None,
     cover = ""
     if article.get("og_image"):
         cover = (
-            f'<img src="{_esc(article["og_image"])}" alt="{_esc(title)}" '
+            f'<img loading="lazy" src="{_esc(article["og_image"])}" alt="{_esc(title)}" '
             'style="width:100%;border-radius:var(--radius);margin:1rem 0 2rem">'
         )
 
@@ -1026,7 +1052,7 @@ def render_seo_article(site: dict, article: dict, author: dict = None,
         avatar = ""
         if author.get("avatar_url"):
             avatar = (
-                f'<img src="{_esc(author["avatar_url"])}" '
+                f'<img loading="lazy" src="{_esc(author["avatar_url"])}" '
                 f'alt="{_esc(author.get("name") or "")}" '
                 'style="width:64px;height:64px;border-radius:50%;flex-shrink:0">'
             )
@@ -1079,7 +1105,7 @@ def render_seo_article(site: dict, article: dict, author: dict = None,
         '</div></section>'
         f'{related_html}'
     )
-    return head + header + body + _render_footer(site)
+    return head + header + body + _render_team_section(site) + _render_footer(site)
 
 
 # ── sitemap.xml / robots.txt ─────────────────────────────────────────────────
@@ -1136,4 +1162,4 @@ def render_404(site: dict, menu_pages: list = None) -> str:
         '<a href="/" class="btn btn-primary">Back to Home</a>'
         '</div></section>'
     )
-    return head + header + body + _render_footer(site)
+    return head + header + body + _render_team_section(site) + _render_footer(site)

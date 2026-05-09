@@ -3189,6 +3189,10 @@ class Database:
                 cur.execute("ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS secondary_image_url TEXT DEFAULT ''")
                 cur.execute("ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS telegram_url TEXT DEFAULT ''")
                 cur.execute("ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS whatsapp_url TEXT DEFAULT ''")
+                # team_html: HTML блок «Our Team» — задаётся 1 раз в настройках сайта,
+                # рендерится на всех страницах сайта (homepage / blog / article / location / page)
+                # перед футером. Пустое значение = блок не рендерится.
+                cur.execute("ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS team_html TEXT DEFAULT ''")
                 # Индексы для быстрых LIKE / lookup
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_seo_sites_domain ON seo_sites (LOWER(domain))")
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_seo_locations_site ON seo_locations (site_id, status)")
@@ -3256,7 +3260,7 @@ class Database:
                   "ga_id", "gtm_id", "fb_pixel_id",
                   "footer_html", "header_html", "social_links", "status",
                   "template", "hero_image_url", "secondary_image_url",
-                  "telegram_url", "whatsapp_url"):
+                  "telegram_url", "whatsapp_url", "team_html"):
             if k in kwargs:
                 cols.append(k)
                 vals.append(kwargs[k])
@@ -3283,7 +3287,7 @@ class Database:
                    "ga_id", "gtm_id", "fb_pixel_id",
                    "footer_html", "header_html", "social_links", "status",
                    "template", "hero_image_url", "secondary_image_url",
-                   "telegram_url", "whatsapp_url"}
+                   "telegram_url", "whatsapp_url", "team_html"}
         fields, vals = [], []
         for k, v in kwargs.items():
             if k in allowed:

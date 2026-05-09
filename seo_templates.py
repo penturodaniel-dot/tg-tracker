@@ -171,6 +171,116 @@ def _schema_article(site: dict, article: dict, author: dict = None) -> dict:
     return s
 
 
+def _schema_breadcrumb(site: dict, items: list) -> dict:
+    """BreadcrumbList: items = [{name, path}, ...]. Google показывает в SERP
+    под заголовком — повышает CTR. Path относительный (например '/blog')."""
+    list_items = []
+    for i, it in enumerate(items, 1):
+        list_items.append({
+            "@type": "ListItem",
+            "position": i,
+            "name": it.get("name", ""),
+            "item": _site_url(site, it.get("path", "/")),
+        })
+    return {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": list_items,
+    }
+
+
+def _extract_faq(content_html: str) -> list:
+    """Извлекает Q&A пары из content_html. Ищем секцию FAQ
+    (заголовок 'FAQ' / 'Frequently asked questions' / 'Часто задаваемые
+    вопросы' и т.п.) и парсим H3-вопросы + следующий абзац как ответ.
+
+    Возвращает [{q, a}, ...] или пустой список если FAQ не найден.
+    """
+    if not content_html:
+        return []
+    import re as _re
+    # Найти FAQ-секцию: H2 с одним из ключевых слов до следующего H2 или конца
+    faq_section_re = _re.compile(
+        r'<h2[^>]*>\s*(?:FAQ|Frequently[\s-]asked\s+questions?|Часто[\s-]задаваемые\s+вопросы|Frequently\s+answered\s+questions)\s*[:.]?\s*</h2>(.*?)(?=<h2[^>]*>|$)',
+        _re.IGNORECASE | _re.DOTALL,
+    )
+    m = faq_section_re.search(content_html)
+    if not m:
+        return []
+    section = m.group(1)
+    # В секции — пары: <h3>question</h3><p>answer</p>
+    qa_re = _re.compile(
+        r'<h3[^>]*>\s*(.*?)\s*</h3>\s*<p[^>]*>\s*(.*?)\s*</p>',
+        _re.IGNORECASE | _re.DOTALL,
+    )
+    pairs = []
+    for qm in qa_re.finditer(section):
+        q = _re.sub(r'<[^>]+>', '', qm.group(1)).strip()
+        a = _re.sub(r'<[^>]+>', '', qm.group(2)).strip()
+        if q and a:
+            pairs.append({"q": q, "a": a})
+    return pairs
+
+
+def _schema_faq_page(faqs: list) -> dict:
+    """FAQPage Schema.org из извлечённых Q&A пар.
+    Google показывает rich-результаты с FAQ в SERP."""
+    return {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": f["q"],
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": f["a"],
+                },
+            }
+            for f in faqs
+        ],
+    }
+
+
+def _schema_service_offers(site: dict, location: dict) -> list:
+    """Список Service-объектов внутри LocalBusiness — типы массажа
+    с ценами. Google использует для отображения каталога услуг."""
+    base = (site.get("brand_name") or site.get("name") or "")
+    city = location.get("city") or ""
+    return [
+        {
+            "@type": "Service",
+            "name": f"60-Minute Massage in {city}" if city else "60-Minute Massage",
+            "provider": {"@type": "LocalBusiness", "name": base},
+            "offers": {
+                "@type": "Offer",
+                "price": "230",
+                "priceCurrency": "USD",
+            },
+        },
+        {
+            "@type": "Service",
+            "name": f"30-Minute Massage in {city}" if city else "30-Minute Massage",
+            "provider": {"@type": "LocalBusiness", "name": base},
+            "offers": {
+                "@type": "Offer",
+                "price": "200",
+                "priceCurrency": "USD",
+            },
+        },
+        {
+            "@type": "Service",
+            "name": f"15-Minute Massage in {city}" if city else "15-Minute Massage",
+            "provider": {"@type": "LocalBusiness", "name": base},
+            "offers": {
+                "@type": "Offer",
+                "price": "140",
+                "priceCurrency": "USD",
+            },
+        },
+    ]
+
+
 # ── CSS ──────────────────────────────────────────────────────────────────────
 
 def _adjust_color(hex_color: str, amount: int = -30) -> str:
@@ -487,7 +597,30 @@ def render_seo_location(site: dict, location: dict, contacts: list,
     desc = location.get("meta_description") or site.get("default_meta_description") or ""
     canonical = _site_url(site, "/" + (location.get("slug") or "").lstrip("/"))
 
-    schemas = [_schema_local_business(site, location, contacts)]
+    # Schemas: LocalBusiness (с прайсами как hasOfferCatalog) + BreadcrumbList
+    local_schema = _schema_local_business(site, location, contacts)
+    # Добавляем service offers (60min/30min/15min) в LocalBusiness
+    local_schema["hasOfferCatalog"] = {
+        "@type": "OfferCatalog",
+        "name": "Massage Sessions",
+        "itemListElement": _schema_service_offers(site, location),
+    }
+    schemas = [local_schema]
+    schemas.append(_schema_breadcrumb(site, [
+        {"name": "Home", "path": "/"},
+        {"name": location.get("city", ""), "path": "/" + (location.get("slug") or "").lstrip("/")},
+    ]))
+    # FAQPage из faq_json локации
+    try:
+        loc_faqs = _json.loads(location.get("faq_json") or "[]")
+        if isinstance(loc_faqs, list) and loc_faqs:
+            schemas.append(_schema_faq_page([
+                {"q": f.get("q", ""), "a": f.get("a", "")}
+                for f in loc_faqs if isinstance(f, dict) and f.get("q") and f.get("a")
+            ]))
+    except Exception:
+        pass
+
     head = _render_head(site, title=title, description=desc,
                          canonical=canonical, og_type="website",
                          og_image=location.get("og_image", ""),
@@ -641,6 +774,11 @@ def render_seo_page(site: dict, page: dict, menu_pages: list = None) -> str:
     schemas = []
     if page.get("schema_json"):
         schemas.append(page["schema_json"])
+    # BreadcrumbList для статической страницы
+    schemas.append(_schema_breadcrumb(site, [
+        {"name": "Home", "path": "/"},
+        {"name": title, "path": "/" + (page.get("slug") or "").lstrip("/")},
+    ]))
 
     head = _render_head(site, title=title, description=desc,
                          canonical=canonical, og_type="website",
@@ -665,8 +803,15 @@ def render_seo_blog_index(site: dict, articles: list, categories: list = None,
     desc = (category and category.get("meta_description")) or site.get("default_meta_description") or ""
     canonical = _site_url(site, "/blog" + (f"/category/{category['slug']}" if category else ""))
 
+    # BreadcrumbList на блог-индексе
+    bc_items = [{"name": "Home", "path": "/"}, {"name": "Blog", "path": "/blog"}]
+    if category:
+        bc_items.append({"name": category.get("name", ""), "path": f"/blog/category/{category.get('slug','')}"})
+    schemas = [_schema_breadcrumb(site, bc_items)]
+
     head = _render_head(site, title=base_title, description=desc,
-                         canonical=canonical, og_type="website")
+                         canonical=canonical, og_type="website",
+                         schema_jsons=schemas)
     header = _render_header(site, menu_pages or [])
 
     cards = ""
@@ -821,7 +966,17 @@ def render_seo_article(site: dict, article: dict, author: dict = None,
     desc = article.get("meta_description") or article.get("excerpt") or ""
     canonical = article.get("canonical_url") or _site_url(site, "/blog/" + (article.get("slug") or "").lstrip("/"))
 
+    # Schemas: Article + BreadcrumbList + опц. FAQPage если найдены FAQ
     schemas = [_schema_article(site, article, author)]
+    breadcrumb_items = [{"name": "Home", "path": "/"}, {"name": "Blog", "path": "/blog"}]
+    if category:
+        breadcrumb_items.append({"name": category.get("name", ""), "path": f"/blog/category/{category.get('slug','')}"})
+    breadcrumb_items.append({"name": title, "path": f"/blog/{(article.get('slug') or '').lstrip('/')}"})
+    schemas.append(_schema_breadcrumb(site, breadcrumb_items))
+    faqs = _extract_faq(article.get("content_html") or "")
+    if faqs:
+        schemas.append(_schema_faq_page(faqs))
+
     head = _render_head(site, title=title, description=desc,
                          canonical=canonical, og_type="article",
                          og_image=article.get("og_image", ""),
@@ -830,6 +985,8 @@ def render_seo_article(site: dict, article: dict, author: dict = None,
     header = _render_header(site, menu_pages or [])
 
     pub = (article.get("published_at") or article.get("created_at") or "")[:10]
+    upd = (article.get("updated_at") or "")[:10]
+    show_updated = upd and upd != pub
     author_name = author.get("name") if author else ""
     cat_label = category.get("name") if category else ""
 
@@ -842,9 +999,14 @@ def render_seo_article(site: dict, article: dict, author: dict = None,
         '</div>'
     )
 
+    # Meta-row с time-тегами + опциональная "Updated:" дата
     by = f"By {_esc(author_name)}" if author_name else ""
     sep = " · " if author_name and pub else ""
-    meta = f'<div class="meta-row">{by}{sep}{_esc(pub)}</div>'
+    pub_html = f'<time datetime="{_esc(pub)}" itemprop="datePublished">{_esc(pub)}</time>' if pub else ""
+    upd_html = ""
+    if show_updated:
+        upd_html = f' · <span style="color:var(--muted)">Updated: <time datetime="{_esc(upd)}" itemprop="dateModified">{_esc(upd)}</time></span>'
+    meta = f'<div class="meta-row">{by}{sep}{pub_html}{upd_html}</div>'
 
     cover = ""
     if article.get("og_image"):

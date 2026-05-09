@@ -732,7 +732,10 @@ def render_seo_home_jobs(site: dict, page: dict, articles: list = None) -> str:
 # Используют тот же head/header/footer + Montserrat/Open Sans/pink палитру.
 
 # Реюзаем Article schema и авто-перелинковку из default-шаблона
-from seo_templates import _schema_article, _auto_link_internal_articles
+from seo_templates import (
+    _schema_article, _auto_link_internal_articles,
+    _schema_breadcrumb, _extract_faq, _schema_faq_page,
+)
 
 
 def render_seo_article_jobs(site: dict, article: dict, author: dict = None,
@@ -743,7 +746,17 @@ def render_seo_article_jobs(site: dict, article: dict, author: dict = None,
     desc = article.get("meta_description") or article.get("excerpt") or ""
     canonical = article.get("canonical_url") or _site_url(site, "/blog/" + (article.get("slug") or "").lstrip("/"))
 
+    # Schemas: Article + BreadcrumbList + опц. FAQPage
     schemas = [_schema_article(site, article, author)]
+    bc_items = [{"name": "Home", "path": "/"}, {"name": _t(site, "nav.blog"), "path": "/blog"}]
+    if category:
+        bc_items.append({"name": category.get("name", ""), "path": f"/blog/category/{category.get('slug','')}"})
+    bc_items.append({"name": title, "path": f"/blog/{(article.get('slug') or '').lstrip('/')}"})
+    schemas.append(_schema_breadcrumb(site, bc_items))
+    faqs = _extract_faq(article.get("content_html") or "")
+    if faqs:
+        schemas.append(_schema_faq_page(faqs))
+
     head = _render_jobs_head(site, title=title, description=desc,
                               canonical=canonical, og_type="article",
                               og_image=article.get("og_image", ""),
@@ -751,6 +764,8 @@ def render_seo_article_jobs(site: dict, article: dict, author: dict = None,
     header = _render_jobs_header(site)
 
     pub = (article.get("published_at") or article.get("created_at") or "")[:10]
+    upd = (article.get("updated_at") or "")[:10]
+    show_updated = upd and upd != pub
     author_name = author.get("name") if author else ""
     cat_label = category.get("name") if category else ""
 
@@ -769,9 +784,16 @@ def render_seo_article_jobs(site: dict, article: dict, author: dict = None,
 
     by = "By " + _esc(author_name) if author_name else ""
     sep = " · " if author_name and pub else ""
+    pub_html = '<time datetime="' + _esc(pub) + '" itemprop="datePublished">' + _esc(pub) + '</time>' if pub else ""
+    upd_html = ""
+    if show_updated:
+        # Локализованный лейбл "Updated"
+        lang = site.get("language") or "ru"
+        upd_label = {"ru": "Обновлено", "ua": "Оновлено", "en": "Updated"}.get(lang, "Updated")
+        upd_html = ' · <span>' + upd_label + ': <time datetime="' + _esc(upd) + '" itemprop="dateModified">' + _esc(upd) + '</time></span>'
     meta_row = (
         '<div style="display:flex;gap:16px;font-size:.92rem;color:var(--muted);margin-bottom:2rem">'
-        + by + sep + _esc(pub) +
+        + by + sep + pub_html + upd_html +
         '</div>'
     )
 
@@ -874,8 +896,15 @@ def render_seo_blog_index_jobs(site: dict, articles: list, categories: list = No
     desc = (category and category.get("meta_description")) or site.get("default_meta_description") or ""
     canonical = _site_url(site, "/blog" + ("/category/" + category["slug"] if category else ""))
 
+    # BreadcrumbList Schema
+    bc_items = [{"name": "Home", "path": "/"}, {"name": _t(site, "nav.blog"), "path": "/blog"}]
+    if category:
+        bc_items.append({"name": category.get("name", ""), "path": f"/blog/category/{category.get('slug','')}"})
+    schemas = [_schema_breadcrumb(site, bc_items)]
+
     head = _render_jobs_head(site, title=base_title, description=desc,
-                              canonical=canonical, og_type="website")
+                              canonical=canonical, og_type="website",
+                              schema_jsons=schemas)
     header = _render_jobs_header(site)
 
     cards = ""
@@ -939,6 +968,11 @@ def render_seo_page_jobs(site: dict, page: dict) -> str:
     schemas = []
     if page.get("schema_json"):
         schemas.append(page["schema_json"])
+    # BreadcrumbList Schema
+    schemas.append(_schema_breadcrumb(site, [
+        {"name": "Home", "path": "/"},
+        {"name": title, "path": "/" + (page.get("slug") or "").lstrip("/")},
+    ]))
 
     head = _render_jobs_head(site, title=title, description=desc,
                               canonical=canonical, og_type="website",

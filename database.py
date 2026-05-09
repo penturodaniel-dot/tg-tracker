@@ -3733,11 +3733,17 @@ class Database:
     def get_seo_articles(self, site_id: int, status: str = None,
                          category_id: int = None, limit: int = None,
                          offset: int = 0, tag_filter: str = None) -> list:
-        """Возвращает статьи. tag_filter — точное совпадение тега
-        (используется как language-фильтр для мульти-язычных сайтов:
-        каждая статья импортирована с tags='ru'/'ua'/'en'). Фильтр
-        применяется только в листингах; прямой /blog/{slug} URL
-        не зависит от языка — все статьи доступны."""
+        """Возвращает статьи. tag_filter — language-фильтр по тегу для
+        мульти-язычных сайтов (статьи с tags='ru'/'ua'/'en' и т.п.).
+
+        Логика «толерантного» фильтра (чтобы не ломать одно-язычные сайты
+        у которых tags содержит только топические метки типа 'swedish'):
+          - Статья с явным language-тегом который совпадает с tag_filter → показать
+          - Статья БЕЗ language-тегов (только топические) → показать
+            (трактуем как language-agnostic контент)
+          - Статья с другим language-тегом (en-статья на ru-сайте) → скрыть
+
+        Прямой /blog/{slug} URL — не использует фильтр, все статьи доступны."""
         self._init_seo_tables()
         sql = "SELECT * FROM seo_articles WHERE site_id=%s"
         params: list = [site_id]
@@ -3747,22 +3753,43 @@ class Database:
         if category_id is not None:
             sql += " AND category_id=%s"
             params.append(category_id)
-        if tag_filter:
-            # Простой LIKE — теги хранятся как CSV строка
-            sql += " AND (tags=%s OR tags LIKE %s OR tags LIKE %s OR tags LIKE %s)"
-            params.append(tag_filter)
-            params.append(f"{tag_filter},%")
-            params.append(f"%, {tag_filter}")
-            params.append(f"%,{tag_filter},%")
         sql += " ORDER BY COALESCE(published_at, created_at) DESC"
-        if limit:
+        # limit/offset применяем ПОСЛЕ Python-фильтра когда есть tag_filter
+        apply_sql_limit = bool(limit) and not tag_filter
+        if apply_sql_limit:
             sql += " LIMIT %s OFFSET %s"
             params.append(limit)
             params.append(offset)
+
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, params)
-                return [dict(r) for r in cur.fetchall()]
+                rows = [dict(r) for r in cur.fetchall()]
+
+        if tag_filter:
+            # Распознаваемые language-теги. Если статья имеет один из них
+            # но он не совпадает с tag_filter — статья скрывается.
+            LANG_TAGS = {"ru", "ua", "uk", "en", "es", "de", "fr", "pl", "it", "pt"}
+            tf = tag_filter.strip().lower()
+
+            def _matches(article):
+                tags_csv = (article.get("tags") or "").lower()
+                tag_list = [t.strip() for t in tags_csv.split(",") if t.strip()]
+                if tf in tag_list:
+                    return True  # явное совпадение
+                article_lang_tags = [t for t in tag_list if t in LANG_TAGS]
+                if not article_lang_tags:
+                    return True  # нет language-тегов вообще → показываем везде
+                return False  # есть другой language-тег → скрываем
+
+            rows = [r for r in rows if _matches(r)]
+            # Применяем limit/offset после фильтра
+            if offset:
+                rows = rows[offset:]
+            if limit:
+                rows = rows[:limit]
+
+        return rows
 
     def get_seo_article(self, article_id: int):
         self._init_seo_tables()

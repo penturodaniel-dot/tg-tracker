@@ -229,14 +229,21 @@ Railway автоматически запускает nixpacks:
 Диспатчер в `routers/seo.py` ветвится по `site.template` для homepage / blog index / article / page / 404. Локации только в default (jobs_landing их не использует — это лендинги без множественных адресов).
 
 **Публичный рендер (`seo_templates.py` — default + общие хелперы):**
-- Полная SEO-обвязка: `<title>`, meta description, canonical, Open Graph, Twitter Card, Schema.org JSON-LD (`Organization`, `WebSite`, `LocalBusiness` + `HealthAndBeautyBusiness`, `Article`)
+- Полная SEO-обвязка: `<title>`, meta description, canonical, Open Graph, Twitter Card, Schema.org JSON-LD (`Organization`, `WebSite`, `LocalBusiness` + `HealthAndBeautyBusiness`, `Article`, `BreadcrumbList`, `FAQPage`, `Service`/`OfferCatalog`)
 - `sitemap.xml` и `robots.txt` генерируются автоматически на каждый сайт
 - Inline CSS с подстановкой палитры через `__PRIMARY__` / `__SECONDARY__` (через `.replace()`, НЕ `%`-formatting — в CSS есть `100%` который ломает % syntax)
 - Google Fonts (Inter + Playfair Display) с `font-display: swap`
 - Mobile-responsive
 - Контакт-кнопки: `tel:`, `mailto:`, `t.me/`, `wa.me/`, `sms:` + inline SVG-иконки
-- **Локации**: встроенный Google Maps iframe (без API-ключа, через `maps.google.com/maps?q=lat,lng&output=embed`) + кнопка «Open in Google Maps» (приоритет — пользовательский `google_maps_url`, иначе строится из координат)
+- **Локации**: встроенный Google Maps iframe (без API-ключа, через `maps.google.com/maps?q=lat,lng&output=embed`) + кнопка «Open in Google Maps» (приоритет — пользовательский `google_maps_url`, иначе строится из координат). На странице города **автоматически** появляется секция «Our Services in [City]» если в `seo_pages` есть child-страницы со slug'ами `<city-slug>/<service-slug>` — карточки со ссылками на каждый nested page. Это hub-перелинковка для PageRank-flow.
 - **Статьи**: автоматическая внутренняя перелинковка через `_auto_link_internal_articles()` — карта `_INTERNAL_LINK_MAP` (slug → варианты ключевых фраз) ищется в `content_html`, первое вхождение каждой фразы заменяется ссылкой на `/blog/{slug}`. Защищены `<a>`, `<h1-6>`, `<code>`, `<pre>`. Один линк на target slug на статью. Не линкует сам в себя.
+- **«Updated:» дата** — если `article.updated_at` отличается от `published_at`, рендерится «Updated: YYYY-MM-DD» с `<time itemprop="dateModified">`. Freshness signal для Google.
+- **FAQPage Schema** — авто-парсится из тела статьи (находит H2 «Frequently asked questions» / «Часто задаваемые вопросы» и парсит H3+P пары). Локации тоже получают FAQPage из `faq_json`.
+- **BreadcrumbList Schema** — на каждой статье / странице / локации / nested-page (с правильной иерархией Home › City › Service для nested).
+- **Image optimization**: `_optimize_img_url()` для Cloudinary URL'ов инжектит `f_auto,q_auto` → авто-WebP/AVIF + auto-quality. Все `<img>` теги имеют `loading="lazy"` (кроме FB Pixel noscript).
+- **Our Team block**: `_render_team_section(site)` рендерит `site.team_html` (если задано) перед футером на ВСЕХ страницах — задаётся в админке 1 раз, отображается везде.
+- **Footer «Our Locations»** (default) — диспатчер инжектирует `site["_footer_locations"]` (до 8 городов с primary-телефоном); footer рендерит 4-ю колонку.
+- **Site search** — `/search?q=...` — простой LIKE-поиск по статьям с language-фильтром. Search-страницы `noindex` (best practice).
 
 **Jobs Landing рендер (`seo_templates_jobs.py`):**
 - Те же SEO-хелперы (`_schema_organization`, `_schema_article`, `_auto_link_internal_articles`) что в default — реюзаются
@@ -252,14 +259,23 @@ Railway автоматически запускает nixpacks:
 - `site.telegram_url` / `site.whatsapp_url` — точки контакта
 - ⚠️ Python 3.11 не поддерживает PEP 701 (вложенные f-string с одинаковыми кавычками). На production используется 3.11 — **избегай нестинга f-string**, только plain string concat. Иначе `import` упадёт → middleware вернёт «Internal error». Локально 3.13 не отловит этот баг — проверяй через `ast.parse(feature_version=(3,11))`.
 
-**Language-фильтр для листингов:** на мульти-язычных сайтах (типа choise: ru/ua/en статьи в одной БД) каждая статья импортирована с `tags='ru'/'ua'/'en'`. Диспатчер в `/blog`, на главной (recent), и в related статьи передаёт `tag_filter=site.language` → показывает **только статьи на языке сайта**. Прямой `/blog/<slug>` URL **НЕ** фильтрует — все статьи доступны → Google продолжает индексировать ua/en URL'ы которые уже были в индексе при миграции с Lovable. Метод `get_seo_articles(tag_filter=...)` использует CSV-aware LIKE matching.
+**Language-фильтр для листингов:** на мульти-язычных сайтах (типа choise: ru/ua/en статьи в одной БД) каждая статья импортирована с `tags='ru'/'ua'/'en'`. Диспатчер в `/blog`, на главной (recent), и в related статьи передаёт `tag_filter=site.language` → показывает только нужный язык. Прямой `/blog/<slug>` URL **НЕ** фильтрует — все статьи доступны → Google продолжает индексировать ua/en URL'ы которые уже были в индексе.
+
+⚠️ **«Толерантный» фильтр** в `get_seo_articles` (Python-side post-filter):
+- Статья с `tags` совпадающим с `tag_filter` → показать
+- Статья **без** language-тегов вообще (только топические типа «swedish, beginner») → показать как language-agnostic
+- Статья с другим language-тегом (en на ru-сайте) → скрыть
+
+Это нужно потому что на одно-язычных сайтах (типа RelaxTouch — все статьи на en, теги топические) строгий SQL-фильтр всё бы скрыл. Recognized lang tags: `ru, ua, uk, en, es, de, fr, pl, it, pt`.
 
 **Маршруты публичные** (на SEO-домене):
-- `/` — главная (locations grid + recent articles)
+- `/` — главная (locations grid + recent articles в default; полный landing в jobs_landing)
 - `/blog` — индекс статей
 - `/blog/category/<slug>` — статьи рубрики
 - `/blog/<slug>` — статья
 - `/<slug>` — локация (приоритет) или статическая страница
+- `/<city-slug>/<service-slug>` — **nested service-page** (например `/los-angeles-ca/swedish-massage`). Диспатчер ищет `seo_pages.slug == 'los-angeles-ca/swedish-massage'`. Если есть — рендер с breadcrumb `Home › City › Service` через `parent_location` параметр в `render_seo_page`.
+- `/search?q=...` — site search (LIKE по article title/h1/excerpt/meta_description/content_html). Honors language filter. Page отдаётся с `noindex`.
 - `/sitemap.xml` / `/robots.txt`
 
 **Админка** (на CRM-домене, под `/seo/*`):
@@ -285,6 +301,8 @@ Railway автоматически запускает nixpacks:
 - `docs/seo-content/relaxtouch-bootstrap.json` — 1 site_settings + 4 categories + 1 author + 4 static pages + 15 location pages
 - `docs/seo-content/relaxtouch-articles-batch-1.json` — 5 pillar-статей (~6,400 слов): Swedish vs Deep Tissue, How Often, First Massage, Science-Backed Benefits, Hot Stone
 - `docs/seo-content/relaxtouch-articles-batch-2.json` — 5 статей (~5,800 слов): Lower Back Pain, Tipping Etiquette, Sports Massage Runners, How to Choose a Therapist, Prenatal Trimester Guide
+- `docs/seo-content/relaxtouch-city-service-pages-LA.json` — 6 nested City × Service страниц для Los Angeles (`los-angeles-ca/swedish-massage`, `/deep-tissue-massage`, `/hot-stone-massage`, `/prenatal-massage`, `/sports-massage`, `/couples-massage`) — long-tail keywords, ~400-700 слов каждая, FAQ + pricing + CTA на /los-angeles-ca
+- `docs/seo-content/relaxtouch-city-service-pages-batch-2.json` — 30 nested City × Service страниц (Costa Mesa CA, Newark CA, Arlington VA, Chicago IL, Brooklyn NY × 6 услуг). Сгенерировано через `build_city_service_pages.py` (~9,400 слов, 90 KB)
 - `docs/seo-content/legal-update-relaxtouch.json` — обновление с реальной юридической инфой (`Digital Chaos Inc.`, NY, 252 Seaview Ave, Staten Island, NY 10305) + Privacy + Terms (US-формат, Richmond County jurisdiction, CCPA + GDPR rights)
 
 *ChoiseForYouToday (choiseforyoutoday.com — HR/jobs, jobs_landing template):*
@@ -318,9 +336,10 @@ Railway автоматически запускает nixpacks:
   - **`template`** — `'default'` или `'jobs_landing'` — определяет рендер главной + внутренних страниц (ALTER через `_init_seo_tables()`)
   - **`hero_image_url`** / **`secondary_image_url`** — для jobs_landing (hero фото + banner)
   - **`telegram_url`** / **`whatsapp_url`** — точки контакта (jobs_landing рисует кнопки CTA)
+  - **`team_html`** — HTML-блок «Our Team» (имена + фото), рендерится перед футером на ВСЕХ страницах сайта (homepage, locations, articles, blog index, static pages, search). Single source of truth — заполняется один раз в `/seo/sites/{id}` и распространяется автоматически. Шаблон с placeholder-разметкой подставляется из админки.
 - `seo_locations` — города на сайте (адрес, lat/lng, **`google_maps_url`**, FAQ JSON, hours JSON). Колонка `google_maps_url` добавлена через `ALTER TABLE IF NOT EXISTS`.
 - `seo_location_contacts` — телефоны / TG / WA / email на локацию (contact_type, value, is_primary, is_active)
-- `seo_pages` — статические страницы (about, contact, privacy, terms, services). Поле `slug=''` зарезервировано под homepage-page для jobs_landing (туда кладётся title/meta_description/og_image/JobPosting schema_json для главной).
+- `seo_pages` — статические страницы (about, contact, privacy, terms, services) **+ nested City × Service страницы** (slug содержит `/`, напр. `los-angeles-ca/swedish-massage`). Диспетчер в `routers/seo.py` сначала проверяет full path как slug → если найдено и parent-slug совпадает с локацией, рендерит как nested service page с breadcrumbs `Home → City → Service` + хаб-перелинковкой (city ↔ service bidirectional для PageRank flow). Поле `slug=''` зарезервировано под homepage-page для jobs_landing (туда кладётся title/meta_description/og_image/JobPosting schema_json для главной).
 - `seo_articles` — блог (slug → category_id, author_id, content_html, is_pillar, view_count, **`tags`** хранит CSV-теги, в т.ч. язык `ru`/`ua`/`en` для language-фильтра в листингах)
 - `seo_categories` / `seo_authors`
 - `seo_redirects` — 301/302 редиректы с трекингом hits

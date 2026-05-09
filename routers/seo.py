@@ -272,17 +272,40 @@ async def dispatch_seo_request(request: Request, site: dict, *,
             return HTMLResponse(html)
 
         # Произвольный slug — может быть локацией или страницей
-        slug = path.lstrip("/").split("/", 1)[0]
+        full_path = path.lstrip("/")
+        slug = full_path.split("/", 1)[0]
 
-        # Сначала ищем среди локаций (они приоритетнее, обычно их слаги короче)
+        # 1. NESTED-страница типа /los-angeles-ca/swedish-massage —
+        #    ищем seo_pages по полному пути включая slash. Это даёт
+        #    иерархическую структуру city × service.
+        if "/" in full_path:
+            nested_page = _db.get_seo_page_by_slug(site["id"], full_path)
+            if nested_page and (preview or nested_page.get("status") == "published"):
+                # Найдём родительскую локацию для breadcrumb (опц.)
+                parent_loc = _db.get_seo_location_by_slug(site["id"], slug)
+                if is_jobs:
+                    html = tpl_jobs.render_seo_page_jobs(site, nested_page)
+                else:
+                    html = tpl.render_seo_page(site, nested_page, menu_pages,
+                                                parent_location=parent_loc)
+                return HTMLResponse(html)
+
+        # 2. Локации (один сегмент)
         location = _db.get_seo_location_by_slug(site["id"], slug)
         if location and (preview or location.get("status") == "published"):
             contacts = _db.get_seo_location_contacts(location["id"], only_active=True)
-            # Локации только в default шаблоне (jobs_landing их не использует)
-            html = tpl.render_seo_location(site, location, contacts, menu_pages)
+            # Подтянуть child-страницы (city × service) — для блока «Our Services»
+            child_prefix = (location.get("slug") or "") + "/"
+            try:
+                all_pages = _db.get_seo_pages(site["id"], status=list_status)
+                child_pages = [p for p in all_pages if (p.get("slug") or "").startswith(child_prefix)]
+            except Exception:
+                child_pages = []
+            html = tpl.render_seo_location(site, location, contacts, menu_pages,
+                                            child_pages=child_pages)
             return HTMLResponse(html)
 
-        # Затем — статические страницы
+        # 3. Single-segment статические страницы
         page = _db.get_seo_page_by_slug(site["id"], slug)
         if page and (preview or page.get("status") == "published"):
             if is_jobs:

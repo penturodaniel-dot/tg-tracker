@@ -648,7 +648,12 @@ def render_seo_home(site: dict, locations: list, articles: list,
 
 
 def render_seo_location(site: dict, location: dict, contacts: list,
-                         menu_pages: list = None) -> str:
+                         menu_pages: list = None,
+                         child_pages: list = None) -> str:
+    """child_pages — nested service-страницы для этого города (например
+    los-angeles-ca/swedish-massage). Если есть, рендерим секцию
+    «Our Services in [City]» со ссылками. Это создаёт hub-структуру
+    для PageRank-flow между city-page и service-pages."""
     title = location.get("title") or location.get("h1") or f"{location.get('city')}, {location.get('state')}"
     h1 = location.get("h1") or title
     desc = location.get("meta_description") or site.get("default_meta_description") or ""
@@ -819,10 +824,35 @@ def render_seo_location(site: dict, location: dict, contacts: list,
         '</div></section>'
     )
 
-    return head + header + hero + services_html + about_studio + faqs_html + _render_team_section(site) + _render_footer(site)
+    # Секция «Our Services in [City]» — карточки nested service-страниц.
+    # Создаёт city-page → service-page внутреннюю перелинковку (hub pattern,
+    # хорошо для SEO PageRank-flow).
+    children_section = ""
+    if child_pages:
+        cards = ""
+        for cp in child_pages:
+            href = "/" + (cp.get("slug") or "").lstrip("/")
+            t = cp.get("h1") or cp.get("title") or cp.get("slug") or ""
+            d = (cp.get("meta_description") or "")[:140]
+            cards += (
+                f'<a href="{_esc(href)}" class="card" style="text-decoration:none;color:inherit;display:block">'
+                f'<h3 style="margin:0 0 8px">{_esc(t)}</h3>'
+                f'<p style="color:var(--muted);font-size:.95rem;margin:0">{_esc(d)}</p>'
+                '</a>'
+            )
+        children_section = (
+            '<section style="background:var(--surface,#FAF7F2)"><div class="container">'
+            f'<h2>Our Services in {_esc(location.get("city",""))}</h2>'
+            '<p style="color:var(--muted);max-width:680px;margin-bottom:24px">Choose the modality that fits what your body needs today.</p>'
+            f'<div class="grid grid-3" style="margin-top:24px">{cards}</div>'
+            '</div></section>'
+        )
+
+    return head + header + hero + services_html + about_studio + children_section + faqs_html + _render_team_section(site) + _render_footer(site)
 
 
-def render_seo_page(site: dict, page: dict, menu_pages: list = None) -> str:
+def render_seo_page(site: dict, page: dict, menu_pages: list = None,
+                     parent_location: dict = None) -> str:
     title = page.get("title") or page.get("h1") or page.get("slug") or "Page"
     h1 = page.get("h1") or title
     desc = page.get("meta_description") or site.get("default_meta_description") or ""
@@ -831,11 +861,15 @@ def render_seo_page(site: dict, page: dict, menu_pages: list = None) -> str:
     schemas = []
     if page.get("schema_json"):
         schemas.append(page["schema_json"])
-    # BreadcrumbList для статической страницы
-    schemas.append(_schema_breadcrumb(site, [
-        {"name": "Home", "path": "/"},
-        {"name": title, "path": "/" + (page.get("slug") or "").lstrip("/")},
-    ]))
+    # BreadcrumbList — если есть parent_location, добавляем её в иерархию
+    bc_items = [{"name": "Home", "path": "/"}]
+    if parent_location:
+        bc_items.append({
+            "name": parent_location.get("city", "") + ", " + parent_location.get("state", ""),
+            "path": "/" + (parent_location.get("slug") or "").lstrip("/"),
+        })
+    bc_items.append({"name": title, "path": "/" + (page.get("slug") or "").lstrip("/")})
+    schemas.append(_schema_breadcrumb(site, bc_items))
 
     head = _render_head(site, title=title, description=desc,
                          canonical=canonical, og_type="website",
@@ -844,9 +878,17 @@ def render_seo_page(site: dict, page: dict, menu_pages: list = None) -> str:
                          schema_jsons=schemas)
     header = _render_header(site, menu_pages or [])
 
+    # Visible breadcrumb HTML
+    if parent_location:
+        parent_city = _esc(parent_location.get("city", "") + ", " + parent_location.get("state", ""))
+        parent_slug = _esc((parent_location.get("slug") or "").lstrip("/"))
+        breadcrumb_html = f'<a href="/">Home</a> / <a href="/{parent_slug}">{parent_city}</a> / {_esc(title)}'
+    else:
+        breadcrumb_html = f'<a href="/">Home</a> / {_esc(title)}'
+
     body = (
         '<section><div class="container-narrow">'
-        f'<div class="breadcrumbs"><a href="/">Home</a> / {_esc(title)}</div>'
+        f'<div class="breadcrumbs">{breadcrumb_html}</div>'
         f'<h1>{_esc(h1)}</h1>'
         f'<div class="prose">{page.get("content_html") or ""}</div>'
         '</div></section>'

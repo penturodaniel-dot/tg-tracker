@@ -3732,7 +3732,12 @@ class Database:
     # ── seo_articles ─────────────────────────────────────────────────────────
     def get_seo_articles(self, site_id: int, status: str = None,
                          category_id: int = None, limit: int = None,
-                         offset: int = 0) -> list:
+                         offset: int = 0, tag_filter: str = None) -> list:
+        """Возвращает статьи. tag_filter — точное совпадение тега
+        (используется как language-фильтр для мульти-язычных сайтов:
+        каждая статья импортирована с tags='ru'/'ua'/'en'). Фильтр
+        применяется только в листингах; прямой /blog/{slug} URL
+        не зависит от языка — все статьи доступны."""
         self._init_seo_tables()
         sql = "SELECT * FROM seo_articles WHERE site_id=%s"
         params: list = [site_id]
@@ -3742,6 +3747,13 @@ class Database:
         if category_id is not None:
             sql += " AND category_id=%s"
             params.append(category_id)
+        if tag_filter:
+            # Простой LIKE — теги хранятся как CSV строка
+            sql += " AND (tags=%s OR tags LIKE %s OR tags LIKE %s OR tags LIKE %s)"
+            params.append(tag_filter)
+            params.append(f"{tag_filter},%")
+            params.append(f"%, {tag_filter}")
+            params.append(f"%,{tag_filter},%")
         sql += " ORDER BY COALESCE(published_at, created_at) DESC"
         if limit:
             sql += " LIMIT %s OFFSET %s"

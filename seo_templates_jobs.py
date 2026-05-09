@@ -700,3 +700,255 @@ def render_seo_home_jobs(site: dict, page: dict, articles: list = None) -> str:
         )
 
     return head + header + hero + about + benefits + req + how + offers + blog_html + cta + _render_jobs_footer(site)
+
+
+# ── Внутренние страницы в jobs стиле ────────────────────────────────────────
+# (статьи, блог-индекс, статические страницы, 404)
+# Используют тот же head/header/footer + Montserrat/Open Sans/pink палитру.
+
+# Реюзаем Article schema и авто-перелинковку из default-шаблона
+from seo_templates import _schema_article, _auto_link_internal_articles
+
+
+def render_seo_article_jobs(site: dict, article: dict, author: dict = None,
+                              category: dict = None, related: list = None) -> str:
+    """Статья в jobs стиле — pink/magenta, Montserrat/Open Sans."""
+    title = article.get("title") or article.get("h1") or "Article"
+    h1 = article.get("h1") or title
+    desc = article.get("meta_description") or article.get("excerpt") or ""
+    canonical = article.get("canonical_url") or _site_url(site, "/blog/" + (article.get("slug") or "").lstrip("/"))
+
+    schemas = [_schema_article(site, article, author)]
+    head = _render_jobs_head(site, title=title, description=desc,
+                              canonical=canonical, og_type="article",
+                              og_image=article.get("og_image", ""),
+                              schema_jsons=schemas)
+    header = _render_jobs_header(site)
+
+    pub = (article.get("published_at") or article.get("created_at") or "")[:10]
+    author_name = author.get("name") if author else ""
+    cat_label = category.get("name") if category else ""
+
+    # Breadcrumbs
+    cat_link = ""
+    if category:
+        cat_link = ' / <a href="/blog/category/' + _esc(category["slug"]) + '">' + _esc(cat_label) + '</a>'
+    breadcrumbs = (
+        '<div style="font-size:.88rem;color:var(--muted);margin-bottom:1.5rem">'
+        '<a href="/" style="color:var(--muted)">Home</a> / '
+        '<a href="/blog" style="color:var(--muted)">' + _esc(_t(site, "nav.blog")) + '</a>'
+        + cat_link +
+        ' / ' + _esc(title[:50]) +
+        '</div>'
+    )
+
+    by = "By " + _esc(author_name) if author_name else ""
+    sep = " · " if author_name and pub else ""
+    meta_row = (
+        '<div style="display:flex;gap:16px;font-size:.92rem;color:var(--muted);margin-bottom:2rem">'
+        + by + sep + _esc(pub) +
+        '</div>'
+    )
+
+    cover = ""
+    if article.get("og_image"):
+        cover = (
+            '<img src="' + _esc(article["og_image"]) + '" alt="' + _esc(title) +
+            '" style="width:100%;border-radius:24px;margin:1rem 0 2.5rem;box-shadow:var(--shadow-card)">'
+        )
+
+    tags_html = ""
+    if article.get("tags"):
+        tags = [t.strip() for t in article["tags"].split(",") if t.strip()]
+        chips = "".join(
+            '<span style="display:inline-block;padding:6px 14px;background:var(--surface);border-radius:999px;font-size:.82rem;color:var(--muted);margin:2px;font-weight:600">' + _esc(t) + '</span>'
+            for t in tags
+        )
+        tags_html = '<div style="margin:2.5rem 0">' + chips + '</div>'
+
+    author_block = ""
+    if author and (author.get("bio_html") or author.get("name")):
+        avatar = ""
+        if author.get("avatar_url"):
+            avatar = (
+                '<img src="' + _esc(author["avatar_url"]) +
+                '" alt="' + _esc(author.get("name") or "") +
+                '" style="width:64px;height:64px;border-radius:50%;flex-shrink:0">'
+            )
+        creds = ""
+        if author.get("credentials"):
+            creds = (
+                '<div style="color:var(--muted);font-size:.9rem;margin-bottom:8px">'
+                + _esc(author["credentials"]) + '</div>'
+            )
+        author_block = (
+            '<div style="margin-top:3rem;padding:24px;background:var(--gradient-card);border-radius:24px;display:flex;gap:16px;align-items:flex-start;box-shadow:var(--shadow-card)">'
+            + avatar + '<div>'
+            '<div style="font-weight:700;font-size:1.1rem;font-family:Montserrat,sans-serif">' + _esc(author.get("name", "")) + '</div>'
+            + creds +
+            '<div style="color:var(--muted);font-size:.95rem">' + (author.get("bio_html") or "") + '</div>'
+            '</div></div>'
+        )
+
+    related_html = ""
+    if related:
+        cards = ""
+        for art in related[:3]:
+            art_url = "/blog/" + (art.get("slug") or "").lstrip("/")
+            bg = ""
+            if art.get("og_image"):
+                bg = "background-image:url('" + _esc(art.get("og_image")) + "')"
+            cards += (
+                '<a href="' + _esc(art_url) + '" style="display:block;background:#fff;border-radius:24px;overflow:hidden;box-shadow:var(--shadow-card);transition:all .3s;text-decoration:none;color:inherit">'
+                '<div style="aspect-ratio:16/9;' + bg + ';background-size:cover;background-position:center;background-color:#FBE5F2"></div>'
+                '<div style="padding:24px">'
+                '<h3 style="margin:0;font-size:1.05rem">' + _esc(art.get("title", "")) + '</h3>'
+                '</div></a>'
+            )
+        related_html = (
+            '<section class="gradient-section"><div class="container">'
+            '<div class="section-title-wrap"><h2>' + _esc(_t(site, "nav.blog")) + '</h2></div>'
+            '<div class="benefits-grid">' + cards + '</div>'
+            '</div></section>'
+        )
+
+    # Авто-перелинковка между статьями (тот же helper что в default)
+    linked_content = _auto_link_internal_articles(
+        article.get("content_html") or "",
+        current_slug=article.get("slug", "")
+    )
+
+    body = (
+        '<section style="padding:60px 0"><div class="container" style="max-width:800px">'
+        + breadcrumbs +
+        '<h1 style="margin-bottom:1rem">' + _esc(h1) + '</h1>'
+        + meta_row + cover +
+        '<div style="font-size:1.05rem;line-height:1.85;color:var(--text)">' + linked_content + '</div>'
+        + tags_html + author_block +
+        '</div></section>'
+        + related_html
+    )
+
+    # CTA banner внизу статьи
+    cta = (
+        '<section class="cta-section"><div class="container">'
+        '<div class="cta-card">'
+        '<h2>' + _esc(_t(site, "cta.main")) + '</h2>'
+        '<p>' + _esc(_t(site, "cta.sub")) + '</p>'
+        + _tg_btn(site, inverted=True) +
+        '</div></div></section>'
+    )
+
+    return head + header + body + cta + _render_jobs_footer(site)
+
+
+def render_seo_blog_index_jobs(site: dict, articles: list, categories: list = None,
+                                 category: dict = None) -> str:
+    """Блог-индекс в jobs стиле."""
+    base_title = _t(site, "nav.blog") if not category else (category.get("name") or _t(site, "nav.blog"))
+    desc = (category and category.get("meta_description")) or site.get("default_meta_description") or ""
+    canonical = _site_url(site, "/blog" + ("/category/" + category["slug"] if category else ""))
+
+    head = _render_jobs_head(site, title=base_title, description=desc,
+                              canonical=canonical, og_type="website")
+    header = _render_jobs_header(site)
+
+    cards = ""
+    for art in articles or []:
+        art_url = "/blog/" + (art.get("slug") or "").lstrip("/")
+        bg = ""
+        if art.get("og_image"):
+            bg = "background-image:url('" + _esc(art.get("og_image")) + "')"
+        date = (art.get("published_at") or art.get("created_at") or "")[:10]
+        cards += (
+            '<a href="' + _esc(art_url) + '" style="display:block;background:#fff;border-radius:24px;overflow:hidden;box-shadow:var(--shadow-card);transition:all .3s;text-decoration:none;color:inherit">'
+            '<div style="aspect-ratio:16/9;' + bg + ';background-size:cover;background-position:center;background-color:#FBE5F2"></div>'
+            '<div style="padding:24px">'
+            '<h3 style="margin-bottom:10px;font-size:1.15rem;line-height:1.3">' + _esc(art.get("title", "")) + '</h3>'
+            '<p style="color:var(--muted);font-size:.95rem;margin:0 0 12px">' + _esc((art.get("excerpt") or "")[:160]) + '</p>'
+            '<div style="font-size:.85rem;color:var(--muted)">' + _esc(date) + '</div>'
+            '</div></a>'
+        )
+    if not cards:
+        cards = '<p style="color:var(--muted);grid-column:1/-1;text-align:center;padding:40px">Статей пока нет.</p>'
+
+    cat_links = ""
+    if categories:
+        chips = '<a href="/blog" style="display:inline-block;padding:8px 18px;background:var(--surface);border-radius:999px;font-size:.92rem;font-weight:600;color:var(--muted);margin:4px;text-decoration:none">All</a>'
+        for cat in categories:
+            chips += (
+                '<a href="/blog/category/' + _esc(cat["slug"]) +
+                '" style="display:inline-block;padding:8px 18px;background:var(--surface);border-radius:999px;font-size:.92rem;font-weight:600;color:var(--muted);margin:4px;text-decoration:none">'
+                + _esc(cat["name"]) + '</a>'
+            )
+        cat_links = '<div style="margin-top:20px;display:flex;flex-wrap:wrap;justify-content:center;gap:6px">' + chips + '</div>'
+
+    breadcrumbs = (
+        '<div style="font-size:.88rem;color:var(--muted);margin-bottom:1rem;text-align:center">'
+        '<a href="/" style="color:var(--muted)">Home</a> / ' + _esc(_t(site, "nav.blog"))
+        + (' / ' + _esc(category["name"]) if category else '')
+        + '</div>'
+    )
+
+    body = (
+        '<section class="hero"><div class="container">'
+        + breadcrumbs +
+        '<div class="section-title-wrap"><h1 style="margin-bottom:0">' + _esc(base_title) + '</h1></div>'
+        + cat_links +
+        '</div></section>'
+        '<section><div class="container">'
+        '<div class="benefits-grid">' + cards + '</div>'
+        '</div></section>'
+    )
+
+    return head + header + body + _render_jobs_footer(site)
+
+
+def render_seo_page_jobs(site: dict, page: dict) -> str:
+    """Статическая страница в jobs стиле (about/contact/privacy/terms)."""
+    title = page.get("title") or page.get("h1") or page.get("slug") or "Page"
+    h1 = page.get("h1") or title
+    desc = page.get("meta_description") or site.get("default_meta_description") or ""
+    canonical = page.get("canonical_url") or _site_url(site, "/" + (page.get("slug") or "").lstrip("/"))
+
+    schemas = []
+    if page.get("schema_json"):
+        schemas.append(page["schema_json"])
+
+    head = _render_jobs_head(site, title=title, description=desc,
+                              canonical=canonical, og_type="website",
+                              og_image=page.get("og_image", ""),
+                              schema_jsons=schemas)
+    header = _render_jobs_header(site)
+
+    breadcrumbs = (
+        '<div style="font-size:.88rem;color:var(--muted);margin-bottom:1.5rem">'
+        '<a href="/" style="color:var(--muted)">Home</a> / ' + _esc(title)
+        + '</div>'
+    )
+
+    body = (
+        '<section style="padding:60px 0"><div class="container" style="max-width:800px">'
+        + breadcrumbs +
+        '<h1 style="margin-bottom:1.5rem">' + _esc(h1) + '</h1>'
+        '<div style="font-size:1.05rem;line-height:1.85">' + (page.get("content_html") or "") + '</div>'
+        '</div></section>'
+    )
+
+    return head + header + body + _render_jobs_footer(site)
+
+
+def render_seo_404_jobs(site: dict) -> str:
+    """404 в jobs стиле."""
+    head = _render_jobs_head(site, title="Page Not Found",
+                              description="Страница не найдена",
+                              og_type="website")
+    header = _render_jobs_header(site)
+    body = (
+        '<section class="hero" style="padding:120px 0;text-align:center"><div class="container">'
+        '<h1 style="font-size:5rem">404</h1>'
+        '<p style="font-size:1.2rem;color:var(--muted);margin-bottom:2rem">Страница не найдена.</p>'
+        '<a href="/" class="btn btn-primary">На главную</a>'
+        '</div></section>'
+    )
+    return head + header + body + _render_jobs_footer(site)

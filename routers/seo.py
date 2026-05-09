@@ -126,28 +126,40 @@ async def dispatch_seo_request(request: Request, site: dict, *,
         list_status = None if preview else "published"
         menu_pages = _menu_pages_for(site)
 
+        # Шаблон сайта (определяет внутренние страницы тоже)
+        template = (site.get("template") or "default").lower()
+        is_jobs = (template == "jobs_landing")
+        if is_jobs:
+            import seo_templates_jobs as tpl_jobs
+
+        # Language-фильтр для листингов: на мульти-язычных сайтах
+        # каждая статья импортирована с tags='ru'/'ua'/'en'. В блог-индексе
+        # и на главной показываем только статьи с языком сайта (фильтр по tag).
+        # Прямой /blog/<slug> URL не зависит от фильтра — все статьи доступны.
+        site_lang = (site.get("language") or "").strip()
+        articles_tag = site_lang if site_lang in ("ru", "ua", "en", "uk", "es") else None
+
         # Корень — главная сайта
         if path == "/" or path == "":
-            template = (site.get("template") or "default").lower()
-            articles = _db.get_seo_articles(site["id"], status=list_status, limit=6)
-            if template == "jobs_landing":
-                # Jobs-landing шаблон: ищем page со slug='' для дополнительных
-                # данных (title/meta/schema). Если не нашли — рендерим по
-                # дефолтным переводам site.language.
-                import seo_templates_jobs as tpl_jobs
+            articles = _db.get_seo_articles(site["id"], status=list_status,
+                                             limit=6, tag_filter=articles_tag)
+            if is_jobs:
                 home_page = _db.get_seo_page_by_slug(site["id"], "") or {}
                 html = tpl_jobs.render_seo_home_jobs(site, home_page, articles)
                 return HTMLResponse(html)
-            # default шаблон: hero + locations grid + recent articles
             locations = _db.get_seo_locations(site["id"], status=list_status)
             html = tpl.render_seo_home(site, locations, articles, menu_pages)
             return HTMLResponse(html)
 
         # Блог-индекс
         if path == "/blog":
-            articles = _db.get_seo_articles(site["id"], status=list_status, limit=50)
+            articles = _db.get_seo_articles(site["id"], status=list_status,
+                                             limit=50, tag_filter=articles_tag)
             categories = _db.get_seo_categories(site["id"])
-            html = tpl.render_seo_blog_index(site, articles, categories, menu_pages)
+            if is_jobs:
+                html = tpl_jobs.render_seo_blog_index_jobs(site, articles, categories)
+            else:
+                html = tpl.render_seo_blog_index(site, articles, categories, menu_pages)
             return HTMLResponse(html)
 
         # Блог по категории: /blog/category/<slug>
@@ -155,31 +167,38 @@ async def dispatch_seo_request(request: Request, site: dict, *,
             cat_slug = path[len("/blog/category/"):].split("/", 1)[0]
             category = _db.get_seo_category_by_slug(site["id"], cat_slug)
             if not category:
-                return _render_404(site, menu_pages)
+                return _render_404(site, menu_pages, is_jobs)
             articles = _db.get_seo_articles(site["id"], status=list_status,
-                                             category_id=category["id"], limit=50)
+                                             category_id=category["id"], limit=50,
+                                             tag_filter=articles_tag)
             categories = _db.get_seo_categories(site["id"])
-            html = tpl.render_seo_blog_index(site, articles, categories,
-                                              menu_pages, category=category)
+            if is_jobs:
+                html = tpl_jobs.render_seo_blog_index_jobs(site, articles, categories, category=category)
+            else:
+                html = tpl.render_seo_blog_index(site, articles, categories,
+                                                  menu_pages, category=category)
             return HTMLResponse(html)
 
-        # Статья: /blog/<slug>
+        # Статья: /blog/<slug> — прямой URL, без language-фильтра
         if path.startswith("/blog/"):
             slug = path[len("/blog/"):].split("/", 1)[0]
             if not slug:
-                return _render_404(site, menu_pages)
+                return _render_404(site, menu_pages, is_jobs)
             article = _db.get_seo_article_by_slug(site["id"], slug)
             if not article or (not preview and article.get("status") != "published"):
-                return _render_404(site, menu_pages)
+                return _render_404(site, menu_pages, is_jobs)
             author = None
             if article.get("author_id"):
                 author = _db.get_seo_author(article["author_id"])
             category = None
             if article.get("category_id"):
                 category = _db.get_seo_category(article["category_id"])
+            # Related articles того же языка что и текущая статья
+            article_tag = (article.get("tags") or "").strip() or articles_tag
             related = _db.get_seo_articles(
                 site["id"], status=list_status,
-                category_id=article.get("category_id"), limit=4
+                category_id=article.get("category_id"), limit=4,
+                tag_filter=article_tag if article_tag in ("ru","ua","en","uk","es") else None
             )
             related = [r for r in related if r["id"] != article["id"]][:3]
             if not preview:
@@ -187,9 +206,13 @@ async def dispatch_seo_request(request: Request, site: dict, *,
                     _db.increment_seo_article_views(article["id"])
                 except Exception:
                     pass
-            html = tpl.render_seo_article(site, article, author=author,
-                                           category=category, related=related,
-                                           menu_pages=menu_pages)
+            if is_jobs:
+                html = tpl_jobs.render_seo_article_jobs(site, article, author=author,
+                                                          category=category, related=related)
+            else:
+                html = tpl.render_seo_article(site, article, author=author,
+                                                category=category, related=related,
+                                                menu_pages=menu_pages)
             return HTMLResponse(html)
 
         # Произвольный slug — может быть локацией или страницей
@@ -199,26 +222,34 @@ async def dispatch_seo_request(request: Request, site: dict, *,
         location = _db.get_seo_location_by_slug(site["id"], slug)
         if location and (preview or location.get("status") == "published"):
             contacts = _db.get_seo_location_contacts(location["id"], only_active=True)
+            # Локации только в default шаблоне (jobs_landing их не использует)
             html = tpl.render_seo_location(site, location, contacts, menu_pages)
             return HTMLResponse(html)
 
         # Затем — статические страницы
         page = _db.get_seo_page_by_slug(site["id"], slug)
         if page and (preview or page.get("status") == "published"):
-            html = tpl.render_seo_page(site, page, menu_pages)
+            if is_jobs:
+                html = tpl_jobs.render_seo_page_jobs(site, page)
+            else:
+                html = tpl.render_seo_page(site, page, menu_pages)
             return HTMLResponse(html)
 
         # Не нашли — 404
-        return _render_404(site, menu_pages)
+        return _render_404(site, menu_pages, is_jobs)
 
     except Exception as e:
         log.error(f"[SEO] dispatch error host={request.headers.get('host')} path={request.url.path}: {e}", exc_info=True)
         return PlainTextResponse("Internal error", status_code=500)
 
 
-def _render_404(site: dict, menu_pages: list) -> HTMLResponse:
+def _render_404(site: dict, menu_pages: list, is_jobs: bool = False) -> HTMLResponse:
     try:
-        html = tpl.render_404(site, menu_pages)
+        if is_jobs:
+            import seo_templates_jobs as tpl_jobs
+            html = tpl_jobs.render_seo_404_jobs(site)
+        else:
+            html = tpl.render_404(site, menu_pages)
         return HTMLResponse(html, status_code=404)
     except Exception:
         return PlainTextResponse("Not Found", status_code=404)

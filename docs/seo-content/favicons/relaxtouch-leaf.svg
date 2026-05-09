@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="rtl-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8FAA88"/>
+      <stop offset="100%" stop-color="#6A8A66"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#rtl-bg)"/>
+  <!-- stylized leaf -->
+  <path d="M16 5 C 22 9, 23 17, 16 25 C 9 17, 10 9, 16 5 Z"
+        fill="#FAF7F2" opacity="0.92"/>
+  <line x1="16" y1="9" x2="16" y2="22"
+        stroke="#6A8A66" stroke-width="1" opacity="0.55" stroke-linecap="round"/>
+</svg>

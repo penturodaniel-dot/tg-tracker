@@ -91,12 +91,28 @@ frontend/
   package.json
   vite.config.js
 
+seo_templates_jobs.py    # Альтернативный шаблон 'jobs_landing' для HR-сайтов
+                          # (pink/magenta gradient, Montserrat+Open Sans,
+                          # FB Pixel Lead-event на Telegram-кнопках,
+                          # i18n ru/ua/en, JobPosting Schema.org)
+
 docs/
   seo-content/
-    relaxtouch-bootstrap.json          # site_settings + categories + authors
-                                        # + 4 static pages + 15 locations
-    relaxtouch-articles-batch-1.json   # 5 статей, ~6,400 слов
-    relaxtouch-articles-batch-2.json   # 5 статей, ~5,800 слов
+    relaxtouch-bootstrap.json              # RelaxTouch (relaxtouchtoday.com):
+                                             # site_settings + categories + authors
+                                             # + 4 static pages + 15 locations
+    relaxtouch-articles-batch-1.json       # 5 статей RelaxTouch, ~6,400 слов
+    relaxtouch-articles-batch-2.json       # 5 статей RelaxTouch, ~5,800 слов
+    choiseforyoutoday-bootstrap.json       # ChoiseForYouToday (choiseforyoutoday.com):
+                                             # JobsLanding-сайт, мигрирован с Lovable.dev,
+                                             # 19 статей ru/ua/en + JobPosting schema
+    legal-update-relaxtouch.json           # Юр. данные Digital Chaos Inc. + privacy/terms
+    legal-update-choiseforyoutoday.json    # Юр. данные + privacy/terms/about на русском
+    favicons/
+      relaxtouch.svg                       # SVG фавикон RelaxTouch (R monogram)
+      relaxtouch-leaf.svg                  # SVG фавикон RelaxTouch (стилизованный лист)
+      choiseforyoutoday.svg                # SVG фавикон Choise (M monogram)
+      choiseforyoutoday-chat.svg           # SVG фавикон Choise (chat bubble)
     # (импорт через /seo/sites/{id}/import; slug-based upsert)
 ```
 
@@ -206,7 +222,13 @@ Railway автоматически запускает nixpacks:
 2. Кастомный домен есть в `seo_sites` И `status='live'` → `dispatch_seo_request(request, site)` из `routers/seo.py`. Все ошибки внутри ловятся → middleware никогда не падает из-за SEO-багов.
 3. Иначе → фолбэк на существующую логику лендингов (без изменений).
 
-**Публичный рендер (`seo_templates.py`):**
+**Мульти-шаблон система:** каждый сайт может выбрать `template` (поле в `seo_sites`):
+- `default` — wellness/spa style (RelaxTouch). Inter + Playfair Display, sage-палитра. Hero + locations grid + recent articles на главной. См. `seo_templates.py`.
+- `jobs_landing` — HR/recruitment landing (ChoiseForYouToday). Pink/magenta gradient, Montserrat + Open Sans. Полный landing с hero/about/benefits/requirements/how/offers/CTA. Strings i18n (ru/ua/en) выбираются по `site.language`. См. `seo_templates_jobs.py`.
+
+Диспатчер в `routers/seo.py` ветвится по `site.template` для homepage / blog index / article / page / 404. Локации только в default (jobs_landing их не использует — это лендинги без множественных адресов).
+
+**Публичный рендер (`seo_templates.py` — default + общие хелперы):**
 - Полная SEO-обвязка: `<title>`, meta description, canonical, Open Graph, Twitter Card, Schema.org JSON-LD (`Organization`, `WebSite`, `LocalBusiness` + `HealthAndBeautyBusiness`, `Article`)
 - `sitemap.xml` и `robots.txt` генерируются автоматически на каждый сайт
 - Inline CSS с подстановкой палитры через `__PRIMARY__` / `__SECONDARY__` (через `.replace()`, НЕ `%`-formatting — в CSS есть `100%` который ломает % syntax)
@@ -215,6 +237,22 @@ Railway автоматически запускает nixpacks:
 - Контакт-кнопки: `tel:`, `mailto:`, `t.me/`, `wa.me/`, `sms:` + inline SVG-иконки
 - **Локации**: встроенный Google Maps iframe (без API-ключа, через `maps.google.com/maps?q=lat,lng&output=embed`) + кнопка «Open in Google Maps» (приоритет — пользовательский `google_maps_url`, иначе строится из координат)
 - **Статьи**: автоматическая внутренняя перелинковка через `_auto_link_internal_articles()` — карта `_INTERNAL_LINK_MAP` (slug → варианты ключевых фраз) ищется в `content_html`, первое вхождение каждой фразы заменяется ссылкой на `/blog/{slug}`. Защищены `<a>`, `<h1-6>`, `<code>`, `<pre>`. Один линк на target slug на статью. Не линкует сам в себя.
+
+**Jobs Landing рендер (`seo_templates_jobs.py`):**
+- Те же SEO-хелперы (`_schema_organization`, `_schema_article`, `_auto_link_internal_articles`) что в default — реюзаются
+- Свой `_render_jobs_head` — Montserrat + Open Sans + Pixel + GA + JobPosting schema
+- Свой `_render_jobs_header` — навигация с anchor-ссылками на секции главной
+- Свой `_render_jobs_footer` — 3 колонки + legal-row с ссылками на /privacy, /terms (E-E-A-T) + copyright
+- `_tg_btn(site, ...)` хелпер — все Telegram-кнопки шлют **`fbq('track','Lead')`** при клике (если `site.fb_pixel_id` задан, иначе guard `typeof fbq==='function'` пропускает)
+- Полная homepage из секций: hero / about+banner / benefits-grid (6 cards) / requirements / how-it-works (3 steps) / offers / CTA
+- Локализация ru/ua/en через embedded `T` dict
+- Использует `site.color_primary` / `color_secondary` для всех градиентов через CSS `.replace()` подстановку
+- `site.hero_image_url` — фото человека на главной (опц.)
+- `site.secondary_image_url` — фон баннера в about (опц.)
+- `site.telegram_url` / `site.whatsapp_url` — точки контакта
+- ⚠️ Python 3.11 не поддерживает PEP 701 (вложенные f-string с одинаковыми кавычками). На production используется 3.11 — **избегай нестинга f-string**, только plain string concat. Иначе `import` упадёт → middleware вернёт «Internal error». Локально 3.13 не отловит этот баг — проверяй через `ast.parse(feature_version=(3,11))`.
+
+**Language-фильтр для листингов:** на мульти-язычных сайтах (типа choise: ru/ua/en статьи в одной БД) каждая статья импортирована с `tags='ru'/'ua'/'en'`. Диспатчер в `/blog`, на главной (recent), и в related статьи передаёт `tag_filter=site.language` → показывает **только статьи на языке сайта**. Прямой `/blog/<slug>` URL **НЕ** фильтрует — все статьи доступны → Google продолжает индексировать ua/en URL'ы которые уже были в индексе при миграции с Lovable. Метод `get_seo_articles(tag_filter=...)` использует CSV-aware LIKE matching.
 
 **Маршруты публичные** (на SEO-домене):
 - `/` — главная (locations grid + recent articles)
@@ -242,11 +280,23 @@ Railway автоматически запускает nixpacks:
 **Sidebar:** пункт «SEO → Сайты» добавлен в обе версии (React `NavSidebar.jsx` для TG-чатов и HTML `nav_html()` для всех остальных страниц).
 
 **Стартовый контент в репозитории:**
-- `docs/seo-content/relaxtouch-bootstrap.json` — 1 site_settings + 4 categories + 1 author + 4 static pages + 15 location pages для `relaxtouchtoday.com`
+
+*RelaxTouch (relaxtouchtoday.com — wellness/spa, default template):*
+- `docs/seo-content/relaxtouch-bootstrap.json` — 1 site_settings + 4 categories + 1 author + 4 static pages + 15 location pages
 - `docs/seo-content/relaxtouch-articles-batch-1.json` — 5 pillar-статей (~6,400 слов): Swedish vs Deep Tissue, How Often, First Massage, Science-Backed Benefits, Hot Stone
 - `docs/seo-content/relaxtouch-articles-batch-2.json` — 5 статей (~5,800 слов): Lower Back Pain, Tipping Etiquette, Sports Massage Runners, How to Choose a Therapist, Prenatal Trimester Guide
+- `docs/seo-content/legal-update-relaxtouch.json` — обновление с реальной юридической инфой (`Digital Chaos Inc.`, NY, 252 Seaview Ave, Staten Island, NY 10305) + Privacy + Terms (US-формат, Richmond County jurisdiction, CCPA + GDPR rights)
+
+*ChoiseForYouToday (choiseforyoutoday.com — HR/jobs, jobs_landing template):*
+- `docs/seo-content/choiseforyoutoday-bootstrap.json` — 1 site_settings (template=jobs_landing, ru, FB Pixel `1321696403049126`, Google Site Verification `XvBJpr-...`) + 3 categories (work/success/life) + 1 author + 1 homepage page (с JobPosting Schema.org) + 19 articles (ru/ua/en mix). Контент сграблен с публичного Supabase REST API при миграции с Lovable.dev.
+- `docs/seo-content/legal-update-choiseforyoutoday.json` — юр. данные + Privacy + Terms + About страницы на русском (anti-scam уведомление в About: «услуги бесплатны для кандидаток»)
+
+*Favicons:*
+- `docs/seo-content/favicons/*.svg` — SVG фавиконки для обоих сайтов (по 2 варианта каждому)
 
 Все импортируются через `/seo/sites/{id}/import`. Slug-based upsert (skip-existing по умолчанию, галка для перезаписи).
+
+**Юридическое лицо:** оба сайта (RelaxTouch и ChoiseForYouToday) операторируются одной компанией — `Digital Chaos Inc.`, Domestic Business Corp., County of Richmond, NY State, 252 Seaview Ave, Staten Island, NY 10305. EIN — приватный, **никогда не публиковать на сайте/в Schema.org**.
 
 ### Ключевые таблицы
 
@@ -263,11 +313,15 @@ Railway автоматически запускает nixpacks:
 - `settings` — key/value настройки CRM
 
 **SEO-модуль:**
-- `seo_sites` — сайты (домен, язык, брендинг, GA/Pixel, header/footer HTML, status)
-- `seo_locations` — города на сайте (адрес, lat/lng, **`google_maps_url`**, FAQ JSON, hours JSON). Колонка `google_maps_url` добавлена через `ALTER TABLE IF NOT EXISTS` в `_init_seo_tables()`.
+- `seo_sites` — сайты:
+  - Базовые: домен, язык, брендинг, GA/Pixel, header/footer HTML, status, color_primary/secondary
+  - **`template`** — `'default'` или `'jobs_landing'` — определяет рендер главной + внутренних страниц (ALTER через `_init_seo_tables()`)
+  - **`hero_image_url`** / **`secondary_image_url`** — для jobs_landing (hero фото + banner)
+  - **`telegram_url`** / **`whatsapp_url`** — точки контакта (jobs_landing рисует кнопки CTA)
+- `seo_locations` — города на сайте (адрес, lat/lng, **`google_maps_url`**, FAQ JSON, hours JSON). Колонка `google_maps_url` добавлена через `ALTER TABLE IF NOT EXISTS`.
 - `seo_location_contacts` — телефоны / TG / WA / email на локацию (contact_type, value, is_primary, is_active)
-- `seo_pages` — статические страницы (about, contact, privacy, terms, services)
-- `seo_articles` — блог (slug → category_id, author_id, content_html, is_pillar, view_count)
+- `seo_pages` — статические страницы (about, contact, privacy, terms, services). Поле `slug=''` зарезервировано под homepage-page для jobs_landing (туда кладётся title/meta_description/og_image/JobPosting schema_json для главной).
+- `seo_articles` — блог (slug → category_id, author_id, content_html, is_pillar, view_count, **`tags`** хранит CSV-теги, в т.ч. язык `ru`/`ua`/`en` для language-фильтра в листингах)
 - `seo_categories` / `seo_authors`
 - `seo_redirects` — 301/302 редиректы с трекингом hits
 

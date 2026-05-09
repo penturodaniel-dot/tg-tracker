@@ -128,8 +128,18 @@ async def dispatch_seo_request(request: Request, site: dict, *,
 
         # Корень — главная сайта
         if path == "/" or path == "":
-            locations = _db.get_seo_locations(site["id"], status=list_status)
+            template = (site.get("template") or "default").lower()
             articles = _db.get_seo_articles(site["id"], status=list_status, limit=6)
+            if template == "jobs_landing":
+                # Jobs-landing шаблон: ищем page со slug='' для дополнительных
+                # данных (title/meta/schema). Если не нашли — рендерим по
+                # дефолтным переводам site.language.
+                import seo_templates_jobs as tpl_jobs
+                home_page = _db.get_seo_page_by_slug(site["id"], "") or {}
+                html = tpl_jobs.render_seo_home_jobs(site, home_page, articles)
+                return HTMLResponse(html)
+            # default шаблон: hero + locations grid + recent articles
+            locations = _db.get_seo_locations(site["id"], status=list_status)
             html = tpl.render_seo_home(site, locations, articles, menu_pages)
             return HTMLResponse(html)
 
@@ -533,7 +543,12 @@ async def seo_site_edit(request: Request, site_id: int):
         _f_select("Тип", "site_type", site.get("site_type", "client"), [("client","Клиенты"),("staff","Сотрудники"),("other","Другое")]) +
         _f_select("Язык", "language", site.get("language", "en"), [("en","English"),("ru","Русский"),("uk","Українська"),("es","Español")]) +
         _f_select("Статус", "status", site.get("status", "draft"), [("draft","Draft (только превью)"),("live","Live (опубликован)")])
-    ) + "</div>" + "<div class='seo-h2'>Брендинг</div>" + "<div class='seo-grid seo-grid-2'>" + (
+    ) + "</div>" + (
+        _f_select("Шаблон главной", "template", site.get("template", "default"), [
+            ("default", "Default — wellness/spa (как RelaxTouch)"),
+            ("jobs_landing", "Jobs landing — HR/работа (как ChoiseForYouToday)"),
+        ], hint="Шаблон главной страницы. Default — hero + города + статьи. Jobs landing — HR-лендинг (hero, секции преимуществ, как начать, FAQ, CTA). Влияет только на главную; страницы и статьи рендерятся одинаково везде.")
+    ) + "<div class='seo-h2'>Брендинг</div>" + "<div class='seo-grid seo-grid-2'>" + (
         _f_text("Brand name", "brand_name", site.get("brand_name", "")) +
         _f_text("Tagline", "tagline", site.get("tagline", ""), hint="Короткий слоган под H1")
     ) + (
@@ -542,7 +557,19 @@ async def seo_site_edit(request: Request, site_id: int):
     ) + (
         _f_color("Основной цвет", "color_primary", site.get("color_primary", "#7A9B76")) +
         _f_color("Акцентный цвет", "color_secondary", site.get("color_secondary", "#E8DDD0"))
-    ) + "</div>" + "<div class='seo-h2'>SEO defaults</div>" + (
+    ) + "</div>" + (
+        # Картинки и контакты — нужны для jobs_landing шаблона; для default
+        # тоже не помешают (могут использоваться позже)
+        "<div class='seo-h2'>Hero и баннер (для шаблона jobs_landing)</div>" +
+        "<div class='seo-grid seo-grid-2'>" +
+        _f_image_url("Hero image (фото человека на главной)", "hero_image_url", site.get("hero_image_url", ""), hint="Фотография на главном экране. Прозрачный PNG лучше всего смотрится на круговом фоне.") +
+        _f_image_url("Secondary image (фон баннера)", "secondary_image_url", site.get("secondary_image_url", ""), hint="Фоновая картинка для баннера в about-секции. Будет затемнена градиентом.") +
+        "</div>" +
+        "<div class='seo-grid seo-grid-2'>" +
+        _f_text("Telegram URL", "telegram_url", site.get("telegram_url", ""), hint="Например: https://t.me/your_handle") +
+        _f_text("WhatsApp URL", "whatsapp_url", site.get("whatsapp_url", ""), hint="Например: https://wa.me/12135550100") +
+        "</div>"
+    ) + "<div class='seo-h2'>SEO defaults</div>" + (
         _f_text("Title suffix", "title_suffix", site.get("title_suffix", ""), hint="Добавляется к каждому title (например: ' | RelaxTouch')")
     ) + (
         _f_textarea("Default meta description", "default_meta_description", site.get("default_meta_description", ""), rows=2, hint="Используется на страницах где не задан свой description")
@@ -581,7 +608,9 @@ async def seo_site_save(request: Request, site_id: int):
               "title_suffix", "default_meta_description", "default_og_image",
               "org_name", "org_phone", "org_email", "org_address",
               "ga_id", "gtm_id", "fb_pixel_id",
-              "social_links", "header_html", "footer_html"]
+              "social_links", "header_html", "footer_html",
+              "template", "hero_image_url", "secondary_image_url",
+              "telegram_url", "whatsapp_url"]
     payload = {k: (form.get(k) or "").strip() for k in fields if k in form}
     if "domain" in payload:
         payload["domain"] = payload["domain"].lower().lstrip("www.")

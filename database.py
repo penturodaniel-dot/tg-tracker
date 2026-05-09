@@ -3183,6 +3183,12 @@ class Database:
                 # ── ALTER'ы для столбцов добавленных после первого релиза ──
                 # google_maps_url — share-ссылка из Google Maps для кнопки на странице локации
                 cur.execute("ALTER TABLE seo_locations ADD COLUMN IF NOT EXISTS google_maps_url TEXT DEFAULT ''")
+                # Шаблоны рендера + дополнительные поля брендинга на сайт
+                cur.execute("ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS template TEXT DEFAULT 'default'")
+                cur.execute("ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS hero_image_url TEXT DEFAULT ''")
+                cur.execute("ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS secondary_image_url TEXT DEFAULT ''")
+                cur.execute("ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS telegram_url TEXT DEFAULT ''")
+                cur.execute("ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS whatsapp_url TEXT DEFAULT ''")
                 # Индексы для быстрых LIKE / lookup
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_seo_sites_domain ON seo_sites (LOWER(domain))")
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_seo_locations_site ON seo_locations (site_id, status)")
@@ -3248,7 +3254,9 @@ class Database:
                   "title_suffix", "default_meta_description", "default_og_image",
                   "org_name", "org_phone", "org_email", "org_address",
                   "ga_id", "gtm_id", "fb_pixel_id",
-                  "footer_html", "header_html", "social_links", "status"):
+                  "footer_html", "header_html", "social_links", "status",
+                  "template", "hero_image_url", "secondary_image_url",
+                  "telegram_url", "whatsapp_url"):
             if k in kwargs:
                 cols.append(k)
                 vals.append(kwargs[k])
@@ -3273,7 +3281,9 @@ class Database:
                    "default_meta_description", "default_og_image",
                    "org_name", "org_phone", "org_email", "org_address",
                    "ga_id", "gtm_id", "fb_pixel_id",
-                   "footer_html", "header_html", "social_links", "status"}
+                   "footer_html", "header_html", "social_links", "status",
+                   "template", "hero_image_url", "secondary_image_url",
+                   "telegram_url", "whatsapp_url"}
         fields, vals = [], []
         for k, v in kwargs.items():
             if k in allowed:

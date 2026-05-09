@@ -1,5 +1,5 @@
 {
-  "_README": "ChoiseForYouToday — миграция с Lovable.dev. Импортируй через /seo/sites/{id}/import. После импорта проверь homepage и несколько статей в preview, потом меняй status на published. JobPosting Schema.org сохранён в schema_json главной — сильный сигнал для Google. URLs идентичны — позиции в поиске не должны просесть.",
+  "_README": "ChoiseForYouToday — миграция с Lovable.dev. После создания сайта импортируй через /seo/sites/{id}/import. Сайт будет использовать шаблон jobs_landing для главной — pink/magenta gradient брендинг, секции hero/about/benefits/requirements/how/offers/CTA строятся автоматически из переводов в seo_templates_jobs.py. Тексты i18n по site.language (сейчас ru). Для брендинга залей через админку: hero_image_url (фото человека для круга), secondary_image_url (фон баннера). Если уже импортировал ранее, ре-импортируй с галкой «Перезаписывать существующие» — settings.template переключится на jobs_landing.",
   "site_settings": {
     "brand_name": "Massage Job USA",
     "tagline": "Работа массажисткой в США — от $500/день",
@@ -13,7 +13,12 @@
     "org_name": "Massage Job USA",
     "fb_pixel_id": "1321696403049126",
     "social_links": "{}",
-    "header_html": "<meta name=\"google-site-verification\" content=\"XvBJpr-C1s0-OJvATogQyXdkNLiFMCeIRLAUBQr05tE\">"
+    "header_html": "<meta name=\"google-site-verification\" content=\"XvBJpr-C1s0-OJvATogQyXdkNLiFMCeIRLAUBQr05tE\">",
+    "template": "jobs_landing",
+    "telegram_url": "https://t.me/mafa_core",
+    "hero_image_url": "",
+    "secondary_image_url": "",
+    "whatsapp_url": ""
   },
   "categories": [
     {

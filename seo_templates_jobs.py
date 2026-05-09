@@ -485,10 +485,20 @@ def _render_jobs_footer(site: dict) -> str:
 
 
 def _tg_btn(site: dict, *, label: str = None, inverted: bool = False) -> str:
+    """Кнопка «Связаться в Телеграм».
+    onclick шлёт Lead-event в Facebook Pixel — это ключевая конверсия для
+    HR-лендингов. Pixel загружается в _render_jobs_head если site.fb_pixel_id
+    задан. Если pixel выключен (нет fb_pixel_id) — клик просто открывает
+    Telegram, ошибки не будет (проверяем typeof fbq).
+    """
     url = site.get("telegram_url") or "#"
     cls = "btn btn-inverted" if inverted else "btn btn-primary"
     label = label or _t(site, "tg.button")
-    return f'<a href="{_esc(url)}" target="_blank" rel="noopener" class="{cls}">📨 {_esc(label)}</a>'
+    onclick = "if(typeof fbq==='function')fbq('track','Lead');"
+    return (
+        f'<a href="{_esc(url)}" target="_blank" rel="noopener" '
+        f'class="{cls}" onclick="{onclick}">📨 {_esc(label)}</a>'
+    )
 
 
 # ── Главная (homepage) для jobs_landing ──────────────────────────────────────

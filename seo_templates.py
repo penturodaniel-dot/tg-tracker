@@ -254,6 +254,8 @@ section{padding:56px 0}
 footer.site-footer{background:#1F1D1A;color:#D4CFC5;padding:48px 0 24px;margin-top:80px}
 footer.site-footer a{color:#D4CFC5}
 footer.site-footer a:hover{color:#fff}
+footer.site-footer p,footer.site-footer li,footer.site-footer dd{color:#D4CFC5}
+footer.site-footer h2,footer.site-footer h3,footer.site-footer h4{color:#fff}
 footer.site-footer .columns{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-bottom:32px}
 @media(max-width:700px){footer.site-footer .columns{grid-template-columns:1fr}}
 footer.site-footer .copy{text-align:center;font-size:.85rem;color:#8A867E;border-top:1px solid #3A3733;padding-top:24px}

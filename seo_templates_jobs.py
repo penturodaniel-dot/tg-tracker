@@ -462,6 +462,14 @@ def _render_jobs_footer(site: dict) -> str:
     if email:
         contact_lines += '<p>' + _esc(email) + '</p>'
 
+    # Подписи для legal-ссылок по языку сайта
+    lang = site.get("language") or "ru"
+    legal_labels = {
+        "ru": {"about": "О компании", "privacy": "Конфиденциальность", "terms": "Условия"},
+        "ua": {"about": "Про нас",    "privacy": "Конфіденційність", "terms": "Умови"},
+        "en": {"about": "About",      "privacy": "Privacy Policy",   "terms": "Terms of Service"},
+    }.get(lang, {"about": "About", "privacy": "Privacy Policy", "terms": "Terms of Service"})
+
     return (
         '<footer class="site-footer"><div class="container">'
         '<div class="columns">'
@@ -469,7 +477,7 @@ def _render_jobs_footer(site: dict) -> str:
         '<p>' + _esc(_t(site, "footer.desc")) + '</p></div>'
         '<div><h4>' + _esc(_t(site, "nav.howToStart")) + '</h4>'
         '<ul>'
-        '<li><a href="#about">' + _esc(tag_label) + '</a></li>'
+        '<li><a href="/about">' + _esc(legal_labels["about"]) + '</a></li>'
         '<li><a href="#benefits">' + _esc(_t(site, "nav.benefits")) + '</a></li>'
         '<li><a href="#requirements">' + _esc(_t(site, "nav.requirements")) + '</a></li>'
         '<li><a href="/blog">' + _esc(_t(site, "nav.blog")) + '</a></li>'
@@ -479,7 +487,14 @@ def _render_jobs_footer(site: dict) -> str:
         + contact_lines +
         '</div>'
         '</div>'
-        '<div class="copy">© ' + str(year) + ' ' + _esc(org) + '. ' + _esc(_t(site, "footer.rights")) + '</div>'
+        # Legal row: Privacy · Terms — обязательные ссылки для E-E-A-T
+        '<div style="text-align:center;font-size:.82rem;color:#7A727F;padding:14px 0 10px;'
+        'border-top:1px solid #2D2832;margin-top:30px">'
+        '<a href="/privacy" style="color:#A9A1AC;margin:0 12px">' + _esc(legal_labels["privacy"]) + '</a>'
+        '·'
+        '<a href="/terms" style="color:#A9A1AC;margin:0 12px">' + _esc(legal_labels["terms"]) + '</a>'
+        '</div>'
+        '<div class="copy" style="border-top:none;padding-top:6px">© ' + str(year) + ' ' + _esc(org) + '. ' + _esc(_t(site, "footer.rights")) + '</div>'
         '</div></footer></body></html>'
     )
 

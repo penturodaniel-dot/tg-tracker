@@ -445,23 +445,41 @@ def _render_jobs_footer(site: dict) -> str:
     brand = site.get("brand_name") or site.get("name") or ""
     org = site.get("org_name") or brand
     year = datetime.utcnow().year
+
+    # About-link label: для русского обрезаем длинный таглайн до первого слова
+    tag_label = _t(site, "about.tagline")
+    if (site.get("language") or "ru") == "ru":
+        tag_label = tag_label.split(" и")[0]
+
+    # Контакты: telegram + email — собираем заранее, без вложенных f-string
+    tg_url = (site.get("telegram_url") or "").strip()
+    email = (site.get("org_email") or "").strip()
+    contact_lines = ""
+    if tg_url:
+        contact_lines += (
+            '<p><a href="' + _esc(tg_url) + '" target="_blank" rel="noopener">Telegram</a></p>'
+        )
+    if email:
+        contact_lines += '<p>' + _esc(email) + '</p>'
+
     return (
         '<footer class="site-footer"><div class="container">'
         '<div class="columns">'
-        f'<div><div class="brand-foot">{_esc(brand)}</div>'
-        f'<p>{_esc(_t(site, "footer.desc"))}</p></div>'
-        f'<div><h4>{_esc(_t(site, "nav.howToStart"))}</h4>'
-        f'<ul><li><a href="#about">{_esc(_t(site, "about.tagline").split(" и")[0] if site.get("language")=="ru" else _t(site,"about.tagline"))}</a></li>'
-        f'<li><a href="#benefits">{_esc(_t(site, "nav.benefits"))}</a></li>'
-        f'<li><a href="#requirements">{_esc(_t(site, "nav.requirements"))}</a></li>'
-        f'<li><a href="/blog">{_esc(_t(site, "nav.blog"))}</a></li></ul></div>'
-        f'<div><h4>{_esc(_t(site, "footer.contacts"))}</h4>'
-        f'<p>{_esc(_t(site, "footer.address"))}</p>'
-        f'{f"<p><a href=\"{_esc(site.get('telegram_url'))}\" target=\"_blank\" rel=\"noopener\">Telegram</a></p>" if site.get("telegram_url") else ""}'
-        f'{f"<p>{_esc(site.get(chr(39)+chr(111)+chr(114)+chr(103)+chr(95)+chr(101)+chr(109)+chr(97)+chr(105)+chr(108)+chr(39)))}</p>" if site.get("org_email") else ""}'
+        '<div><div class="brand-foot">' + _esc(brand) + '</div>'
+        '<p>' + _esc(_t(site, "footer.desc")) + '</p></div>'
+        '<div><h4>' + _esc(_t(site, "nav.howToStart")) + '</h4>'
+        '<ul>'
+        '<li><a href="#about">' + _esc(tag_label) + '</a></li>'
+        '<li><a href="#benefits">' + _esc(_t(site, "nav.benefits")) + '</a></li>'
+        '<li><a href="#requirements">' + _esc(_t(site, "nav.requirements")) + '</a></li>'
+        '<li><a href="/blog">' + _esc(_t(site, "nav.blog")) + '</a></li>'
+        '</ul></div>'
+        '<div><h4>' + _esc(_t(site, "footer.contacts")) + '</h4>'
+        '<p>' + _esc(_t(site, "footer.address")) + '</p>'
+        + contact_lines +
         '</div>'
         '</div>'
-        f'<div class="copy">© {year} {_esc(org)}. {_esc(_t(site, "footer.rights"))}</div>'
+        '<div class="copy">© ' + str(year) + ' ' + _esc(org) + '. ' + _esc(_t(site, "footer.rights")) + '</div>'
         '</div></footer></body></html>'
     )
 

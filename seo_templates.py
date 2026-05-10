@@ -438,10 +438,27 @@ def _render_head(site: dict, *, title: str, description: str = "",
     ga_snippet = ""
     if site.get("ga_id"):
         gid = _esc(site["ga_id"])
+        # Phone click tracker: fires 'phone_click' GA4 event on any <a href="tel:..."> click.
+        # Mark as Key Event in GA4 Admin → Events to count as conversion.
+        phone_tracker = (
+            "document.addEventListener('click',function(e){"
+            "var a=e.target.closest && e.target.closest('a[href^=\"tel:\"]');"
+            "if(!a||typeof gtag!=='function')return;"
+            "var num=a.getAttribute('href').replace('tel:','');"
+            "gtag('event','phone_click',{"
+            "phone_number:num,"
+            "link_text:(a.innerText||'').trim().slice(0,80),"
+            "page_location:location.href,"
+            "page_path:location.pathname"
+            "});"
+            "},true);"
+        )
         ga_snippet = (
             f'<script async src="https://www.googletagmanager.com/gtag/js?id={gid}"></script>'
             f'<script>window.dataLayer=window.dataLayer||[];function gtag(){{dataLayer.push(arguments);}}'
-            f"gtag('js',new Date());gtag('config','{gid}');</script>"
+            f"gtag('js',new Date());gtag('config','{gid}');"
+            f"{phone_tracker}"
+            f"</script>"
         )
 
     robots = '<meta name="robots" content="noindex, nofollow">' if noindex else ''

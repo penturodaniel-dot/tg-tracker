@@ -418,7 +418,8 @@ def _build_css(site: dict) -> str:
 def _render_head(site: dict, *, title: str, description: str = "",
                   canonical: str = "", og_image: str = "",
                   og_type: str = "website", noindex: bool = False,
-                  schema_jsons: list = None, extra_head: str = "") -> str:
+                  schema_jsons: list = None, extra_head: str = "",
+                  preload_image: str = "") -> str:
     title_full = title
     if site.get("title_suffix"):
         title_full = f"{title}{site['title_suffix']}"
@@ -494,7 +495,12 @@ def _render_head(site: dict, *, title: str, description: str = "",
         parts.append(f'<link rel="icon" href="{_esc(favicon)}">')
     parts.append('<link rel="preconnect" href="https://fonts.googleapis.com">')
     parts.append('<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>')
+    parts.append('<link rel="preconnect" href="https://res.cloudinary.com" crossorigin>')
     parts.append('<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">')
+    # Preload above-the-fold image (LCP candidate) for faster paint.
+    if preload_image:
+        _pl = _optimize_img_url(preload_image)
+        parts.append(f'<link rel="preload" as="image" href="{_esc(_pl)}" fetchpriority="high">')
     parts.append(f'<style>{_build_css(site)}</style>')
     if schema_blocks:
         parts.append(schema_blocks)
@@ -1097,7 +1103,8 @@ def render_seo_article(site: dict, article: dict, author: dict = None,
                          canonical=canonical, og_type="article",
                          og_image=article.get("og_image", ""),
                          noindex=bool(article.get("noindex")),
-                         schema_jsons=schemas)
+                         schema_jsons=schemas,
+                         preload_image=article.get("og_image", ""))
     header = _render_header(site, menu_pages or [])
 
     pub = (article.get("published_at") or article.get("created_at") or "")[:10]
@@ -1126,8 +1133,11 @@ def render_seo_article(site: dict, article: dict, author: dict = None,
 
     cover = ""
     if article.get("og_image"):
+        _cov = _optimize_img_url(article["og_image"])
+        # Above-the-fold cover = LCP element. Eager + high priority, not lazy.
         cover = (
-            f'<img loading="lazy" src="{_esc(article["og_image"])}" alt="{_esc(title)}" '
+            f'<img loading="eager" fetchpriority="high" decoding="async" '
+            f'src="{_esc(_cov)}" alt="{_esc(title)}" '
             'style="width:100%;border-radius:var(--radius);margin:1rem 0 2rem">'
         )
 

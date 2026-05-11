@@ -496,7 +496,11 @@ def _render_head(site: dict, *, title: str, description: str = "",
     parts.append('<link rel="preconnect" href="https://fonts.googleapis.com">')
     parts.append('<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>')
     parts.append('<link rel="preconnect" href="https://res.cloudinary.com" crossorigin>')
-    parts.append('<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">')
+    # Non-blocking Google Fonts load: media=print trick removes CSS from critical
+    # rendering path; onload swaps back to media=all. <noscript> fallback for no-JS.
+    _fonts_href = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap"
+    parts.append(f'<link rel="stylesheet" href="{_fonts_href}" media="print" onload="this.media=\'all\'">')
+    parts.append(f'<noscript><link rel="stylesheet" href="{_fonts_href}"></noscript>')
     # Preload above-the-fold image (LCP candidate) for faster paint.
     if preload_image:
         _pl = _optimize_img_url(preload_image)

@@ -760,11 +760,13 @@ async def seo_locations_list(request: Request, site_id: int):
     for loc in locs:
         st = loc.get("status") or "draft"
         pill_cls = "published" if st == "published" else "draft"
+        toggle_label = "Снять" if st == "published" else "Опубликовать"
         rows += f"""<tr>
 <td><a href="/seo/sites/{site_id}/locations/{loc['id']}" style="color:#fde047">{_esc(loc.get('city') or '')}, {_esc(loc.get('state') or '')}</a><div style="font-size:.72rem;color:var(--text3)">/{_esc(loc.get('slug') or '')}</div></td>
 <td><span class="seo-pill {pill_cls}">{st}</span></td>
 <td>{_esc((loc.get('updated_at') or '')[:10])}</td>
-<td><a href="/seo/sites/{site_id}/locations/{loc['id']}" class="seo-btn sm secondary">Редактировать</a>
+<td><form method="post" action="/seo/sites/{site_id}/locations/{loc['id']}/toggle-status" style="display:inline"><button class="seo-btn sm secondary">{toggle_label}</button></form>
+<a href="/seo/sites/{site_id}/locations/{loc['id']}" class="seo-btn sm secondary">Редактировать</a>
 <form method="post" action="/seo/sites/{site_id}/locations/{loc['id']}/delete" style="display:inline" onsubmit="return confirm('Удалить локацию?')"><button class="seo-btn sm danger">✕</button></form></td>
 </tr>"""
     if not rows:
@@ -781,8 +783,18 @@ async def seo_locations_list(request: Request, site_id: int):
 <button class="seo-btn">Создать</button>
 </form></div>"""
 
+    draft_count = sum(1 for l in locs if (l.get("status") or "draft") != "published")
+    bulk_btn = ""
+    if draft_count:
+        bulk_btn = (
+            f'<form method="post" action="/seo/sites/{site_id}/locations/bulk-publish" style="margin-bottom:12px" '
+            f'onsubmit="return confirm(\'Опубликовать {draft_count} черновиков?\')">'
+            f'<button class="seo-btn">Опубликовать все драфты ({draft_count})</button>'
+            f'</form>'
+        )
     content = (f'<div class="seo-h1">{_esc(site.get("name") or "")}</div>'
                f'{_site_subnav(site_id, "locations")}'
+               f'{bulk_btn}'
                f'<table class="seo-table" style="margin-bottom:24px"><thead>'
                f'<tr><th>Локация</th><th>Статус</th><th>Обновлено</th><th></th></tr>'
                f'</thead><tbody>{rows}</tbody></table>{new_form}')
@@ -978,12 +990,15 @@ async def seo_pages_list(request: Request, site_id: int):
     pages = _db.get_seo_pages(site_id)
     rows = ""
     for p in pages:
-        pill = '<span class="seo-pill published">published</span>' if p.get("status") == "published" else '<span class="seo-pill draft">draft</span>'
+        is_pub = p.get("status") == "published"
+        pill = '<span class="seo-pill published">published</span>' if is_pub else '<span class="seo-pill draft">draft</span>'
+        toggle_label = "Снять" if is_pub else "Опубликовать"
         rows += f"""<tr>
 <td><a href="/seo/sites/{site_id}/pages/{p['id']}" style="color:#fde047">{_esc(p.get('title') or p.get('slug') or '')}</a><div style="font-size:.72rem;color:var(--text3)">/{_esc(p.get('slug') or '')}</div></td>
 <td>{_esc(p.get('page_type') or '')}</td>
 <td>{pill}</td>
-<td><form method="post" action="/seo/sites/{site_id}/pages/{p['id']}/delete" style="display:inline" onsubmit="return confirm('Удалить?')"><button class="seo-btn sm danger">✕</button></form></td>
+<td><form method="post" action="/seo/sites/{site_id}/pages/{p['id']}/toggle-status" style="display:inline"><button class="seo-btn sm secondary">{toggle_label}</button></form>
+<form method="post" action="/seo/sites/{site_id}/pages/{p['id']}/delete" style="display:inline" onsubmit="return confirm('Удалить?')"><button class="seo-btn sm danger">✕</button></form></td>
 </tr>"""
     if not rows:
         rows = '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">Страниц нет.</td></tr>'
@@ -998,8 +1013,18 @@ async def seo_pages_list(request: Request, site_id: int):
 <button class="seo-btn">Создать</button>
 </form></div>"""
 
+    draft_count = sum(1 for p in pages if (p.get("status") or "draft") != "published")
+    bulk_btn = ""
+    if draft_count:
+        bulk_btn = (
+            f'<form method="post" action="/seo/sites/{site_id}/pages/bulk-publish" style="margin-bottom:12px" '
+            f'onsubmit="return confirm(\'Опубликовать {draft_count} черновиков?\')">'
+            f'<button class="seo-btn">Опубликовать все драфты ({draft_count})</button>'
+            f'</form>'
+        )
     content = (f'<div class="seo-h1">{_esc(site.get("name") or "")}</div>'
                f'{_site_subnav(site_id, "pages")}'
+               f'{bulk_btn}'
                f'<table class="seo-table" style="margin-bottom:24px"><thead><tr>'
                f'<th>Страница</th><th>Тип</th><th>Статус</th><th></th></tr></thead>'
                f'<tbody>{rows}</tbody></table>{new_form}')
@@ -1103,15 +1128,18 @@ async def seo_articles_list(request: Request, site_id: int):
     cats = {c["id"]: c["name"] for c in _db.get_seo_categories(site_id)}
     rows = ""
     for a in arts:
-        pill = '<span class="seo-pill published">published</span>' if a.get("status") == "published" else '<span class="seo-pill draft">draft</span>'
+        is_pub = a.get("status") == "published"
+        pill = '<span class="seo-pill published">published</span>' if is_pub else '<span class="seo-pill draft">draft</span>'
         cat_label = cats.get(a.get("category_id")) or "—"
+        toggle_label = "Снять" if is_pub else "Опубликовать"
         rows += f"""<tr>
 <td><a href="/seo/sites/{site_id}/articles/{a['id']}" style="color:#fde047">{_esc(a.get('title') or a.get('slug') or '')}</a><div style="font-size:.72rem;color:var(--text3)">/blog/{_esc(a.get('slug') or '')}</div></td>
 <td>{_esc(cat_label)}</td>
 <td>{pill}</td>
 <td>{_esc((a.get('published_at') or a.get('created_at') or '')[:10])}</td>
 <td>{a.get('view_count', 0)}</td>
-<td><form method="post" action="/seo/sites/{site_id}/articles/{a['id']}/delete" style="display:inline" onsubmit="return confirm('Удалить?')"><button class="seo-btn sm danger">✕</button></form></td>
+<td><form method="post" action="/seo/sites/{site_id}/articles/{a['id']}/toggle-status" style="display:inline"><button class="seo-btn sm secondary">{toggle_label}</button></form>
+<form method="post" action="/seo/sites/{site_id}/articles/{a['id']}/delete" style="display:inline" onsubmit="return confirm('Удалить?')"><button class="seo-btn sm danger">✕</button></form></td>
 </tr>"""
     if not rows:
         rows = '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">Статей нет.</td></tr>'
@@ -1125,8 +1153,18 @@ async def seo_articles_list(request: Request, site_id: int):
 <button class="seo-btn">Создать (как draft)</button>
 </form></div>"""
 
+    draft_count = sum(1 for a in arts if (a.get("status") or "draft") != "published")
+    bulk_btn = ""
+    if draft_count:
+        bulk_btn = (
+            f'<form method="post" action="/seo/sites/{site_id}/articles/bulk-publish" style="margin-bottom:12px" '
+            f'onsubmit="return confirm(\'Опубликовать {draft_count} черновиков?\')">'
+            f'<button class="seo-btn">Опубликовать все драфты ({draft_count})</button>'
+            f'</form>'
+        )
     content = (f'<div class="seo-h1">{_esc(site.get("name") or "")}</div>'
                f'{_site_subnav(site_id, "articles")}'
+               f'{bulk_btn}'
                f'<table class="seo-table" style="margin-bottom:24px"><thead><tr>'
                f'<th>Заголовок</th><th>Рубрика</th><th>Статус</th><th>Дата</th><th>Просмотры</th><th></th></tr></thead>'
                f'<tbody>{rows}</tbody></table>{new_form}')
@@ -1236,6 +1274,110 @@ async def seo_article_delete(request: Request, site_id: int, art_id: int):
     if err: return err
     _db.delete_seo_article(art_id)
     return _redirect_to(f"/seo/sites/{site_id}/articles", msg="Удалено")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# BULK STATUS TOGGLES — публикация/снятие массовой пачкой одной кнопкой
+# и per-row быстрый toggle. Экономит клики при работе с большими импортами.
+# ════════════════════════════════════════════════════════════════════════════
+
+def _toggle_status(current: str) -> str:
+    return "draft" if (current or "draft") == "published" else "published"
+
+
+def _set_status_with_published_at(update_fn, get_fn, entity_id: int, new_status: str):
+    """Set status, auto-fill published_at on first publish."""
+    payload = {"status": new_status}
+    if new_status == "published":
+        existing = get_fn(entity_id) if get_fn else None
+        if existing and not existing.get("published_at"):
+            from datetime import datetime
+            payload["published_at"] = datetime.utcnow().isoformat()
+    update_fn(entity_id, **payload)
+
+
+# --- Locations ---
+@router.post("/seo/sites/{site_id}/locations/{loc_id}/toggle-status")
+async def seo_location_toggle(request: Request, site_id: int, loc_id: int):
+    user, err = _admin_check(request)
+    if err: return err
+    cur = _db.get_seo_location(loc_id)
+    if not cur:
+        return _redirect_to(f"/seo/sites/{site_id}/locations", err="Локация не найдена")
+    new_status = _toggle_status(cur.get("status") or "draft")
+    _set_status_with_published_at(_db.update_seo_location, _db.get_seo_location, loc_id, new_status)
+    return _redirect_to(f"/seo/sites/{site_id}/locations",
+                        msg=f"Локация: {new_status}")
+
+
+@router.post("/seo/sites/{site_id}/locations/bulk-publish")
+async def seo_locations_bulk_publish(request: Request, site_id: int):
+    user, err = _admin_check(request)
+    if err: return err
+    locs = _db.get_seo_locations(site_id)
+    n = 0
+    for loc in locs:
+        if (loc.get("status") or "draft") != "published":
+            _set_status_with_published_at(_db.update_seo_location, _db.get_seo_location, loc["id"], "published")
+            n += 1
+    return _redirect_to(f"/seo/sites/{site_id}/locations",
+                        msg=f"Опубликовано локаций: {n}")
+
+
+# --- Pages ---
+@router.post("/seo/sites/{site_id}/pages/{page_id}/toggle-status")
+async def seo_page_toggle(request: Request, site_id: int, page_id: int):
+    user, err = _admin_check(request)
+    if err: return err
+    cur = _db.get_seo_page(page_id)
+    if not cur:
+        return _redirect_to(f"/seo/sites/{site_id}/pages", err="Страница не найдена")
+    new_status = _toggle_status(cur.get("status") or "draft")
+    _set_status_with_published_at(_db.update_seo_page, _db.get_seo_page, page_id, new_status)
+    return _redirect_to(f"/seo/sites/{site_id}/pages",
+                        msg=f"Страница: {new_status}")
+
+
+@router.post("/seo/sites/{site_id}/pages/bulk-publish")
+async def seo_pages_bulk_publish(request: Request, site_id: int):
+    user, err = _admin_check(request)
+    if err: return err
+    pages = _db.get_seo_pages(site_id)
+    n = 0
+    for p in pages:
+        if (p.get("status") or "draft") != "published":
+            _set_status_with_published_at(_db.update_seo_page, _db.get_seo_page, p["id"], "published")
+            n += 1
+    return _redirect_to(f"/seo/sites/{site_id}/pages",
+                        msg=f"Опубликовано страниц: {n}")
+
+
+# --- Articles ---
+@router.post("/seo/sites/{site_id}/articles/{art_id}/toggle-status")
+async def seo_article_toggle(request: Request, site_id: int, art_id: int):
+    user, err = _admin_check(request)
+    if err: return err
+    cur = _db.get_seo_article(art_id)
+    if not cur:
+        return _redirect_to(f"/seo/sites/{site_id}/articles", err="Статья не найдена")
+    new_status = _toggle_status(cur.get("status") or "draft")
+    _set_status_with_published_at(_db.update_seo_article, _db.get_seo_article, art_id, new_status)
+    return _redirect_to(f"/seo/sites/{site_id}/articles",
+                        msg=f"Статья: {new_status}")
+
+
+@router.post("/seo/sites/{site_id}/articles/bulk-publish")
+async def seo_articles_bulk_publish(request: Request, site_id: int):
+    user, err = _admin_check(request)
+    if err: return err
+    arts = _db.get_seo_articles(site_id)
+    n = 0
+    for a in arts:
+        if (a.get("status") or "draft") != "published":
+            _set_status_with_published_at(_db.update_seo_article, _db.get_seo_article, a["id"], "published")
+            n += 1
+    return _redirect_to(f"/seo/sites/{site_id}/articles",
+                        msg=f"Опубликовано статей: {n}")
 
 
 # ════════════════════════════════════════════════════════════════════════════

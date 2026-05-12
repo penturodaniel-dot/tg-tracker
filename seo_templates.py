@@ -1031,10 +1031,6 @@ _INTERNAL_LINK_MAP = [
         "choosing a massage therapist",
         "find a massage therapist",
     ]),
-    ("prenatal-massage-trimester-guide", [
-        "prenatal massage",
-        "pregnancy massage",
-    ]),
 ]
 
 

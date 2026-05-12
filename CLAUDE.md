@@ -300,9 +300,9 @@ Railway автоматически запускает nixpacks:
 *RelaxTouch (relaxtouchtoday.com — wellness/spa, default template):*
 - `docs/seo-content/relaxtouch-bootstrap.json` — 1 site_settings + 4 categories + 1 author + 4 static pages + 15 location pages
 - `docs/seo-content/relaxtouch-articles-batch-1.json` — 5 pillar-статей (~6,400 слов): Swedish vs Deep Tissue, How Often, First Massage, Science-Backed Benefits, Hot Stone
-- `docs/seo-content/relaxtouch-articles-batch-2.json` — 5 статей (~5,800 слов): Lower Back Pain, Tipping Etiquette, Sports Massage Runners, How to Choose a Therapist, Prenatal Trimester Guide
-- `docs/seo-content/relaxtouch-city-service-pages-LA.json` — 6 nested City × Service страниц для Los Angeles (`los-angeles-ca/swedish-massage`, `/deep-tissue-massage`, `/hot-stone-massage`, `/prenatal-massage`, `/sports-massage`, `/couples-massage`) — long-tail keywords, ~400-700 слов каждая, FAQ + pricing + CTA на /los-angeles-ca
-- `docs/seo-content/relaxtouch-city-service-pages-batch-2.json` — 30 nested City × Service страниц (Costa Mesa CA, Newark CA, Arlington VA, Chicago IL, Brooklyn NY × 6 услуг). Сгенерировано через `build_city_service_pages.py` (~9,400 слов, 90 KB)
+- `docs/seo-content/relaxtouch-articles-batch-2.json` — 4 статьи (~4,600 слов): Lower Back Pain, Tipping Etiquette, Sports Massage Runners, How to Choose a Therapist
+- `docs/seo-content/relaxtouch-city-service-pages-LA.json` — 5 nested City × Service страниц для Los Angeles (`los-angeles-ca/swedish-massage`, `/deep-tissue-massage`, `/hot-stone-massage`, `/sports-massage`, `/couples-massage`) — long-tail keywords, ~400-700 слов каждая, FAQ + pricing + CTA на /los-angeles-ca
+- `docs/seo-content/relaxtouch-city-service-pages-batch-2.json` — 25 nested City × Service страниц (Costa Mesa CA, Newark CA, Arlington VA, Chicago IL, Brooklyn NY × 5 услуг). Сгенерировано через `build_city_service_pages.py` (~9,400 слов, 90 KB)
 - `docs/seo-content/legal-update-relaxtouch.json` — обновление с реальной юридической инфой (`Digital Chaos Inc.`, NY, 252 Seaview Ave, Staten Island, NY 10305) + Privacy + Terms (US-формат, Richmond County jurisdiction, CCPA + GDPR rights)
 
 *ChoiseForYouToday (choiseforyoutoday.com — HR/jobs, jobs_landing template):*

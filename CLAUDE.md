@@ -232,7 +232,12 @@ Railway автоматически запускает nixpacks:
 - Полная SEO-обвязка: `<title>`, meta description, canonical, Open Graph, Twitter Card, Schema.org JSON-LD (`Organization`, `WebSite`, `LocalBusiness` + `HealthAndBeautyBusiness`, `Article`, `BreadcrumbList`, `FAQPage`, `Service`/`OfferCatalog`)
 - `sitemap.xml` и `robots.txt` генерируются автоматически на каждый сайт
 - Inline CSS с подстановкой палитры через `__PRIMARY__` / `__SECONDARY__` (через `.replace()`, НЕ `%`-formatting — в CSS есть `100%` который ломает % syntax)
-- Google Fonts (Inter + Playfair Display) с `font-display: swap`
+- Google Fonts (Inter + Playfair Display) загружаются **асинхронно** через `media="print" onload="this.media='all'"` паттерн (CSS не блокирует render-path). `<noscript>` fallback для no-JS. Экономит ~780мс на mobile LCP.
+- **Performance / Core Web Vitals оптимизации:**
+  - `<link rel="preconnect">` для `fonts.googleapis.com`, `fonts.gstatic.com`, `res.cloudinary.com` — сокращает TLS handshake до CDN с картинками
+  - `_render_head(..., preload_image=...)` — если передан URL, инжектит `<link rel="preload" as="image" fetchpriority="high">` для above-the-fold картинки (LCP candidate). `render_seo_article` передаёт `article.og_image` как preload_image.
+  - Article cover image (`<img>` в начале статьи) рендерится с `loading="eager" fetchpriority="high" decoding="async"` — это LCP element выше fold, lazy здесь бьёт по Core Web Vitals.
+  - URL картинки cover'а гонится через `_optimize_img_url()` (Cloudinary `f_auto,q_auto` → WebP/AVIF)
 - Mobile-responsive
 - Контакт-кнопки: `tel:`, `mailto:`, `t.me/`, `wa.me/`, `sms:` + inline SVG-иконки
 - **Локации**: встроенный Google Maps iframe (без API-ключа, через `maps.google.com/maps?q=lat,lng&output=embed`) + кнопка «Open in Google Maps» (приоритет — пользовательский `google_maps_url`, иначе строится из координат). На странице города **автоматически** появляется секция «Our Services in [City]» если в `seo_pages` есть child-страницы со slug'ами `<city-slug>/<service-slug>` — карточки со ссылками на каждый nested page. Это hub-перелинковка для PageRank-flow.
@@ -244,6 +249,7 @@ Railway автоматически запускает nixpacks:
 - **Our Team block**: `_render_team_section(site)` рендерит `site.team_html` (если задано) перед футером на ВСЕХ страницах — задаётся в админке 1 раз, отображается везде.
 - **Footer «Our Locations»** (default) — диспатчер инжектирует `site["_footer_locations"]` (до 8 городов с primary-телефоном); footer рендерит 4-ю колонку.
 - **Site search** — `/search?q=...` — простой LIKE-поиск по статьям с language-фильтром. Search-страницы `noindex` (best practice).
+- **GA4 `phone_click` event** (default template) — если у сайта задан `ga_id`, в `<head>` после gtag-инициализации инжектится глобальный `document.addEventListener('click', ...)` который ловит клики по `<a href="tel:...">` и шлёт `gtag('event', 'phone_click', {phone_number, link_text, page_location, page_path})`. Это main conversion для local services (звонок = запись). Помечается как Key Event в GA4 Admin → Events. Jobs landing **НЕ** трогаем — там CTA = Telegram-кнопки + FB Pixel `Lead` event.
 
 **Jobs Landing рендер (`seo_templates_jobs.py`):**
 - Те же SEO-хелперы (`_schema_organization`, `_schema_article`, `_auto_link_internal_articles`) что в default — реюзаются
@@ -284,6 +290,11 @@ Railway автоматически запускает nixpacks:
 - `/seo/sites/{id}/locations` — города (CRUD), на каждой — адрес, координаты, **`google_maps_url`** (share-ссылка), FAQ JSON, hours JSON, контакты
 - `/seo/sites/{id}/pages` — статические (about, contact, privacy, terms, services)
 - `/seo/sites/{id}/articles` — блог (категория, автор, content_html, pillar-флаг, view counter)
+- **Bulk-publish + per-row toggle status** — на листингах `locations`, `pages`, `articles`:
+  - Сверху списка кнопка **«Опубликовать все драфты (N)»** (видна только если есть драфты, с confirm-popup). POST `/seo/sites/{id}/{type}/bulk-publish` — переключает все draft в published одной транзакцией.
+  - Per-row кнопка **«Опубликовать» / «Снять»** рядом с delete. POST `/seo/sites/{id}/{type}/{item_id}/toggle-status` — toggle статуса конкретной сущности.
+  - При первом переходе в published — автозаполняется `published_at` (через хелпер `_set_status_with_published_at`).
+  - Экономит десятки кликов при активации больших импортов (30+ nested pages, 10 articles за раз).
 - `/seo/sites/{id}/categories` / `/authors` / `/redirects`
 - `/seo/sites/{id}/import` — **bulk-import JSON** (целая `site_settings` + категории + локации + страницы + статьи одним кликом). По умолчанию пропускает существующие slug; галка перезаписывает.
 - `/seo/preview/{id}/{path:path}` — admin-preview, **обходит фильтр `status='live'/published'`** чтобы можно было смотреть черновики. Внутри переписывает root-relative ссылки в preview-prefix чтобы навигация осталась внутри `/seo/preview/{id}/...`. **Важно:** при rewrite не переносить старые headers — `Content-Length` стухнет → пустая страница. Использовать `HTMLResponse(content=html, status_code=...)` без `headers=...`.

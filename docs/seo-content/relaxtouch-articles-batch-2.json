@@ -1,6 +1,5 @@
 {
   "_README": "RelaxTouch — Tantric Wellness articles batch 2 (post-pivot 2026-05). 5 supporting articles. Status = draft, switch to published after preview. Категории и автор существуют из bootstrap (tantric-practices, mindful-body, newcomers-guide, city-guides).",
-
   "articles": [
     {
       "slug": "how-to-prepare-for-a-tantric-session",
@@ -10,7 +9,7 @@
       "h1": "How to Prepare for a Tantric Massage Session",
       "meta_description": "A short, practical guide to preparing for a tantric massage — what to eat, what to wear, what to ask, and what to skip in the hours before your session.",
       "excerpt": "Most people overthink this. Preparing for a tantric session is more about what you don't do than what you do. Here's the short version.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658179/seo/dht45bzi5bg2fyd0n9bh.webp",
       "tags": "preparation,tantric massage,beginner,what to expect",
       "is_pillar": 0,
       "status": "draft",
@@ -24,7 +23,7 @@
       "h1": "Tantric Massage Etiquette: Tipping, Talking, and Time",
       "meta_description": "Clear answers to the small-but-real questions about tantric massage etiquette — tipping, talking during the session, arriving late, and what to do afterwards.",
       "excerpt": "Bodywork has its own quiet etiquette. None of it is hard, but no one explains it. Here are the answers to the small questions most clients are too polite to ask.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658219/seo/jp4bcaw07oewpw8p8vnb.avif",
       "tags": "etiquette,tipping,tantric massage,beginner",
       "is_pillar": 0,
       "status": "draft",
@@ -38,7 +37,7 @@
       "h1": "Tantric Massage for Couples: A Thoughtful Look",
       "meta_description": "An honest look at what tantric massage can — and can't — do for couples. What 'couples sessions' typically involve, who they're for, and the alternative most studios recommend.",
       "excerpt": "Couples tantric massage is one of the most-asked-about offerings in the niche. Here's a thoughtful look at what it actually is, what it isn't, and what most studios (including ours) recommend instead.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778657946/seo/adwaxzfpvvu2ardpalfk.jpg",
       "tags": "couples,tantric massage,relationships",
       "is_pillar": 0,
       "status": "draft",
@@ -52,7 +51,7 @@
       "h1": "How to Choose a Tantric Massage Practitioner",
       "meta_description": "A practical guide to choosing a tantric massage practitioner — the questions to ask, the signs to look for on a website, and the small details that separate professional studios from everything else.",
       "excerpt": "Tantric bodywork doesn't have one universal certification, so choosing a practitioner is more about reading signals than checking credentials. Here's what to read for.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658030/seo/bar7xcxsnl5ermawvtcx.avif",
       "tags": "choose practitioner,tantric massage,beginner,red flags",
       "is_pillar": 0,
       "status": "draft",
@@ -66,7 +65,7 @@
       "h1": "A Short History of Tantric Bodywork in the West",
       "meta_description": "How tantric bodywork came west — a short, honest history of the practice from 1970s Esalen to the modern wellness studio, with the key figures and the messy bits.",
       "excerpt": "Tantric bodywork as practised in modern Western studios is younger than most people think — about fifty years old, with a messy, well-documented origin story.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658059/seo/iggd3a86l3d151xdunh7.webp",
       "tags": "history,tantric massage,esalen,context",
       "is_pillar": 0,
       "status": "draft",

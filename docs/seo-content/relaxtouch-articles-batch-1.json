@@ -1,6 +1,5 @@
 {
   "_README": "RelaxTouch — Tantric Wellness articles batch 1 (post-pivot 2026-05). 5 pillar articles for the tantric massage niche. Import via /seo/sites/{id}/import. Status = draft, switch to published after preview. Categories already exist (tantric-practices, mindful-body, newcomers-guide, city-guides — see bootstrap).",
-
   "articles": [
     {
       "slug": "what-is-tantric-massage-really",
@@ -10,7 +9,7 @@
       "h1": "What Is Tantric Massage, Really? An Honest Guide",
       "meta_description": "An honest, plain-English guide to what tantric massage actually is — what it includes, what it doesn't, who it's for, and how to choose a practitioner.",
       "excerpt": "Tantric massage is one of the most misunderstood corners of bodywork. This guide is what we wish we'd been able to hand a friend asking 'so what actually is it?' — written plainly, with no euphemisms.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778657946/seo/adwaxzfpvvu2ardpalfk.jpg",
       "tags": "tantric massage,beginner,what is tantric massage",
       "is_pillar": 1,
       "status": "draft",
@@ -24,7 +23,7 @@
       "h1": "Your First Tantric Session: What to Expect, Step by Step",
       "meta_description": "A clear, calm walkthrough of a first tantric massage — from booking through aftercare. What happens, what's normal, and what to ask before you go.",
       "excerpt": "A first tantric session is a small thing that some people overthink. Here's a clear, plain walkthrough — booking, arrival, the session itself, and afterwards — so nothing is a surprise.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658030/seo/bar7xcxsnl5ermawvtcx.avif",
       "tags": "first session,tantric massage,what to expect,beginner",
       "is_pillar": 1,
       "status": "draft",
@@ -38,7 +37,7 @@
       "h1": "Tantric vs Sensual Massage: Understanding the Difference",
       "meta_description": "Tantric and sensual massage are often confused but they aren't the same. This guide draws the line clearly — what each one is, who offers what, and how to tell from a studio's website.",
       "excerpt": "'Tantric' and 'sensual' are often used as synonyms online — but they describe different things. This guide draws the line clearly so you know what you're booking.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658059/seo/iggd3a86l3d151xdunh7.webp",
       "tags": "tantric massage,sensual massage,comparison,beginner",
       "is_pillar": 1,
       "status": "draft",
@@ -52,7 +51,7 @@
       "h1": "Why Slow Touch Matters: The Science of Conscious Bodywork",
       "meta_description": "Slow, intentional touch is the central tool of tantric massage. Here's what's actually happening in the nervous system when a session is unhurried — and why it works.",
       "excerpt": "Slow touch isn't a stylistic choice. It's the central tool of tantric bodywork, and there's a clear, well-studied reason it works on the nervous system.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658093/seo/jpyvadzgw19lj8dps6wh.webp",
       "tags": "slow touch,nervous system,tantric massage,c-tactile fibers",
       "is_pillar": 1,
       "status": "draft",
@@ -66,7 +65,7 @@
       "h1": "Tantric Massage for Stress, Anxiety and Burnout",
       "meta_description": "A practical, evidence-informed look at how slow, mindful tantric bodywork supports the nervous system through chronic stress, anxiety, and burnout.",
       "excerpt": "Tantric bodywork isn't a treatment for anxiety — it's not medicine. But it does something specific for a nervous system that's been running hot too long. Here's what.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658122/seo/fkqz2nq78utf2prdqeij.jpg",
       "tags": "stress,anxiety,burnout,nervous system,tantric massage",
       "is_pillar": 1,
       "status": "draft",

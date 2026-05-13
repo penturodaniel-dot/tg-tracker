@@ -1,12 +1,11 @@
 {
   "_README": "RelaxTouch (relaxtouchtoday.com) — Tantric Wellness Massage bootstrap (post-pivot 2026-05). 6 active studio locations. Импортируй через /seo/sites/{id}/import с галкой 'перезаписать'. Slug-based upsert обновит существующие 6 локаций (LA, Costa Mesa, Newark, Arlington, Chicago, Brooklyn) — id и контакты сохраняются. После import надо вручную удалить 9 устаревших локаций (San Francisco, Menlo Park, Riverside, Sacramento, Houston, Phoenix, Austin, San Diego, Seattle и др. — если есть).",
-
   "site_settings": {
     "brand_name": "RelaxTouch",
     "tagline": "Mindful Tantric Massage Studios in the United States",
     "title_suffix": " | RelaxTouch",
     "default_meta_description": "Mindful tantric massage studios across six U.S. cities. Slow, full-body bodywork by experienced practitioners in a calm, modern setting. Open daily, 9 AM to midnight.",
-    "default_og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+    "default_og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778657946/seo/adwaxzfpvvu2ardpalfk.jpg",
     "color_primary": "#7A9B76",
     "color_secondary": "#E8DDD0",
     "language": "en",
@@ -15,7 +14,6 @@
     "org_address": "United States",
     "social_links": "{}"
   },
-
   "categories": [
     {
       "slug": "tantric-practices",
@@ -46,7 +44,6 @@
       "position": 40
     }
   ],
-
   "authors": [
     {
       "slug": "editorial-team",
@@ -56,7 +53,6 @@
       "social_links": "{}"
     }
   ],
-
   "pages": [
     {
       "slug": "about",
@@ -105,7 +101,6 @@
       "content_html": "<p class=\"lead\">These terms apply when you use the RelaxTouch website (relaxtouchtoday.com) or book a session at one of our studios. By using this site or visiting one of our locations, you agree to these terms.</p><h2>Operator</h2><p>RelaxTouch is operated by Digital Chaos Inc., a Domestic Business Corporation registered in the County of Richmond, NY State, with its registered address at 252 Seaview Ave, Staten Island, NY 10305, USA.</p><h2>Sessions</h2><p>All sessions are private, professional bodywork sessions provided in our studio locations. Sessions are non-medical. We do not diagnose, treat or claim to cure any medical condition. If you have a significant medical concern, please consult a licensed healthcare provider.</p><h2>Bookings and cancellations</h2><p>Bookings are confirmed by phone or email. We ask for at least 24 hours' notice for cancellations or reschedules so we can offer the time to someone else. Late cancellations and no-shows may be charged the full session fee at studio discretion.</p><h2>Conduct</h2><p>Sessions are conducted in a professional setting. Inappropriate behavior, requests outside the scope of a wellness session, or any conduct that makes our team feel unsafe will result in immediate end of the session without refund. We reserve the right to refuse service.</p><h2>Limitation of liability</h2><p>To the maximum extent permitted by law, Digital Chaos Inc. is not liable for any indirect, incidental or consequential damages arising from use of this website or any session. Our total liability is limited to the amount you paid for the relevant session.</p><h2>Jurisdiction</h2><p>These terms are governed by the laws of the State of New York, USA. Any dispute will be brought exclusively in the courts of Richmond County, NY.</p><h2>Contact</h2><p>Questions about these terms? Email <a href=\"mailto:hello@relaxtouchtoday.com\">hello@relaxtouchtoday.com</a>.</p>"
     }
   ],
-
   "locations": [
     {
       "slug": "los-angeles-ca",
@@ -116,7 +111,7 @@
       "h1": "Tantric Massage in Los Angeles",
       "tagline": "A quiet tantric studio in the heart of LA.",
       "meta_description": "Mindful tantric massage in Los Angeles, CA. Slow touch, sensory, full-body, and deep body connection sessions in a calm, modern studio. Open 9 AM to midnight, daily.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778657946/seo/adwaxzfpvvu2ardpalfk.jpg",
       "intro_html": "<p>RelaxTouch Los Angeles is a small tantric massage studio built for one thing — a slower, more attentive hour. Tucked into the city's pace, our rooms are quiet, the light is soft, and the practitioner on shift takes their time. No rushed sessions, no upselling, no scripts.</p>",
       "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230.</strong></li><li><strong>30-minute — $200.</strong></li></ul><h3>Styles we practise</h3><ul><li><strong>Tantric Full Body Massage</strong> — our signature slow, intentional, full-body session.</li><li><strong>Sensory Massage</strong> — lighter, attentive touch that gives the nervous system room to settle.</li><li><strong>Slow Touch Massage</strong> — entry-level, unhurried — a gentle place to start if it's your first time.</li><li><strong>Deep Body Connection Massage</strong> — fuller-contact bodywork for people who want a more grounded session.</li></ul><p>Every style is offered by a practitioner trained specifically in that approach.</p>",
       "faq_json": "[{\"q\":\"What does a session look like?\",\"a\":\"You arrive, we offer water, you tell us briefly what brought you in and what you're hoping to feel afterward. Then you settle on the table, draped in linens, and the session begins — slow, full-body, unhurried. We're available to adjust pressure, pace, or focus at any point.\"},{\"q\":\"What should I wear?\",\"a\":\"Whatever you arrive in. You'll be draped in clean linens throughout the session — the same way you would be at any professional bodywork practice.\"},{\"q\":\"Is this a medical service?\",\"a\":\"No. RelaxTouch is a wellness practice. We don't diagnose, treat or claim to cure any medical condition. If you have a significant medical concern, please consult a licensed healthcare provider.\"},{\"q\":\"How do I book?\",\"a\":\"The fastest way is the phone line on this page. We answer 9 AM to midnight, every day.\"}]",
@@ -132,7 +127,7 @@
       "h1": "Tantric Massage in Costa Mesa",
       "tagline": "A quiet tantric studio for Orange County.",
       "meta_description": "Mindful tantric massage in Costa Mesa, Orange County. Slow touch, sensory, full-body, and deep body connection sessions in a calm modern studio. Open 9 AM to midnight, daily.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658030/seo/bar7xcxsnl5ermawvtcx.avif",
       "intro_html": "<p>RelaxTouch Costa Mesa is a small tantric massage studio that gives Orange County a calmer way to reset. Quiet rooms, soft light, an unhurried hour — minutes from South Coast Plaza but a world away from its pace.</p>",
       "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200.</strong></li></ul><h3>Styles we practise</h3><ul><li>Tantric Full Body Massage · Sensory Massage · Slow Touch Massage · Deep Body Connection Massage — each offered by a practitioner trained specifically in that style.</li></ul>",
       "faq_json": "[{\"q\":\"Is parking easy?\",\"a\":\"Yes — there's plenty of parking close to the studio entrance, and we don't validate tickets you don't get.\"},{\"q\":\"How do I book?\",\"a\":\"The fastest way is the phone line on this page. We answer 9 AM to midnight, every day.\"},{\"q\":\"What should I wear?\",\"a\":\"Whatever you arrive in. You'll be draped in clean linens throughout the session.\"},{\"q\":\"Is this a medical service?\",\"a\":\"No. RelaxTouch is a wellness practice. We don't diagnose, treat or claim to cure any medical condition.\"}]",
@@ -148,7 +143,7 @@
       "h1": "Tantric Massage in Newark",
       "tagline": "Tantric bodywork for the East Bay.",
       "meta_description": "Mindful tantric massage in Newark, CA — serving the East Bay. Slow touch, sensory, full-body, and deep body connection sessions. Open 9 AM to midnight, daily.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658059/seo/iggd3a86l3d151xdunh7.webp",
       "intro_html": "<p>RelaxTouch Newark serves the East Bay from a small, modern studio — somewhere between the freeway and home where an hour can actually feel like an hour. Quiet rooms, soft light, unhurried sessions.</p>",
       "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200.</strong></li></ul><h3>Styles we practise</h3><ul><li>Tantric Full Body Massage · Sensory Massage · Slow Touch Massage · Deep Body Connection Massage — each offered by a practitioner trained specifically in that style.</li></ul>",
       "faq_json": "[{\"q\":\"How early or late can I book?\",\"a\":\"We're open every day from 9 AM to midnight. Evenings tend to fill first; mornings are usually open same-day.\"},{\"q\":\"What should I wear?\",\"a\":\"Whatever you arrive in. You'll be draped in clean linens throughout the session.\"},{\"q\":\"How do I book?\",\"a\":\"The fastest way is the phone line on this page.\"},{\"q\":\"Is this a medical service?\",\"a\":\"No. RelaxTouch is a wellness practice. We don't diagnose, treat or claim to cure any medical condition.\"}]",
@@ -164,7 +159,7 @@
       "h1": "Tantric Massage in Arlington",
       "tagline": "Tantric bodywork a walk from Pentagon City.",
       "meta_description": "Mindful tantric massage in Arlington, VA. Slow touch, sensory, full-body, and deep body connection sessions in a calm, modern studio. Open 9 AM to midnight, daily.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658093/seo/jpyvadzgw19lj8dps6wh.webp",
       "intro_html": "<p>RelaxTouch Arlington is a small tantric massage studio a short walk from the Pentagon City corridor — built for the kind of week where everything is on someone else's schedule. Quiet rooms, soft light, an unhurried hour.</p>",
       "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200.</strong></li></ul><h3>Styles we practise</h3><ul><li>Tantric Full Body Massage · Sensory Massage · Slow Touch Massage · Deep Body Connection Massage — each offered by a practitioner trained specifically in that style.</li></ul>",
       "faq_json": "[{\"q\":\"Is the studio accessible by Metro?\",\"a\":\"Yes — we're within a short walk of the Pentagon City station.\"},{\"q\":\"How do I book?\",\"a\":\"The fastest way is the phone line on this page. We answer 9 AM to midnight, every day.\"},{\"q\":\"What should I wear?\",\"a\":\"Whatever you arrive in. You'll be draped in clean linens throughout the session.\"},{\"q\":\"Is this a medical service?\",\"a\":\"No. RelaxTouch is a wellness practice. We don't diagnose, treat or claim to cure any medical condition.\"}]",
@@ -180,7 +175,7 @@
       "h1": "Tantric Massage in Chicago",
       "tagline": "Chicago's quiet alternative to the chain spa.",
       "meta_description": "Mindful tantric massage in Chicago, IL. Slow touch, sensory, full-body, and deep body connection sessions in a calm, modern studio. Open 9 AM to midnight, daily.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658122/seo/fkqz2nq78utf2prdqeij.jpg",
       "intro_html": "<p>RelaxTouch Chicago is the city's quiet alternative to the chain spa — a small, modern studio focused on slower, more attentive bodywork. Quiet rooms, soft light, an unhurried hour, every day of the week.</p>",
       "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200.</strong></li></ul><h3>Styles we practise</h3><ul><li>Tantric Full Body Massage · Sensory Massage · Slow Touch Massage · Deep Body Connection Massage (especially welcome in winter) — each offered by a practitioner trained specifically in that style.</li></ul>",
       "faq_json": "[{\"q\":\"Do you open early in winter?\",\"a\":\"Yes — we keep the same 9 AM to midnight hours all year, weather permitting. The studio is warm, the linens are heated, and our team accounts for the season.\"},{\"q\":\"How do I book?\",\"a\":\"The fastest way is the phone line on this page.\"},{\"q\":\"What should I wear?\",\"a\":\"Whatever you arrive in. You'll be draped in clean linens throughout the session.\"},{\"q\":\"Is this a medical service?\",\"a\":\"No. RelaxTouch is a wellness practice. We don't diagnose, treat or claim to cure any medical condition.\"}]",
@@ -196,7 +191,7 @@
       "h1": "Tantric Massage in Brooklyn",
       "tagline": "The kind of quiet Brooklyn was missing.",
       "meta_description": "Mindful tantric massage in Brooklyn, NY. Slow touch, sensory, full-body, and deep body connection sessions in a calm, modern studio — built for the pace of New York. Open 9 AM to midnight, daily.",
-      "og_image": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80",
+      "og_image": "https://res.cloudinary.com/dqwsfvuon/image/upload/v1778658179/seo/dht45bzi5bg2fyd0n9bh.webp",
       "intro_html": "<p>RelaxTouch Brooklyn is the kind of quiet tantric studio the borough was missing — built for the pace of New York. Small, modern, unhurried. A door you close and an hour that's actually yours.</p>",
       "services_html": "<h3>Sessions</h3><ul><li><strong>60-minute — $230 · 30-minute — $200.</strong></li></ul><h3>Styles we practise</h3><ul><li>Tantric Full Body Massage · Sensory Massage · Slow Touch Massage · Deep Body Connection Massage — each offered by a practitioner trained specifically in that style.</li></ul>",
       "faq_json": "[{\"q\":\"Is the studio near a subway?\",\"a\":\"Yes — we're within a short walk of several lines. Exact directions are confirmed when you book.\"},{\"q\":\"How do I book?\",\"a\":\"The fastest way is the phone line on this page. We answer 9 AM to midnight, every day.\"},{\"q\":\"What should I wear?\",\"a\":\"Whatever you arrive in. You'll be draped in clean linens throughout the session.\"},{\"q\":\"Is this a medical service?\",\"a\":\"No. RelaxTouch is a wellness practice. We don't diagnose, treat or claim to cure any medical condition.\"}]",

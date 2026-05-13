@@ -986,50 +986,57 @@ def render_seo_blog_index(site: dict, articles: list, categories: list = None,
 # при поиске они совпали раньше своих коротких вариантов. Дополняй по мере
 # написания новых статей.
 _INTERNAL_LINK_MAP = [
-    ("swedish-vs-deep-tissue-massage", [
-        "Swedish vs deep tissue massage",
-        "Swedish vs deep tissue",
-        "deep tissue massage",
-        "Swedish massage",
+    ("what-is-tantric-massage-really",  [
+        "what is tantric massage",
+        "tantric massage",
     ]),
-    ("how-often-should-you-get-a-massage", [
-        "how often should you get a massage",
-        "how often you should get a massage",
-        "massage frequency",
+    ("your-first-tantric-session-what-to-expect", [
+        "your first tantric session",
+        "first tantric session",
+        "what to expect",
     ]),
-    ("what-to-expect-at-your-first-massage", [
-        "what to expect at your first massage",
-        "your first massage",
-        "first massage",
+    ("tantric-vs-sensual-massage-difference", [
+        "tantric vs sensual massage",
+        "tantric and sensual",
+        "sensual massage",
     ]),
-    ("science-backed-benefits-of-massage", [
-        "science-backed benefits of regular massage",
-        "benefits of regular massage",
-        "benefits of massage therapy",
+    ("why-slow-touch-matters", [
+        "why slow touch matters",
+        "science of slow touch",
+        "slow touch",
+        "CT-fibre pathway",
+        "C-tactile fibres",
     ]),
-    ("hot-stone-massage-complete-guide", [
-        "hot stone massage",
-        "hot stone therapy",
+    ("tantric-massage-for-stress-and-burnout", [
+        "tantric massage for stress",
+        "burnout",
+        "anxiety",
+        "stress",
     ]),
-    ("massage-for-lower-back-pain", [
-        "massage for lower back pain",
-        "chronic low back pain",
-        "low back pain",
-        "lower back pain",
+    ("how-to-prepare-for-a-tantric-session", [
+        "how to prepare for a tantric session",
+        "prepare for a tantric session",
     ]),
-    ("tipping-for-massage-etiquette-guide", [
-        "tipping for massage",
-        "tipping etiquette",
+    ("tantric-massage-etiquette", [
+        "tantric massage etiquette",
+        "tipping",
+        "etiquette",
     ]),
-    ("sports-massage-for-runners", [
-        "sports massage for runners",
-        "massage for runners",
+    ("tantric-massage-for-couples", [
+        "tantric massage for couples",
+        "couples session",
+        "couples",
     ]),
-    ("how-to-choose-a-massage-therapist", [
-        "how to choose a massage therapist",
-        "choose a massage therapist",
-        "choosing a massage therapist",
-        "find a massage therapist",
+    ("how-to-choose-a-tantric-practitioner", [
+        "how to choose a tantric practitioner",
+        "choose a tantric practitioner",
+        "choose a practitioner",
+    ]),
+    ("history-of-tantric-bodywork-in-the-west", [
+        "history of tantric bodywork",
+        "Esalen",
+        "Mantak Chia",
+        "Margot Anand",
     ]),
 ]
 

@@ -308,13 +308,20 @@ Railway автоматически запускает nixpacks:
 
 **Стартовый контент в репозитории:**
 
-*RelaxTouch (relaxtouchtoday.com — wellness/spa, default template):*
-- `docs/seo-content/relaxtouch-bootstrap.json` — 1 site_settings + 4 categories + 1 author + 4 static pages + 15 location pages
-- `docs/seo-content/relaxtouch-articles-batch-1.json` — 5 pillar-статей (~6,400 слов): Swedish vs Deep Tissue, How Often, First Massage, Science-Backed Benefits, Hot Stone
-- `docs/seo-content/relaxtouch-articles-batch-2.json` — 4 статьи (~4,600 слов): Lower Back Pain, Tipping Etiquette, Sports Massage Runners, How to Choose a Therapist
-- `docs/seo-content/relaxtouch-city-service-pages-LA.json` — 5 nested City × Service страниц для Los Angeles (`los-angeles-ca/swedish-massage`, `/deep-tissue-massage`, `/hot-stone-massage`, `/sports-massage`, `/couples-massage`) — long-tail keywords, ~400-700 слов каждая, FAQ + pricing + CTA на /los-angeles-ca
-- `docs/seo-content/relaxtouch-city-service-pages-batch-2.json` — 25 nested City × Service страниц (Costa Mesa CA, Newark CA, Arlington VA, Chicago IL, Brooklyn NY × 5 услуг). Сгенерировано через `build_city_service_pages.py` (~9,400 слов, 90 KB)
-- `docs/seo-content/legal-update-relaxtouch.json` — обновление с реальной юридической инфой (`Digital Chaos Inc.`, NY, 252 Seaview Ave, Staten Island, NY 10305) + Privacy + Terms (US-формат, Richmond County jurisdiction, CCPA + GDPR rights)
+*RelaxTouch (relaxtouchtoday.com — Tantric Wellness, default template). Перепрофилировано 2026-05 со wellness/spa на mindful tantric massage. 6 активных локаций.*
+- `docs/seo-content/relaxtouch-bootstrap.json` — 1 site_settings + 4 categories (tantric-practices, mindful-body, newcomers-guide, city-guides) + 1 author + 4 static pages + **6 locations only** (LA, Costa Mesa, Newark, Arlington, Chicago, Brooklyn). 9 устаревших городов сняты — после re-import нужно удалить через ✕ или просто оставить в draft.
+- `docs/seo-content/relaxtouch-articles-batch-1.json` — 5 pillar-статей: What Is Tantric Massage (Really), Your First Tantric Session, Tantric vs Sensual, Why Slow Touch Matters, Tantric Massage for Stress/Anxiety/Burnout
+- `docs/seo-content/relaxtouch-articles-batch-2.json` — 5 supporting articles: How to Prepare, Etiquette/Tipping, Tantric for Couples (honest take — не offering "couples session"), How to Choose a Practitioner, History of Tantric Bodywork in the West
+- `docs/seo-content/relaxtouch-city-service-pages-LA.json` — 4 nested City × Service страниц для Los Angeles (`los-angeles-ca/tantric-full-body-massage`, `/sensory-massage`, `/slow-touch-massage`, `/deep-body-connection-massage`)
+- `docs/seo-content/relaxtouch-city-service-pages-batch-2.json` — 20 nested страниц (Costa Mesa, Newark, Arlington, Chicago, Brooklyn × 4 услуги). Сгенерировано через `build_city_service_pages_tantric.py` в `C:\Users\user\AppData\Local\Temp\`.
+- Цены: **60 min — $230**, **30 min — $200** (2-tier, без 15-минутного варианта)
+- 4 услуги: **Tantric Full Body Massage** (signature) / **Sensory Massage** / **Slow Touch Massage** / **Deep Body Connection Massage**. Без "Couples" как отдельной услуги — есть статья про couples с альтернативой (две сессии back-to-back в соседних комнатах).
+- **Tone of voice / правила контента:**
+  - НЕ используем "licensed therapist" — используем "experienced practitioner", "our team", "trained bodyworker"
+  - НЕ используем медицинские заявки ("heal/cure/treat") — используем "support/ease/relieve"
+  - НЕ используем trigger-words (sexual, erotic, awakening, intimate) — нейтрально
+  - Boundaries проговариваются осторожно через формулировки "wellness practice", "professional studio setting", "draped in linens", "non-medical"
+- `docs/seo-content/legal-update-relaxtouch.json` — юр-инфа Digital Chaos Inc. (NY) + Privacy + Terms (US-формат, Richmond County jurisdiction, CCPA + GDPR rights)
 
 *ChoiseForYouToday (choiseforyoutoday.com — HR/jobs, jobs_landing template):*
 - `docs/seo-content/choiseforyoutoday-bootstrap.json` — 1 site_settings (template=jobs_landing, ru, FB Pixel `1321696403049126`, Google Site Verification `XvBJpr-...`) + 3 categories (work/success/life) + 1 author + 1 homepage page (с JobPosting Schema.org) + 19 articles (ru/ua/en mix). Контент сграблен с публичного Supabase REST API при миграции с Lovable.dev.

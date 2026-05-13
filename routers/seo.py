@@ -1014,14 +1014,23 @@ async def seo_pages_list(request: Request, site_id: int):
 </form></div>"""
 
     draft_count = sum(1 for p in pages if (p.get("status") or "draft") != "published")
-    bulk_btn = ""
+    nested_count = sum(1 for p in pages if "/" in (p.get("slug") or ""))
+    bulk_btns = []
     if draft_count:
-        bulk_btn = (
-            f'<form method="post" action="/seo/sites/{site_id}/pages/bulk-publish" style="margin-bottom:12px" '
+        bulk_btns.append(
+            f'<form method="post" action="/seo/sites/{site_id}/pages/bulk-publish" style="display:inline-block;margin-right:8px" '
             f'onsubmit="return confirm(\'Опубликовать {draft_count} черновиков?\')">'
             f'<button class="seo-btn">Опубликовать все драфты ({draft_count})</button>'
             f'</form>'
         )
+    if nested_count:
+        bulk_btns.append(
+            f'<form method="post" action="/seo/sites/{site_id}/pages/bulk-delete-nested" style="display:inline-block" '
+            f'onsubmit="return confirm(\'Удалить все {nested_count} nested-страниц (slug содержит /)? Static pages не пострадают.\')">'
+            f'<button class="seo-btn danger">Удалить все nested-страницы ({nested_count})</button>'
+            f'</form>'
+        )
+    bulk_btn = f'<div style="margin-bottom:12px">{"".join(bulk_btns)}</div>' if bulk_btns else ""
     content = (f'<div class="seo-h1">{_esc(site.get("name") or "")}</div>'
                f'{_site_subnav(site_id, "pages")}'
                f'{bulk_btn}'
@@ -1154,14 +1163,23 @@ async def seo_articles_list(request: Request, site_id: int):
 </form></div>"""
 
     draft_count = sum(1 for a in arts if (a.get("status") or "draft") != "published")
-    bulk_btn = ""
+    total_count = len(arts)
+    bulk_btns = []
     if draft_count:
-        bulk_btn = (
-            f'<form method="post" action="/seo/sites/{site_id}/articles/bulk-publish" style="margin-bottom:12px" '
+        bulk_btns.append(
+            f'<form method="post" action="/seo/sites/{site_id}/articles/bulk-publish" style="display:inline-block;margin-right:8px" '
             f'onsubmit="return confirm(\'Опубликовать {draft_count} черновиков?\')">'
             f'<button class="seo-btn">Опубликовать все драфты ({draft_count})</button>'
             f'</form>'
         )
+    if total_count:
+        bulk_btns.append(
+            f'<form method="post" action="/seo/sites/{site_id}/articles/bulk-delete-all" style="display:inline-block" '
+            f'onsubmit="return confirm(\'УДАЛИТЬ ВСЕ {total_count} статей навсегда? Это действие нельзя отменить.\')">'
+            f'<button class="seo-btn danger">Удалить все статьи ({total_count})</button>'
+            f'</form>'
+        )
+    bulk_btn = f'<div style="margin-bottom:12px">{"".join(bulk_btns)}</div>' if bulk_btns else ""
     content = (f'<div class="seo-h1">{_esc(site.get("name") or "")}</div>'
                f'{_site_subnav(site_id, "articles")}'
                f'{bulk_btn}'
@@ -1352,6 +1370,22 @@ async def seo_pages_bulk_publish(request: Request, site_id: int):
                         msg=f"Опубликовано страниц: {n}")
 
 
+@router.post("/seo/sites/{site_id}/pages/bulk-delete-nested")
+async def seo_pages_bulk_delete_nested(request: Request, site_id: int):
+    """Удаляет ТОЛЬКО nested-страницы (slug содержит `/`).
+    Static pages (about, contact, privacy, terms) не трогает."""
+    user, err = _admin_check(request)
+    if err: return err
+    pages = _db.get_seo_pages(site_id)
+    n = 0
+    for p in pages:
+        if "/" in (p.get("slug") or ""):
+            _db.delete_seo_page(p["id"])
+            n += 1
+    return _redirect_to(f"/seo/sites/{site_id}/pages",
+                        msg=f"Удалено nested-страниц: {n}")
+
+
 # --- Articles ---
 @router.post("/seo/sites/{site_id}/articles/{art_id}/toggle-status")
 async def seo_article_toggle(request: Request, site_id: int, art_id: int):
@@ -1378,6 +1412,20 @@ async def seo_articles_bulk_publish(request: Request, site_id: int):
             n += 1
     return _redirect_to(f"/seo/sites/{site_id}/articles",
                         msg=f"Опубликовано статей: {n}")
+
+
+@router.post("/seo/sites/{site_id}/articles/bulk-delete-all")
+async def seo_articles_bulk_delete_all(request: Request, site_id: int):
+    """Удаляет ВСЕ статьи сайта. Strong confirm требуется на frontend."""
+    user, err = _admin_check(request)
+    if err: return err
+    arts = _db.get_seo_articles(site_id)
+    n = 0
+    for a in arts:
+        _db.delete_seo_article(a["id"])
+        n += 1
+    return _redirect_to(f"/seo/sites/{site_id}/articles",
+                        msg=f"Удалено статей: {n}")
 
 
 # ════════════════════════════════════════════════════════════════════════════

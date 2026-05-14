@@ -497,6 +497,12 @@ def _render_head(site: dict, *, title: str, description: str = "",
     ]
     if canonical:
         parts.append(f'<link rel="canonical" href="{_esc(canonical)}">')
+        # hreflang: target US audience explicitly. site.target_country can
+        # override; defaults to 'US'. site.language drives the language code.
+        target_country = (site.get("target_country") or "US").upper()
+        hreflang_code = f"{(lang or 'en').lower()}-{target_country}"
+        parts.append(f'<link rel="alternate" hreflang="{_esc(hreflang_code)}" href="{_esc(canonical)}">')
+        parts.append(f'<link rel="alternate" hreflang="x-default" href="{_esc(canonical)}">')
     if robots:
         parts.append(robots)
     parts.append(f'<meta property="og:type" content="{_esc(og_type)}">')

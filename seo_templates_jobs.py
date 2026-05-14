@@ -387,6 +387,13 @@ def _render_jobs_head(site: dict, *, title: str, description: str = "",
     ]
     if canonical:
         parts.append(f'<link rel="canonical" href="{_esc(canonical)}">')
+        # hreflang: signal US-targeting to Google even when content is in Russian.
+        # site.target_country overrides; defaults to 'US'. site.language drives
+        # the language code (yields e.g. 'ru-US' for ChoiseForYouToday).
+        target_country = (site.get("target_country") or "US").upper()
+        hreflang_code = f"{(lang or 'en').lower()}-{target_country}"
+        parts.append(f'<link rel="alternate" hreflang="{_esc(hreflang_code)}" href="{_esc(canonical)}">')
+        parts.append(f'<link rel="alternate" hreflang="x-default" href="{_esc(canonical)}">')
     parts.append(f'<meta property="og:type" content="{_esc(og_type)}">')
     parts.append(f'<meta property="og:title" content="{_esc(title_full)}">')
     parts.append(f'<meta property="og:description" content="{_esc(desc)}">')

@@ -295,6 +295,9 @@ Railway автоматически запускает nixpacks:
   - Per-row кнопка **«Опубликовать» / «Снять»** рядом с delete. POST `/seo/sites/{id}/{type}/{item_id}/toggle-status` — toggle статуса конкретной сущности.
   - При первом переходе в published — автозаполняется `published_at` (через хелпер `_set_status_with_published_at`).
   - Экономит десятки кликов при активации больших импортов (30+ nested pages, 10 articles за раз).
+- **Bulk-delete кнопки** (добавлены для tantric-пивота, остаются полезны для будущих rebranding-операций):
+  - На `/articles`: красная **«Удалить все статьи (N)»** — POST `/seo/sites/{id}/articles/bulk-delete-all`. Strong confirm. Удаляет ВСЕ статьи сайта.
+  - На `/pages`: красная **«Удалить все nested-страницы (N)»** — POST `/seo/sites/{id}/pages/bulk-delete-nested`. Удаляет только страницы где `slug` содержит `/` (= city × service nested). Static pages (about/contact/privacy/terms) **не трогает**.
 - `/seo/sites/{id}/categories` / `/authors` / `/redirects`
 - `/seo/sites/{id}/import` — **bulk-import JSON** (целая `site_settings` + категории + локации + страницы + статьи одним кликом). По умолчанию пропускает существующие slug; галка перезаписывает.
 - `/seo/preview/{id}/{path:path}` — admin-preview, **обходит фильтр `status='live'/published'`** чтобы можно было смотреть черновики. Внутри переписывает root-relative ссылки в preview-prefix чтобы навигация осталась внутри `/seo/preview/{id}/...`. **Важно:** при rewrite не переносить старые headers — `Content-Length` стухнет → пустая страница. Использовать `HTMLResponse(content=html, status_code=...)` без `headers=...`.
@@ -309,19 +312,34 @@ Railway автоматически запускает nixpacks:
 **Стартовый контент в репозитории:**
 
 *RelaxTouch (relaxtouchtoday.com — Tantric Wellness, default template). Перепрофилировано 2026-05 со wellness/spa на mindful tantric massage. 6 активных локаций.*
-- `docs/seo-content/relaxtouch-bootstrap.json` — 1 site_settings + 4 categories (tantric-practices, mindful-body, newcomers-guide, city-guides) + 1 author + 4 static pages + **6 locations only** (LA, Costa Mesa, Newark, Arlington, Chicago, Brooklyn). 9 устаревших городов сняты — после re-import нужно удалить через ✕ или просто оставить в draft.
+- `docs/seo-content/relaxtouch-bootstrap.json` — 1 site_settings + 4 categories (tantric-practices, mindful-body, newcomers-guide, city-guides) + 1 author + 4 static pages + **6 locations only** (LA, Costa Mesa, Newark, Arlington, Chicago, Brooklyn).
+  - Каждая локация **расширена** до ~700-900 слов (с 250 было). Используются 3 слота: `intro_html` (короткий hero-параграф) + `services_html` (услуги+цены) + **`about_studio_html`** (новый — рендерится как секция "About Our Studio" под Services). about_studio_html содержит 3 H3-подзаголовка: **Getting here** (район, transit lines, freeways, парковка), **Who we tend to see** (профиль клиента города), **Why [City], specifically** (философское обоснование). Контент **уникален per city** — раньше Google трактовал 6 локаций как near-duplicates и индексировал только одну.
+  - `faq_json` расширен до **7-9 вопросов** на локацию (с 3-4 было). Включает 2-3 city-specific (Metro lines, parking, проблема winter weather для Chicago, suburb service area, и т.д.) + обязательные generic (first session, what to wear, medical disclaimer, **How do I book** = phone only, **How do I pay** = cash only).
 - `docs/seo-content/relaxtouch-articles-batch-1.json` — 5 pillar-статей: What Is Tantric Massage (Really), Your First Tantric Session, Tantric vs Sensual, Why Slow Touch Matters, Tantric Massage for Stress/Anxiety/Burnout
-- `docs/seo-content/relaxtouch-articles-batch-2.json` — 5 supporting articles: How to Prepare, Etiquette/Tipping, Tantric for Couples (honest take — не offering "couples session"), How to Choose a Practitioner, History of Tantric Bodywork in the West
+- `docs/seo-content/relaxtouch-articles-batch-2.json` — 5 supporting articles: How to Prepare, Etiquette/Tipping, Tantric for Couples (honest take — не offering "couples session"), How to Choose a Specialist, History of Tantric Bodywork in the West
 - `docs/seo-content/relaxtouch-city-service-pages-LA.json` — 4 nested City × Service страниц для Los Angeles (`los-angeles-ca/tantric-full-body-massage`, `/sensory-massage`, `/slow-touch-massage`, `/deep-body-connection-massage`)
 - `docs/seo-content/relaxtouch-city-service-pages-batch-2.json` — 20 nested страниц (Costa Mesa, Newark, Arlington, Chicago, Brooklyn × 4 услуги). Сгенерировано через `build_city_service_pages_tantric.py` в `C:\Users\user\AppData\Local\Temp\`.
-- Цены: **60 min — $230**, **30 min — $200** (2-tier, без 15-минутного варианта)
+- Цены: **60 min — $230**, **30 min — $200** (2-tier).
 - 4 услуги: **Tantric Full Body Massage** (signature) / **Sensory Massage** / **Slow Touch Massage** / **Deep Body Connection Massage**. Без "Couples" как отдельной услуги — есть статья про couples с альтернативой (две сессии back-to-back в соседних комнатах).
-- **Tone of voice / правила контента:**
-  - НЕ используем "licensed therapist" — используем "experienced practitioner", "our team", "trained bodyworker"
-  - НЕ используем медицинские заявки ("heal/cure/treat") — используем "support/ease/relieve"
-  - НЕ используем trigger-words (sexual, erotic, awakening, intimate) — нейтрально
-  - Boundaries проговариваются осторожно через формулировки "wellness practice", "professional studio setting", "draped in linens", "non-medical"
+- **Изображения**: 7 реальных Cloudinary URL клиента **зашиты в JSON** (default_og_image, 6 location og_image, 10 article og_image, 24 nested page og_image — ротация). Не сбрасываются на placeholder при re-import.
+- **Бизнес-политики (закреплены везде):**
+  - **Booking: phone only** — каждая FAQ "How do I book?" говорит "Bookings are taken by phone only... We do not accept bookings through email, online forms, or third-party platforms." Contact page тоже переписан.
+  - **Payment: cash only** — каждая локация имеет FAQ "How do I pay?" с "Cash only, paid at the studio... We do not currently accept card or online payments." Schema.org `paymentAccepted` = `["Cash"]` only.
+- **Tone of voice / правила контента (закреплены везде после нескольких чисток):**
+  - НЕ используем "practitioner" / "bodyworker" / "therapist" / "licensed therapist" — используем **"specialist"** (singular) / **"our specialists"** (plural) / "our team". Применено по всему контенту через word-boundary regex (`\bpractitioner\b` → `specialist` etc.).
+  - НЕ используем **никаких** trigger-words: `sexual`, `genital`, `happy ending`, `extras`, `awakening`, `intimate`. По всему публичному контенту 0 occurrences.
+  - НЕ используем медицинские заявки ("heal/cure/treat") — используем "support/ease/relieve". Медицинский disclaimer ("we don't diagnose, treat or claim to cure... please consult a licensed healthcare provider") **сохранён** дословно — юридически важен.
+  - НЕ используем gov/federal/military framing (Arlington изначально позиционировался через "federal employees / government contractors / military / Pentagon City corridor" — всё убрано, заменено на "central Arlington" / "professionals, lawyers, tech and finance / DC-area commuters"). По всему репо 0 occurrences `federal`/`government`/`military`/`Pentagon`/`contractor`/`lobbyist`.
+  - **Исключение по trigger-words: `legal-update-relaxtouch.json` (Terms of Service)** — в Conduct clause намеренно сохранена фраза "sexual harassment" как стандартная legal protection language. Это даёт студии контрактное основание прерывать сессию и взимать полную плату при недопустимом поведении. Юридически обязательно, не трогать.
 - `docs/seo-content/legal-update-relaxtouch.json` — юр-инфа Digital Chaos Inc. (NY) + Privacy + Terms (US-формат, Richmond County jurisdiction, CCPA + GDPR rights)
+- **Скрипты-помощники** (в `C:\Users\user\AppData\Local\Temp\`, не в репо):
+  - `build_city_service_pages_tantric.py` — генератор 24 nested pages
+  - `expand_locations.py` — расширение 6 locations до 700-900 слов
+  - `apply_real_images.py` — простановка Cloudinary URLs во все og_image поля
+  - `apply_naming_payment_fixes.py` — practitioner→specialist + phone-only + cash-only
+  - `remove_gov_references.py` — чистка federal/government из Arlington
+  - `remove_prenatal.py` — историческая чистка prenatal-упоминаний (до пивота)
+  Все скрипты idempotent; можно перезапускать без последствий.
 
 *ChoiseForYouToday (choiseforyoutoday.com — HR/jobs, jobs_landing template):*
 - `docs/seo-content/choiseforyoutoday-bootstrap.json` — 1 site_settings (template=jobs_landing, ru, FB Pixel `1321696403049126`, Google Site Verification `XvBJpr-...`) + 3 categories (work/success/life) + 1 author + 1 homepage page (с JobPosting Schema.org) + 19 articles (ru/ua/en mix). Контент сграблен с публичного Supabase REST API при миграции с Lovable.dev.

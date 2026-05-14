@@ -155,6 +155,8 @@ def _schema_local_business(site: dict, location: dict, contacts: list) -> dict:
         "url": _site_url(site, "/" + (location.get("slug") or "").lstrip("/")),
         "image": location.get("og_image") or site.get("default_og_image") or "",
         "priceRange": "$$",
+        "paymentAccepted": ["Cash", "Credit Card", "Debit Card"],
+        "currenciesAccepted": "USD",
     }
     addr = {
         "@type": "PostalAddress",
@@ -176,6 +178,26 @@ def _schema_local_business(site: dict, location: dict, contacts: list) -> dict:
     phones = [c["value"] for c in contacts if c.get("contact_type") == "phone"]
     if phones:
         s["telephone"] = phones[0]
+    # OpeningHoursSpecification — from hours_json on the location
+    try:
+        hrs = _json.loads(location.get("hours_json") or "[]")
+        if isinstance(hrs, list) and hrs:
+            day_map = {"Monday":"Mo","Tuesday":"Tu","Wednesday":"We","Thursday":"Th",
+                       "Friday":"Fr","Saturday":"Sa","Sunday":"Su"}
+            specs = []
+            for h in hrs:
+                d = h.get("day"); o = h.get("open"); c = h.get("close")
+                if not d or d not in day_map: continue
+                specs.append({
+                    "@type": "OpeningHoursSpecification",
+                    "dayOfWeek": d,
+                    "opens": o or "",
+                    "closes": c or "",
+                })
+            if specs:
+                s["openingHoursSpecification"] = specs
+    except Exception:
+        pass
     return s
 
 

@@ -155,7 +155,7 @@ def _schema_local_business(site: dict, location: dict, contacts: list) -> dict:
         "url": _site_url(site, "/" + (location.get("slug") or "").lstrip("/")),
         "image": location.get("og_image") or site.get("default_og_image") or "",
         "priceRange": "$$",
-        "paymentAccepted": ["Cash", "Credit Card", "Debit Card"],
+        "paymentAccepted": ["Cash"],
         "currenciesAccepted": "USD",
     }
     addr = {

@@ -214,7 +214,13 @@ async def dispatch_seo_request(request: Request, site: dict, *,
                 return _render_404(site, menu_pages, is_jobs)
             article = _db.get_seo_article_by_slug(site["id"], slug)
             if not article or (not preview and article.get("status") != "published"):
-                return _render_404(site, menu_pages, is_jobs)
+                # SEO hygiene: 301 to /blog index instead of 404. Tells Google
+                # the deleted article moved permanently and consolidates link
+                # equity onto the blog index. Faster deindex (~7 days vs 30).
+                # Preview mode keeps 404 so admin can verify draft state.
+                if preview:
+                    return _render_404(site, menu_pages, is_jobs)
+                return RedirectResponse("/blog", status_code=301)
             author = None
             if article.get("author_id"):
                 author = _db.get_seo_author(article["author_id"])
@@ -289,6 +295,19 @@ async def dispatch_seo_request(request: Request, site: dict, *,
                     html = tpl.render_seo_page(site, nested_page, menu_pages,
                                                 parent_location=parent_loc)
                 return HTMLResponse(html)
+            # NESTED-страница НЕ найдена (или draft) — но если parent city
+            # существует и опубликован, делаем 301 на city. Это нужно для
+            # SEO hygiene: ранее удалённые nested URL'ы (например после
+            # tantric-пивота: /los-angeles-ca/swedish-massage и т.п.) ещё
+            # сидят в Google index — 301 на parent city консолидирует
+            # link equity и заставляет Google быстрее их деиндексировать.
+            # В preview-режиме оставляем 404 чтобы админ видел реальное
+            # состояние draft-страницы.
+            if not preview:
+                parent_city = _db.get_seo_location_by_slug(site["id"], slug)
+                if parent_city and parent_city.get("status") == "published":
+                    return RedirectResponse(f"/{slug}", status_code=301)
+                return _render_404(site, menu_pages, is_jobs)
 
         # 2. Локации (один сегмент)
         location = _db.get_seo_location_by_slug(site["id"], slug)

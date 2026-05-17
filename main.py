@@ -204,7 +204,10 @@ class CustomDomainMiddleware(BaseHTTPMiddleware):
                                 utm_content=utm_content,
                                 utm_term=utm_term,
                             )
-                            go_url = f"{app_url}/go-staff?ref={ref_id}"
+                            # Relative URL — переход остаётся на том же домене
+                            # что и лендинг (важно для мульти-домена: _fbp
+                            # cookie и event_source_url не теряются).
+                            go_url = f"/go-staff?ref={ref_id}"
                             tracked_contacts.append({**c, "url": go_url, "type": c_type})
                         else:
                             tracked_contacts.append(c)
@@ -2304,7 +2307,8 @@ async def public_landing(request: Request, slug: str,
         btns = []
         for cc in channels:
             _inv = quote(cc['invite_link'].strip(), safe='')
-            go_url = f"{app_url}/go?to={_inv}&utm_campaign={_utm_campaign_val}&utm_source={_utm_source_val}&utm_medium={utm_medium or 'paid'}"
+            # Relative — клиент остаётся на домене кампании (мульти-домен)
+            go_url = f"/go?to={_inv}&utm_campaign={_utm_campaign_val}&utm_source={_utm_source_val}&utm_medium={utm_medium or 'paid'}"
             if fbclid:      go_url += f"&fbclid={fbclid}"
             if utm_content: go_url += f"&utm_content={utm_content}"
             btns.append({
@@ -2390,7 +2394,8 @@ async def public_landing(request: Request, slug: str,
             db.save_staff_click(ref_id, c["url"], c_type, slug,
                 fbc=_fbc, ttclid=_ttclid, ttp=_ttp,
                 **{k:v for k,v in utm_params.items() if k!='landing_slug'})
-            go_url = f"{app_url}/go-staff?ref={ref_id}"
+            # Relative — переход остаётся на домене кампании (мульти-домен)
+            go_url = f"/go-staff?ref={ref_id}"
             tracked_contacts.append({**c, "url": go_url, "type": c_type})
         else:
             tracked_contacts.append(c)
@@ -2464,7 +2469,13 @@ async def go_staff_redirect(request: Request, ref: str = ""):
             _fb_event_name = "Contact" if _raw_event == "Lead" else _raw_event
         if _fb_pixel and _fb_token:
             import asyncio as _asyncio_fb
-            _fb_app_url = db.get_setting("app_url", "").rstrip("/")
+            # event_source_url: предпочитаем реальный Host запроса (домен
+            # кампании на котором юзер кликнул) — совпадает с доменом где
+            # сработал браузерный Pixel, корректная дедупликация Meta.
+            # Фолбэк на app_url setting если Host пуст.
+            _req_host = (request.headers.get("host", "") or "").split(":")[0]
+            _fb_app_url = (f"https://{_req_host}" if _req_host
+                           else db.get_setting("app_url", "").rstrip("/"))
             _asyncio_fb.create_task(meta_capi.send_event(
                 pixel_id=_fb_pixel,
                 access_token=_fb_token,
@@ -2500,7 +2511,10 @@ async def go_staff_redirect(request: Request, ref: str = ""):
             _tt_token = db.get_setting('tt_access_token', '') or ''
         if _tt_pixel and _tt_token:
             import asyncio as _asyncio
-            _app_url_tt = db.get_setting('app_url', '').rstrip('/')
+            # Тот же принцип: реальный Host запроса, фолбэк на app_url
+            _req_host_tt = (request.headers.get("host", "") or "").split(":")[0]
+            _app_url_tt = (f"https://{_req_host_tt}" if _req_host_tt
+                           else db.get_setting('app_url', '').rstrip('/'))
             _asyncio.create_task(tiktok_capi.send_event(
                 pixel_id=_tt_pixel,
                 access_token=_tt_token,

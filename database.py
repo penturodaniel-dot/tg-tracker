@@ -260,6 +260,9 @@ class Database:
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS bio TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS photo_url TEXT",
                     "ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS wa_bio TEXT",
+                    # Домен лендинга на момент клика — для корректного
+                    # CAPI event_source_url в bot-subscribe флоу (мульти-домен)
+                    "ALTER TABLE click_tracking ADD COLUMN IF NOT EXISTS source_domain TEXT DEFAULT ''",
                     # Права доступа менеджеров
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT DEFAULT ''",
                     # Раздельные пиксели клиенты/сотрудники
@@ -967,7 +970,8 @@ class Database:
     def save_click(self, fbclid=None, fbp=None, utm_source=None, utm_medium=None,
                    utm_campaign=None, utm_content=None, utm_term=None,
                    referrer=None, target_type="channel", target_id=None,
-                   user_agent=None, ip_address=None, click_id=None):
+                   user_agent=None, ip_address=None, click_id=None,
+                   source_domain=None):
         if not click_id:
             click_id = secrets.token_urlsafe(12)
         # Нормализуем fbclid: {{fbclid}} — незаполненный шаблон Facebook, трактуем как None
@@ -980,11 +984,12 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute("""INSERT INTO click_tracking
                     (click_id,fbclid,fbp,utm_source,utm_medium,utm_campaign,utm_content,utm_term,
-                     referrer,target_type,target_id,user_agent,ip_address,created_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                     referrer,target_type,target_id,user_agent,ip_address,source_domain,created_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (click_id) DO NOTHING""",
                     (click_id,fbclid,fbp,utm_source,utm_medium,utm_campaign,utm_content,
                      utm_term,referrer,target_type,target_id,user_agent,ip_address,
+                     (source_domain or ""),
                      datetime.utcnow().isoformat()))
             conn.commit()
         return click_id

@@ -1121,6 +1121,7 @@ async def go_redirect(
                 user_agent   = request.headers.get("user-agent", "")[:255],
                 ip_address   = request.client.host if request.client else None,
                 click_id     = click_id,
+                source_domain = (request.headers.get("host", "") or "").split(":")[0],
             )
             log.info(f"[/go] click_id={real_id} fbclid={'✓' if fbclid else '—'} fbp={'✓' if cookie_fbp else '—'} utm={utm_campaign} → {to[:60]}")
         except Exception as e:

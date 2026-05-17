@@ -246,11 +246,19 @@ def _build_tracker_dp() -> Dispatcher:
         # IP и User-Agent из момента клика на лендинг (улучшают matching)
         _client_ip    = click_data.get("ip_address")  if click_data else None
         _user_agent   = click_data.get("user_agent")  if click_data else None
-        # event_source_url: URL лендинга из которого пришёл пользователь
-        _app_url      = _db.get_setting("app_url") or ""
+        # event_source_url: URL лендинга из которого пришёл пользователь.
+        # Приоритет — source_domain сохранённый в момент клика (домен
+        # кампании, мульти-домен): совпадает с доменом где сработал
+        # браузерный Pixel → корректная дедупликация Meta. Фолбэк на
+        # глобальный app_url setting (старое поведение, backward compat).
         _camp_slug    = campaign.get("slug") if campaign else None
-        _event_source_url = (f"{_app_url}/l/{_camp_slug}" if _camp_slug and _app_url
-                             else _app_url or None)
+        _src_domain   = (click_data.get("source_domain") or "").strip() if click_data else ""
+        if _src_domain:
+            _src_base = f"https://{_src_domain}"
+        else:
+            _src_base = (_db.get_setting("app_url") or "").rstrip("/")
+        _event_source_url = (f"{_src_base}/l/{_camp_slug}" if _camp_slug and _src_base
+                             else _src_base or None)
 
         # test_event_code: из проекта кампании → глобальный
         test_event_code = None

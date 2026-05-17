@@ -597,7 +597,17 @@ def _render_footer(site: dict) -> str:
             slug = (loc.get("slug") or "").lstrip("/")
             label = f"{loc.get('city','')}, {loc.get('state','')}".strip(", ")
             primary_phone = loc.get("primary_phone") or ""
-            phone_html = f'<div style="font-size:.78rem;color:#A9A39A">{_esc(primary_phone)}</div>' if primary_phone else ""
+            if primary_phone:
+                # Кликабельный tel: — глобальный phone_click listener
+                # (в _render_head) подхватит автоматически на любой странице.
+                _tel = "".join(ch for ch in primary_phone if ch.isdigit() or ch == "+")
+                phone_html = (
+                    f'<div style="font-size:.78rem">'
+                    f'<a href="tel:{_esc(_tel)}" style="color:#A9A39A">{_esc(primary_phone)}</a>'
+                    f'</div>'
+                )
+            else:
+                phone_html = ""
             loc_items += (
                 f'<li style="margin-bottom:10px"><a href="/{_esc(slug)}" style="font-size:.92rem;font-weight:600">{_esc(label)}</a>'
                 f'{phone_html}</li>'

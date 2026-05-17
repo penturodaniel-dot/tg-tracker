@@ -2097,6 +2097,7 @@ async def landings_edit(request: Request, id: int = 0, msg: str = ""):
     {tpl_block}
     {texts_block}
     {project_block}
+    {domain_block}
     {"" if landing["type"] == "client" else f'''
     <div class="section"><div class="section-head"><h3>Добавить кнопку</h3><small style="color:var(--text3)">Кнопки появятся на лендинге</small></div>
     <div class="section-body"><form method="post" action="/landings/contact/add"><input type="hidden" name="landing_id" value="{id}"/>

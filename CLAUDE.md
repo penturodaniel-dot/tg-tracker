@@ -224,12 +224,19 @@ Railway → service → **Metrics** / **Observability**. Здоровые зна
 - Поддержка кастомных доменов через `CustomDomainMiddleware`
 - URL: `/l/{slug}` или кастомный домен → корень
 
+**Кастомный домен на лендинг (1 домен = 1 кампания):**
+- Поле `landings.custom_domain` (idempotent ALTER). Привязка через UI: `/landings/edit?id=X` → секция **«🌐 Кастомный домен»** → поле «Домен (без https:// и www.)» → POST `/landings/set_domain` → `db.set_landing_custom_domain`.
+- ⚠️ UI-блок `domain_block` строится в `landings_edit` и **должен быть вставлен** в `content` f-string (после `{project_block}`). Если кто-то уберёт `{domain_block}` из сборки — форма пропадёт, бэкенд при этом продолжит работать (роут жив). Фикс восстановления — коммит `7c552be`.
+- `CustomDomainMiddleware` на apex `/` делает `db.get_landing_by_domain(host)` (динамический lookup, без деплоя) → рендерит привязанный лендинг.
+- Один домен нельзя привязать к 2 лендингам (БД-проверка по `custom_domain`).
+- Порядок подключения: **Cloudflare zone+DNS+Bypass-кэш → Railway Custom Domain → CRM custom_domain → Meta domain verify**. Cloudflare для landing-доменов = **Cache Level: Bypass** (Cache Everything убьёт клик-трекинг — каждый заход должен дойти до сервера).
+
 ### Кнопки на лендингах и клик-трекинг
 - На каждом лендинге настраиваются кнопки контактов (Telegram / WhatsApp)
-- Клик на кнопку идёт через `/go-staff?ref={ref_id}` (для HR-лендингов) или эквивалентный endpoint
+- Клик на кнопку идёт через **относительный** `/go-staff?ref={ref_id}` (HR) или `/go?to=...` (client). **Relative, НЕ `{app_url}/go...`** — критично для мульти-домена: юзер остаётся на домене кампании, `_fbp` cookie не теряется (cookies domain-scoped), event_source_url совпадает с доменом браузерного Pixel. Фикс — коммит `a32d22d`.
 - Endpoint:
-  1. Создаёт запись в таблице `staff_clicks` (сохраняет `target_url`, `target_type`, `utm_*`, `fbclid`, `fbp`, `fbc`, `ttclid`, `ttp`)
-  2. Шлёт server-side событие в Meta CAPI (Lead/Contact/Subscribe — что настроено на лендинге, поле `landings.fb_event`)
+  1. Создаёт запись в таблице `staff_clicks` (HR) / `click_tracking` (client) — `target_url`, `target_type`, `utm_*`, `fbclid`, `fbp`, `fbc`, `ttclid`, `ttp`. Для client `/go` также пишет **`click_tracking.source_domain`** = Host запроса (нужно для CAPI в bot-флоу, см. ниже).
+  2. Шлёт server-side событие в Meta CAPI (Lead/Contact/Subscribe — `landings.fb_event`)
   3. Редиректит юзера на t.me / wa.me ссылку
 - Поле `staff_clicks.target_url` — ссылка t.me или wa.me на конкретный аккаунт
 - При телеграмном клике в URL добавляется `?start=ref_{ref_id}` чтобы можно было точно сматчить когда юзер напишет
@@ -251,6 +258,13 @@ Railway → service → **Metrics** / **Observability**. Здоровые зна
 2. `_fbp` cookie (устанавливается Meta Pixel)
 3. `external_id` = sha256(telegram_user_id)
 4. IP-адрес и User-Agent (помогают делать matching, сохраняются при клике)
+
+**`event_source_url` (мульти-домен):**
+- `/go-staff` (HR/staff Subscribe/Contact) — берётся из **Host заголовка запроса** (домен кампании), фолбэк на `app_url` setting если Host пуст. FB + TikTok CAPI.
+- bot-флоу (client Subscribe при вступлении в канал, `bot_manager.py`) — HTTP-запроса нет, поэтому берётся **`click_tracking.source_domain`** сохранённый в момент клика на `/go`; фолбэк на `app_url`. Фикс — коммиты `a32d22d` + `4354aec`.
+- Итог: при 2+ доменах CAPI рапортует реальный домен кампании = совпадает с браузерным Pixel → корректная дедупликация Meta + проходит domain verification.
+
+> ⚠️ **Операционный gotcha — `{{fbclid}}` в Meta Ads.** У Facebook **НЕТ макроса `{{fbclid}}`**. Если в Website URL рекламы вручную прописать `&fbclid={{fbclid}}` — FB его не раскрывает, и этот мусорный первый параметр **затирает** реальный `fbclid`, который FB сам автодобавляет в конец URL (FastAPI берёт первый дубль). Симптом: `[BOT1] matching=⚠️ слабый | fbclid=—` хотя fbp ловится. Код корректно нормализует `{{fbclid}}`→None (`database.py save_click`). **Фикс — в Meta Ads Manager:** убрать `fbclid={{fbclid}}` из URL (FB добавит реальный сам), валидные макросы (`{{ad.name}}` и т.п.) — в поле **URL Parameters**, не в самом URL. С реальным fbclid → `matching=✅✅ отличный` (fbclid+fbp+fbc+ip+ua).
 
 ### SEO-модуль (мульти-сайт CMS)
 
@@ -325,6 +339,11 @@ Railway → service → **Metrics** / **Observability**. Здоровые зна
 - `/blog/<slug>` — статья
 - `/<slug>` — локация (приоритет) или статическая страница
 - `/<city-slug>/<service-slug>` — **nested service-page** (например `/los-angeles-ca/swedish-massage`). Диспатчер ищет `seo_pages.slug == 'los-angeles-ca/swedish-massage'`. Если есть — рендер с breadcrumb `Home › City › Service` через `parent_location` параметр в `render_seo_page`.
+- **Авто-301 для удалённых страниц (SEO hygiene, коммит `5d25af8`):**
+  - nested URL не найден (или draft в prod), но parent city существует и published → **301 на `/<city>`** (раньше silently рендерил city-страницу с 200 OK → duplicate content).
+  - `/blog/<slug>` не найден (или draft в prod) → **301 на `/blog`**.
+  - В preview-режиме оба остаются 404 (чтобы админ видел реальное draft-состояние).
+  - Зачем: после tantric-пивота 30+ старых nested URL (swedish-massage и т.п.) висели в Google index. 301 даёт быстрый деиндекс (~7 дней vs ~30) + перенос link equity. Универсально для любых будущих bulk-delete без ручных entries в `seo_redirects`.
 - `/search?q=...` — site search (LIKE по article title/h1/excerpt/meta_description/content_html). Honors language filter. Page отдаётся с `noindex`.
 - `/sitemap.xml` / `/robots.txt`
 
